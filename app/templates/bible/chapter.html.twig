@@ -1,0 +1,20 @@
+{% extends 'base.html.twig' %}
+{% block title %}{{ book.nameNl }} {{ chapter }} – Bijbel Vergelijking{% endblock %}
+{% block body %}
+<div class="page-chapter">
+    <nav class="breadcrumb">
+        <a href="{{ path('app_home') }}">Boeken</a> ›
+        <a href="{{ path('app_book', {usfm: book.usfmCode}) }}">{{ book.nameNl }}</a> ›
+        <strong>Hoofdstuk {{ chapter }}</strong>
+    </nav>
+    <h1>{{ book.nameNl }} {{ chapter }}</h1>
+    <div class="verse-grid">
+        {% for v in 1..verse_count %}
+        <a href="{{ path('app_verse', {usfm: book.usfmCode, chapter: chapter, verse: v}) }}"
+           class="verse-card">
+            {{ chapter }}:{{ v }}
+        </a>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

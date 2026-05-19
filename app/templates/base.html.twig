@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Bijbel Vergelijking{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    {% block stylesheets %}
+        {{ encore_entry_link_tags('app') }}
+    {% endblock %}
+</head>
+<body>
+
+<header class="site-header">
+    <nav class="nav-inner">
+        <a href="{{ path('app_home') }}" class="site-logo">
+            <span class="logo-he">בראשית</span>
+            <span class="logo-sep">·</span>
+            <span class="logo-title">Bijbel Vergelijking</span>
+            <span class="logo-sep">·</span>
+            <span class="logo-gk">Ἐν ἀρχῇ</span>
+        </a>
+        <div class="nav-links">
+            <a href="{{ path('app_home') }}">Boeken</a>
+        </div>
+    </nav>
+</header>
+
+<main class="site-main">
+    {% block body %}{% endblock %}
+</main>
+
+<footer class="site-footer">
+    <p>Statenvertaling (1637) · Codex Leningradensis · Textus Receptus Elzevir</p>
+</footer>
+
+{% block javascripts %}
+            {% block importmap %}{{ importmap('app') }}{% endblock %}
+    {{ encore_entry_script_tags('app') }}
+{% endblock %}
+
+</body>
+</html>

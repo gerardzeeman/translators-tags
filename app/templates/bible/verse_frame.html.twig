@@ -1,0 +1,104 @@
+<turbo-frame id="verse-frame">
+<div class="verse-compare-grid">
+
+    {# ── Source language panel ────────────────────────────────────────── #}
+    <section class="panel panel-source"
+             aria-label="{{ passage.testament == 'OT' ? 'Hebreeuws' : 'Grieks' }}">
+
+        <h2 class="panel-heading">
+            {% if passage.testament == 'OT' %}
+                <span class="lang-badge lang-he">עִבְרִית</span> Hebreeuws
+            {% else %}
+                <span class="lang-badge lang-gk">Ἑλληνικά</span> Grieks
+            {% endif %}
+        </h2>
+
+        <div class="source-words {% if passage.testament == 'OT' %}dir-rtl{% endif %}">
+            {% for word in passage.source_words %}
+            <div class="source-word"
+                 data-source-id="{{ word.id }}"
+                 data-lang="{{ passage.testament == 'OT' ? 'HE' : 'GR' }}"
+                 data-strongs="{{ word.strongs }}"
+                 data-linked-tw-ids="{{ word.dutch_links|map(l => l.tw_id)|join(',') }}"
+                 data-controller="source-word">
+
+                <span class="word-text">{{ word.word_text }}</span>
+
+                {% if passage.testament == 'OT' and word.transliteration %}
+                <span class="word-translit">{{ word.transliteration }}</span>
+                {% endif %}
+
+                {% if word.strongs %}
+                <a href="{{ path('app_strongs', {number: word.strongs}) }}"
+                   class="word-strongs"
+                   data-turbo-frame="strongs-panel">{{ word.strongs }}</a>
+                {% endif %}
+
+                {% if word.morph_description %}
+                <span class="word-morph" title="{{ word.morph_description }}">
+                    {{ passage.testament == 'OT' ? word.morph_code : word.parse_code }}
+                </span>
+                {% endif %}
+
+                {# Link indicators #}
+                {% if word.dutch_links|length > 0 %}
+                <div class="link-indicators">
+                    {% for link in word.dutch_links %}
+                    {% set score = link.score|default(0) %}
+                    <span class="link-dot method-{{ link.method }}"
+                          title="{{ link.word_text }} ({{ link.method }}: {{ (score * 100)|round }}%)">
+                        {{ link.word_text }}
+                    </span>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <span class="no-link-badge" title="Geen koppeling">—</span>
+                {% endif %}
+
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+
+    {# ── Dutch translation panel ──────────────────────────────────────── #}
+    <section class="panel panel-dutch" aria-label="Statenvertaling">
+
+        <h2 class="panel-heading">
+            <span class="lang-badge lang-nl">NL</span> Statenvertaling
+        </h2>
+
+        <div class="dutch-verse">
+            {% for word in passage.dutch_verse %}
+            <span class="dutch-word"
+                  data-tw-id="{{ word.word_id }}"
+                  data-method="{{ word.best_method ?? 'none' }}"
+                  data-score="{{ word.best_score ?? 0 }}"
+                  data-controller="dutch-word">
+                {{- word.word_text -}}
+                {%- if not loop.last %} {% endif -%}
+            </span>
+            {% else %}
+            <em class="no-verse">Vers niet gevonden in de Statenvertaling.</em>
+            {% endfor %}
+        </div>
+
+        {# Confidence legend #}
+        <div class="confidence-legend">
+            <span class="legend-item"><span class="dot method-manual"></span> Handmatig</span>
+            <span class="legend-item"><span class="dot method-pivot"></span> ESV Pivot</span>
+            <span class="legend-item"><span class="dot method-heuristic"></span> Heuristiek</span>
+            <span class="legend-item"><span class="dot method-none"></span> Geen koppeling</span>
+        </div>
+
+    </section>
+
+    {# ── Strong's detail panel (Turbo Frame) ──────────────────────────── #}
+    <section class="panel panel-strongs">
+        <h2 class="panel-heading">Strong's Details</h2>
+        <turbo-frame id="strongs-panel">
+            <p class="strongs-placeholder">Klik op een Strong's nummer om details te zien.</p>
+        </turbo-frame>
+    </section>
+
+</div>
+</turbo-frame>

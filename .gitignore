@@ -1,0 +1,25 @@
+# Docker
+.env.local
+.env.*.local
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+ingest/.venv/
+
+# Symfony / PHP
+app/vendor/
+app/var/
+app/.env.local
+app/.env.*.local
+
+# Node (if ever added)
+node_modules/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+app/.env
+app/.env.dev

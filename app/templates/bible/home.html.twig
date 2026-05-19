@@ -1,0 +1,78 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Bijbel Vergelijking – Boeken{% endblock %}
+
+{% block body %}
+<div class="page-home">
+
+    <section class="hero">
+        <h1>Hebreeuwse &amp; Griekse Bijbel<br>naast de Statenvertaling</h1>
+        <p class="hero-sub">Elk woord van de brontekst gekoppeld aan de overeenkomstige Nederlandse vertaling</p>
+    </section>
+
+    {# Coverage stats #}
+    {% if coverage %}
+    <section class="coverage-stats">
+        {% for row in coverage %}
+        <div class="stat-card">
+            <div class="stat-testament">{{ row.testament }}</div>
+            <div class="stat-row">
+                <span class="stat-label">Woorden gekoppeld</span>
+                <span class="stat-value">
+                    {{ row.linked_words|number_format(0, ',', '.') }}
+                    / {{ row.total_words|number_format(0, ',', '.') }}
+                </span>
+            </div>
+            <div class="stat-bar">
+                {% set pct = row.total_words > 0 ? (row.linked_words / row.total_words * 100) : 0 %}
+                <div class="stat-bar-fill" style="width: {{ pct|round }}%"></div>
+            </div>
+            <div class="stat-methods">
+                <span class="badge badge-manual">Handmatig: {{ row.manual_links }}</span>
+                <span class="badge badge-pivot">Pivot: {{ row.pivot_links }}</span>
+                <span class="badge badge-heuristic">Heuristiek: {{ row.heuristic_links }}</span>
+            </div>
+        </div>
+        {% endfor %}
+    </section>
+    {% endif %}
+
+    <div class="testament-grid">
+
+        <section class="testament-col">
+            <h2 class="testament-heading">
+                <span class="heb-label">תנ״ך</span> Oude Testament
+            </h2>
+            <ul class="book-list">
+                {% for book in ot_books %}
+                <li>
+                    <a href="{{ path('app_book', {usfm: book.usfmCode}) }}" class="book-link">
+                        <span class="book-num">{{ book.id }}</span>
+                        <span class="book-name">{{ book.nameNl }}</span>
+                        <span class="book-chapters">{{ book.chapterCount }} hfst</span>
+                    </a>
+                </li>
+                {% endfor %}
+            </ul>
+        </section>
+
+        <section class="testament-col">
+            <h2 class="testament-heading">
+                <span class="gk-label">Καινή Διαθήκη</span> Nieuwe Testament
+            </h2>
+            <ul class="book-list">
+                {% for book in nt_books %}
+                <li>
+                    <a href="{{ path('app_book', {usfm: book.usfmCode}) }}" class="book-link">
+                        <span class="book-num">{{ book.id }}</span>
+                        <span class="book-name">{{ book.nameNl }}</span>
+                        <span class="book-chapters">{{ book.chapterCount }} hfst</span>
+                    </a>
+                </li>
+                {% endfor %}
+            </ul>
+        </section>
+
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,23 @@
+{
+    frankenphp
+}
+
+{$SERVER_NAME}
+
+root * /app/public
+
+encode zstd br gzip
+
+php_server
+
+@assets {
+    path /assets/*
+    file
+}
+header @assets Cache-Control "public, max-age=31536000, immutable"
+
+header {
+    X-Content-Type-Options nosniff
+    X-Frame-Options SAMEORIGIN
+    Referrer-Policy strict-origin-when-cross-origin
+}

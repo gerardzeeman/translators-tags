@@ -1,0 +1,74 @@
+services:
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: bible_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-bible_compare}
+      POSTGRES_USER: ${DB_USER:-bible}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    networks:
+      - bible_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-bible} -d ${DB_NAME:-bible_compare}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    ports:
+      - "5432:5432"   # exposed for local DB tools (TablePlus, DBeaver, etc.)
+
+  app:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+      target: prod
+    container_name: bible_app
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"    # HTTP/3 over QUIC
+    environment:
+      SERVER_NAME: ${SERVER_NAME:-localhost, localhost:80}
+      APP_ENV: prod
+      APP_SECRET: ${APP_SECRET:-change_me_in_production_32chars}
+      DATABASE_URL: postgresql://${DB_USER:-bible}:${DB_PASSWORD:-changeme}@postgres:5432/${DB_NAME:-bible_compare}?serverVersion=16&charset=utf8
+    networks:
+      - bible_net
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  ingest:
+    build:
+      context: ./ingest
+      dockerfile: Dockerfile
+    container_name: bible_ingest
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-bible_compare}
+      DB_USER: ${DB_USER:-bible}
+      DB_PASSWORD: ${DB_PASSWORD:-changeme}
+    volumes:
+      - source_data:/data/sources
+    networks:
+      - bible_net
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles:
+      - ingest   # only starts when explicitly requested
+    command: python main.py
+
+volumes:
+  postgres_data:
+  source_data:
+
+networks:
+  bible_net:
+    driver: bridge

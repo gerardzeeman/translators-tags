@@ -1,0 +1,23 @@
+{% extends 'base.html.twig' %}
+{% block title %}{{ book.nameNl }} – Bijbel Vergelijking{% endblock %}
+{% block body %}
+<div class="page-book">
+    <nav class="breadcrumb">
+        <a href="{{ path('app_home') }}">Boeken</a> › <strong>{{ book.nameNl }}</strong>
+    </nav>
+    <h1>{{ book.nameNl }}</h1>
+    <p class="book-meta">
+        {{ book.testament == 'OT' ? 'Oude Testament · Hebreeuws' : 'Nieuwe Testament · Grieks' }}
+        · {{ book.chapterCount }} hoofdstukken
+    </p>
+    <div class="chapter-grid">
+        {% for row in chapter_counts %}
+        <a href="{{ path('app_chapter', {usfm: book.usfmCode, chapter: row.chapter}) }}"
+           class="chapter-card">
+            <span class="chap-num">{{ row.chapter }}</span>
+            <span class="chap-verses">{{ row.verse_count }} verzen</span>
+        </a>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

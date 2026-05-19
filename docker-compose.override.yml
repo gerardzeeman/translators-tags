@@ -1,0 +1,21 @@
+services:
+
+  app:
+    build:
+      target: dev
+    environment:
+      APP_ENV: dev
+      APP_DEBUG: "1"
+      APP_SECRET: dev_secret_not_for_production
+    volumes:
+      - ./app:/app          # live code reload from host
+      - /app/var            # keep var/ inside container (cache, logs)
+      - /app/vendor         # keep vendor/ inside container
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+
+  postgres:
+    ports:
+      - "5432:5432"
