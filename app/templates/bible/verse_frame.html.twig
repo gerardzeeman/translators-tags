@@ -28,6 +28,10 @@
                 <span class="word-translit">{{ word.transliteration }}</span>
                 {% endif %}
 
+                {% if passage.testament == 'NT' and word.transliteration %}
+                <span class="word-translit">{{ word.transliteration }}</span>
+                {% endif %}
+
                 {% if word.strongs %}
                 <a href="{{ path('app_strongs', {number: word.strongs}) }}"
                    class="word-strongs"

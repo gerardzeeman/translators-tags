@@ -1,0 +1,78 @@
+{% extends 'base.html.twig' %}
+{% block title %}Mijn profiel – Bijbel Vergelijking{% endblock %}
+
+{% block body %}
+<div style="max-width: 560px; margin: 0 auto;">
+    <h1 style="font-size:1.8rem; margin-bottom:1.5rem;">Mijn profiel</h1>
+
+    {% if error %}
+    <div class="alert alert-error" style="padding:.75rem 1rem; background:#fdf0ee; color:#922; border:1px solid #f0b8b0; border-radius:4px; margin-bottom:1.25rem;">
+        {{ error }}
+    </div>
+    {% endif %}
+
+    {% if success %}
+    <div class="alert alert-success" style="padding:.75rem 1rem; background:#edf7ed; color:#2a6a2a; border:1px solid #b8ddb8; border-radius:4px; margin-bottom:1.25rem;">
+        {{ success }}
+    </div>
+    {% endif %}
+
+    {# Account info #}
+    <section style="background:#fff; border:1px solid var(--color-border); border-radius:6px; padding:1.5rem 2rem; margin-bottom:1.5rem; box-shadow:var(--shadow);">
+        <h2 style="font-size:1.1rem; margin-bottom:1rem; border-bottom:1px solid var(--color-border-light); padding-bottom:.5rem;">Accountgegevens</h2>
+        <p style="margin-bottom:.35rem;"><strong>E-mail:</strong> {{ user.email }}</p>
+        <p style="margin-bottom:.35rem;"><strong>Rol:</strong> {{ user.admin ? 'Beheerder' : 'Gebruiker' }}</p>
+        <p style="margin-bottom:.35rem;"><strong>Lid sinds:</strong> {{ user.createdAt|date('d-m-Y') }}</p>
+        {% if user.lastLoginAt %}
+        <p><strong>Laatste login:</strong> {{ user.lastLoginAt|date('d-m-Y H:i') }}</p>
+        {% endif %}
+    </section>
+
+    {# Change display name #}
+    <section style="background:#fff; border:1px solid var(--color-border); border-radius:6px; padding:1.5rem 2rem; margin-bottom:1.5rem; box-shadow:var(--shadow);">
+        <h2 style="font-size:1.1rem; margin-bottom:1rem; border-bottom:1px solid var(--color-border-light); padding-bottom:.5rem;">Naam wijzigen</h2>
+        <form method="post" action="{{ path('app_profile') }}">
+            <input type="hidden" name="action" value="update_name">
+            <div style="margin-bottom:1rem;">
+                <label for="display_name" style="display:block; font-size:.85rem; color:var(--color-ink-light); margin-bottom:.35rem;">Weergavenaam</label>
+                <input type="text" id="display_name" name="display_name"
+                       value="{{ user.displayName }}"
+                       style="width:100%; padding:.6rem .85rem; border:1px solid var(--color-border); border-radius:4px; font-family:var(--font-serif); font-size:1rem;"
+                       required>
+            </div>
+            <button type="submit" style="padding:.55rem 1.5rem; background:var(--color-accent); color:#fff; border:none; border-radius:4px; font-family:var(--font-serif); font-size:.95rem; cursor:pointer;">
+                Opslaan
+            </button>
+        </form>
+    </section>
+
+    {# Change password #}
+    <section style="background:#fff; border:1px solid var(--color-border); border-radius:6px; padding:1.5rem 2rem; box-shadow:var(--shadow);">
+        <h2 style="font-size:1.1rem; margin-bottom:1rem; border-bottom:1px solid var(--color-border-light); padding-bottom:.5rem;">Wachtwoord wijzigen</h2>
+        <form method="post" action="{{ path('app_profile') }}">
+            <input type="hidden" name="action" value="change_password">
+            <div style="margin-bottom:1rem;">
+                <label for="current_password" style="display:block; font-size:.85rem; color:var(--color-ink-light); margin-bottom:.35rem;">Huidig wachtwoord</label>
+                <input type="password" id="current_password" name="current_password"
+                       style="width:100%; padding:.6rem .85rem; border:1px solid var(--color-border); border-radius:4px; font-family:var(--font-serif); font-size:1rem;"
+                       required>
+            </div>
+            <div style="margin-bottom:1rem;">
+                <label for="new_password" style="display:block; font-size:.85rem; color:var(--color-ink-light); margin-bottom:.35rem;">Nieuw wachtwoord</label>
+                <input type="password" id="new_password" name="new_password"
+                       style="width:100%; padding:.6rem .85rem; border:1px solid var(--color-border); border-radius:4px; font-family:var(--font-serif); font-size:1rem;"
+                       required>
+            </div>
+            <div style="margin-bottom:1.25rem;">
+                <label for="confirm_password" style="display:block; font-size:.85rem; color:var(--color-ink-light); margin-bottom:.35rem;">Bevestig nieuw wachtwoord</label>
+                <input type="password" id="confirm_password" name="confirm_password"
+                       style="width:100%; padding:.6rem .85rem; border:1px solid var(--color-border); border-radius:4px; font-family:var(--font-serif); font-size:1rem;"
+                       required>
+            </div>
+            <button type="submit" style="padding:.55rem 1.5rem; background:var(--color-accent); color:#fff; border:none; border-radius:4px; font-family:var(--font-serif); font-size:.95rem; cursor:pointer;">
+                Wachtwoord wijzigen
+            </button>
+        </form>
+    </section>
+</div>
+{% endblock %}

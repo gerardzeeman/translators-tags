@@ -352,3 +352,55 @@ a:hover { text-decoration: underline; }
 
 /* ─── Utilities ──────────────────────────────────────────────────────────── */
 .no-verse { color: var(--color-ink-muted); font-style: italic; }
+
+/* ─── User nav menu ──────────────────────────────────────────────────────── */
+.nav-user {
+    position: relative;
+}
+.nav-user-btn {
+    background: none;
+    border: 1px solid rgba(255,255,255,.25);
+    border-radius: var(--radius);
+    color: var(--color-border-light);
+    font-family: var(--font-serif);
+    font-size: .9rem;
+    padding: .25rem .75rem;
+    cursor: pointer;
+    transition: border-color .15s, color .15s;
+}
+.nav-user-btn:hover {
+    border-color: rgba(255,255,255,.6);
+    color: #fff;
+}
+.nav-user-menu {
+    display: none;
+    position: absolute;
+    right: 0;
+    top: calc(100% + .5rem);
+    background: #fff;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    min-width: 140px;
+    z-index: 200;
+    overflow: hidden;
+}
+.nav-user:hover .nav-user-menu,
+.nav-user:focus-within .nav-user-menu {
+    display: block;
+}
+.nav-user-menu a {
+    display: block;
+    padding: .6rem 1rem;
+    color: var(--color-ink);
+    font-size: .9rem;
+    transition: background .12s;
+}
+.nav-user-menu a:hover {
+    background: var(--color-border-light);
+    text-decoration: none;
+}
+.nav-logout {
+    border-top: 1px solid var(--color-border-light);
+    color: var(--color-accent) !important;
+}

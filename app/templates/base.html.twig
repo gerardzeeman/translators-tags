@@ -17,12 +17,23 @@
         <a href="{{ path('app_home') }}" class="site-logo">
             <span class="logo-he">בראשית</span>
             <span class="logo-sep">·</span>
-            <span class="logo-title">Bijbel Vergelijking</span>
+            <span class="logo-title">(H)SV Translators Tags</span>
             <span class="logo-sep">·</span>
             <span class="logo-gk">Ἐν ἀρχῇ</span>
         </a>
         <div class="nav-links">
-            <a href="{{ path('app_home') }}">Boeken</a>
+            <a href="{{ path('app_home') }}">Bijbelboeken</a>
+            {% if app.user %}
+            <div class="nav-user">
+                <button class="nav-user-btn" type="button">
+                    {{ app.user.displayName }} ▾
+                </button>
+                <div class="nav-user-menu">
+                    <a href="{{ path('app_profile') }}">Profiel</a>
+                    <a href="{{ path('app_logout') }}" class="nav-logout">Uitloggen</a>
+                </div>
+            </div>
+            {% endif %}
         </div>
     </nav>
 </header>

@@ -102,6 +102,7 @@ class PassageRepository
                 gw.lemma,
                 gw.strongs,
                 gw.parse_code,
+                gw.transliteration,
                 COALESCE(
                     json_agg(
                         json_build_object(

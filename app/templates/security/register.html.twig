@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Registreren – Bijbel Vergelijking</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        :root {
+            --color-parchment: #f5f0e8;
+            --color-ink:       #1a1208;
+            --color-ink-light: #4a3f2a;
+            --color-ink-muted: #8a7a60;
+            --color-border:    #d4c9b0;
+            --color-accent:    #7a3b1e;
+            --color-accent-2:  #1e4d7a;
+            --color-error-bg:  #fdf0ee;
+            --color-error:     #922;
+            --font-serif:      'EB Garamond', Georgia, serif;
+        }
+        body {
+            background: var(--color-parchment);
+            font-family: var(--font-serif);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+        }
+        .auth-card {
+            background: #fff;
+            border: 1px solid var(--color-border);
+            border-radius: 6px;
+            padding: 2.5rem 3rem;
+            width: 100%;
+            max-width: 440px;
+            box-shadow: 0 2px 8px rgba(0,0,0,.08), 0 8px 32px rgba(0,0,0,.04);
+        }
+        .auth-logo { text-align: center; margin-bottom: 2rem; }
+        .auth-logo .logo-he { display: block; font-size: 2.2rem; direction: rtl; color: var(--color-accent); }
+        .auth-logo .logo-title { display: block; font-size: 1rem; color: var(--color-ink-muted); margin-top: .4rem; }
+        h1 { font-size: 1.5rem; font-weight: 500; margin-bottom: 1.5rem; text-align: center; }
+        .alert { padding: .75rem 1rem; border-radius: 4px; margin-bottom: 1.25rem; font-size: .9rem; }
+        .alert-error { background: var(--color-error-bg); color: var(--color-error); border: 1px solid #f0b8b0; }
+        .form-group { margin-bottom: 1.25rem; }
+        label { display: block; font-size: .85rem; color: var(--color-ink-light); margin-bottom: .35rem; }
+        .field-hint { font-size: .75rem; color: var(--color-ink-muted); margin-top: .25rem; }
+        input[type="email"],
+        input[type="password"],
+        input[type="text"] {
+            width: 100%;
+            padding: .6rem .85rem;
+            border: 1px solid var(--color-border);
+            border-radius: 4px;
+            font-family: var(--font-serif);
+            font-size: 1rem;
+            color: var(--color-ink);
+            background: #fdfaf5;
+            transition: border-color .15s;
+            outline: none;
+        }
+        input:focus { border-color: var(--color-accent); box-shadow: 0 0 0 3px rgba(122,59,30,.12); }
+        .btn-primary {
+            width: 100%;
+            padding: .7rem;
+            background: var(--color-accent);
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            font-family: var(--font-serif);
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background .15s;
+        }
+        .btn-primary:hover { background: #8a4522; }
+        .auth-footer { text-align: center; margin-top: 1.5rem; font-size: .85rem; color: var(--color-ink-muted); }
+        .auth-footer a { color: var(--color-accent-2); }
+        .divider { border: none; border-top: 1px solid var(--color-border); margin: 1.5rem 0; }
+    </style>
+</head>
+<body>
+<div class="auth-card">
+    <div class="auth-logo">
+        <span class="logo-he">בְּרֵאשִׁית</span>
+        <span class="logo-title">Bijbel Vergelijking</span>
+    </div>
+
+    <h1>Account aanmaken</h1>
+
+    {% if error %}
+    <div class="alert alert-error">{{ error }}</div>
+    {% endif %}
+
+    <form method="post" action="{{ path('app_register') }}">
+        <div class="form-group">
+            <label for="display_name">Naam</label>
+            <input type="text"
+                   id="display_name"
+                   name="display_name"
+                   value="{{ last_name }}"
+                   autocomplete="name"
+                   autofocus
+                   required>
+        </div>
+
+        <div class="form-group">
+            <label for="email">E-mailadres</label>
+            <input type="email"
+                   id="email"
+                   name="email"
+                   value="{{ last_email }}"
+                   autocomplete="email"
+                   required>
+        </div>
+
+        <div class="form-group">
+            <label for="password">Wachtwoord</label>
+            <input type="password"
+                   id="password"
+                   name="password"
+                   autocomplete="new-password"
+                   required>
+            <p class="field-hint">Minimaal 8 tekens</p>
+        </div>
+
+        <div class="form-group">
+            <label for="confirm_password">Wachtwoord bevestigen</label>
+            <input type="password"
+                   id="confirm_password"
+                   name="confirm_password"
+                   autocomplete="new-password"
+                   required>
+        </div>
+
+        <button type="submit" class="btn-primary">Account aanmaken</button>
+    </form>
+
+    <hr class="divider">
+
+    <div class="auth-footer">
+        Al een account? <a href="{{ path('app_login') }}">Inloggen</a>
+    </div>
+</div>
+</body>
+</html>
