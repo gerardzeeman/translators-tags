@@ -42,6 +42,9 @@ class GreekWord
     #[ORM\Column(type: 'text', nullable: true)]
     private ?string $parseCode = null;
 
+    #[ORM\Column(type: 'text')]
+    private string $transliteration;
+
     #[ORM\OneToMany(mappedBy: 'greekWord', targetEntity: WordLink::class)]
     private Collection $wordLinks;
 
@@ -59,6 +62,7 @@ class GreekWord
     public function getLemma(): ?string { return $this->lemma; }
     public function getStrongs(): ?string { return $this->strongs; }
     public function getParseCode(): ?string { return $this->parseCode; }
+    public function getTransliteration(): string { return $this->transliteration; }
     public function getWordLinks(): Collection { return $this->wordLinks; }
 
     /**

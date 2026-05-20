@@ -4,15 +4,13 @@ Parses the byztxt/greektext-elzevir .UEL files (one per NT book).
 
 File format (space-separated, lines may wrap mid-verse):
   1:1 word1 strongs1 {parse1} word2 strongs2 {parse2} ...
-  1:2 word1 strongs1 {parse1} ...
 
-A line starting with digits and a colon begins a new verse.
-Continuation lines (starting with a space) belong to the current verse.
-Some entries have an extra number between strongs and parse (variant flag).
+Beta Code conversion uses the byztxt custom method based on the beta-code library.
 """
 import re
 from pathlib import Path
 from tqdm import tqdm
+import beta_code
 from db.loaders import bulk_insert_greek_words
 
 SOURCES_DIR = Path("/data/sources")
@@ -28,13 +26,70 @@ BOOK_MAP: dict[str, int] = {
 }
 
 BATCH_SIZE = 1000
-
-# Matches a verse reference at the start of a line e.g. "1:1"
 VERSE_REF_RE = re.compile(r"^(\d+):(\d+)\s+(.*)")
-
-# Matches a single word token: word strongs {parse} or word strongs extra {parse}
+# Matches: word strongs {parse}  OR  word strongs extra_num {parse}
 TOKEN_RE = re.compile(r"(\S+)\s+(\d+)(?:\s+\d+)?\s+\{([^}]+)\}")
 
+
+# ── Beta Code conversion (adapted from byztxt/byzantine-majority-text) ────────
+
+def standardise_beta_code(text: str) -> str:
+    """
+    Pre-process Beta Code to make it compatible with the beta-code library.
+    Adapted from byztxt/byzantine-majority-text/scripts/beta_to_unicode_custom.
+    """
+    # Swap order of + followed by / or \ (library expects /+ not +/)
+    text = text.replace("+/", "/+")
+    text = text.replace("+\\", "\\+")
+    # Replace apostrophes with right quotation marks
+    text = text.replace("'", "\u2019")
+    # Add space before dash/bracket after final sigma so it stays final
+    text = text.replace("S-", "S -")
+    text = text.replace("S]", "S ]")
+
+    # Custom
+    text = text.replace("c", "x")
+    text = text.replace("v", "s")
+    text = text.replace("y", "q")
+
+    return text.strip()
+
+def standardised_to_transliteration(text: str):
+    text = text.replace("h", "ē")
+    text = text.replace("x", "ch")
+    text = text.replace("w", "ō")
+    text = text.replace("q", "th")
+    text = text.replace("v", "s")
+
+    return text
+
+
+def beta_word_to_unicode(word: str) -> str:
+    """
+    Convert a single Beta Code word token to Unicode Greek.
+    Adapted from convert_beta_to_unicode_strongs() in the byztxt script,
+    but operating on a single pre-extracted word (no strongs/parse codes).
+    """
+    standardised = standardise_beta_code(word)
+    
+    try:
+        result = beta_code.beta_code_to_greek(standardised)
+        # Restore extra space added around final sigma before dash/bracket
+        result = result.replace("{ν", "{NA")
+        result = result.replace("{β", "{Byz")
+        result = result.replace("{ξ", "{NA27/28")
+        result = result.replace("{μ", "{ECM")
+        result = result.replace("{ς", "{NA27")
+        result = result.replace("{ε", "{NA28")
+        result = result.replace("ς -", "ς-")
+        result = result.replace("ς ]", "ς]")
+        result = result.replace(" ♦ ", " = ")
+        return result
+    except Exception:
+        return word  # return original on any conversion failure
+
+
+# ── Strong's normalisation ────────────────────────────────────────────────────
 
 def parse_strongs_gk(raw: str) -> str | None:
     raw = raw.strip()
@@ -46,6 +101,8 @@ def parse_strongs_gk(raw: str) -> str | None:
     except ValueError:
         return None
 
+
+# ── Main parser ───────────────────────────────────────────────────────────────
 
 def parse_elzevir() -> None:
     parsed_dir = SOURCES_DIR / "elzevir" / "parsed"
@@ -66,26 +123,28 @@ def parse_elzevir() -> None:
             continue
 
         rows: list[dict] = []
-        current_chapter = None
-        current_verse   = None
-        current_text    = ""   # accumulated text for current verse
+        current_chapter: int | None = None
+        current_verse:   int | None = None
+        current_text = ""
 
-        def flush_verse(chapter, verse, text):
-            """Parse accumulated verse text into word tokens and add to rows."""
+        def flush_verse(chapter: int, verse: int, text: str) -> None:
             position = 1
             for m in TOKEN_RE.finditer(text):
-                word_text  = m.group(1)
+                beta_word  = m.group(1)
                 strongs    = parse_strongs_gk(m.group(2))
                 parse_code = m.group(3).strip()
+                word_text  = beta_word_to_unicode(beta_word)
+                translit   = standardised_to_transliteration(str(beta_word))
                 rows.append({
-                    "book_id":       book_id,
-                    "chapter":       chapter,
-                    "verse":         verse,
-                    "word_position": position,
-                    "word_text":     word_text,
-                    "lemma":         None,
-                    "strongs":       strongs,
-                    "parse_code":    parse_code,
+                    "book_id":         book_id,
+                    "chapter":         chapter,
+                    "verse":           verse,
+                    "word_position":   position,
+                    "word_text":       word_text,
+                    "lemma":           None,
+                    "strongs":         strongs,
+                    "parse_code":      parse_code,
+                    "transliteration": translit,
                 })
                 position += 1
 
@@ -97,24 +156,17 @@ def parse_elzevir() -> None:
 
                 m = VERSE_REF_RE.match(line)
                 if m:
-                    # New verse — flush previous
                     if current_chapter is not None:
                         flush_verse(current_chapter, current_verse, current_text)
                     current_chapter = int(m.group(1))
                     current_verse   = int(m.group(2))
                     current_text    = m.group(3)
                 else:
-                    # Continuation line — append to current verse text
                     current_text += " " + line.strip()
 
-        # Flush last verse
+        # Flush final verse of the book
         if current_chapter is not None:
             flush_verse(current_chapter, current_verse, current_text)
-
-        if len(rows) >= BATCH_SIZE:
-            bulk_insert_greek_words(rows)
-            total_words += len(rows)
-            rows.clear()
 
         if rows:
             bulk_insert_greek_words(rows)
@@ -122,6 +174,16 @@ def parse_elzevir() -> None:
             rows.clear()
 
     print(f"\n  ✓ Greek words inserted: {total_words:,}")
+    _validate_count(total_words)
+
+
+def _validate_count(count: int) -> None:
+    expected_min, expected_max = 130_000, 145_000
+    if not (expected_min <= count <= expected_max):
+        print(
+            f"  ⚠ Word count {count:,} outside expected range "
+            f"({expected_min:,}–{expected_max:,}). Check all 27 books were present."
+        )
 
 
 if __name__ == "__main__":

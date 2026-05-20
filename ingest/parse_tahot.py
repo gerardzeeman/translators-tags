@@ -43,6 +43,7 @@ def find_tahot_file() -> Path:
             f"No TAHOT file found in {base}. "
             "Check that the STEPBible repo cloned correctly."
         )
+    print(candidates)
     # Prefer the sorted-by-Ref version
     for p in candidates:
         if "Ref" in p.name or "ref" in p.name:

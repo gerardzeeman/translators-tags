@@ -36,11 +36,14 @@ def bulk_insert_greek_words(rows: list[dict]) -> None:
                 """
                 INSERT INTO greek_words
                     (book_id, chapter, verse, word_position,
-                     word_text, lemma, strongs, parse_code)
+                     word_text, lemma, strongs, parse_code, transliteration)
                 VALUES
                     (%(book_id)s, %(chapter)s, %(verse)s, %(word_position)s,
-                     %(word_text)s, %(lemma)s, %(strongs)s, %(parse_code)s)
-                ON CONFLICT (book_id, chapter, verse, word_position) DO NOTHING
+                     %(word_text)s, %(lemma)s, %(strongs)s, %(parse_code)s, %(transliteration)s)
+                ON CONFLICT (book_id, chapter, verse, word_position)
+                DO UPDATE
+                SET word_text = EXCLUDED.word_text,
+                    transliteration = EXCLUDED.transliteration;
                 """,
                 rows,
             )

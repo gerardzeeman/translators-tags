@@ -65,6 +65,12 @@ services:
       - ingest   # only starts when explicitly requested
     command: python main.py
 
+  adminer:
+    image: adminer
+    restart: unless-stopped
+    ports:
+      - "8081:8080"
+
 volumes:
   postgres_data:
   source_data:
