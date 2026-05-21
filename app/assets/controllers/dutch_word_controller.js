@@ -2,8 +2,20 @@
 import { Controller } from '@hotwired/stimulus'
 
 export default class extends Controller {
-    click() {
-        this.element.dispatchEvent(new CustomEvent('dutch-word:activate', {
+    connect() {
+        this.element.addEventListener('click',      this.#onClick.bind(this))
+        this.element.addEventListener('mouseenter', this.#onMouseEnter.bind(this))
+        this.element.addEventListener('mouseleave', this.#onMouseLeave.bind(this))
+    }
+
+    disconnect() {
+        this.element.removeEventListener('click',      this.#onClick.bind(this))
+        this.element.removeEventListener('mouseenter', this.#onMouseEnter.bind(this))
+        this.element.removeEventListener('mouseleave', this.#onMouseLeave.bind(this))
+    }
+
+    #dispatch(type) {
+        this.element.dispatchEvent(new CustomEvent(type, {
             bubbles: true,
             detail: {
                 twId:   this.element.dataset.twId,
@@ -12,4 +24,8 @@ export default class extends Controller {
             }
         }))
     }
+
+    #onClick()      { this.#dispatch('dutch-word:activate') }
+    #onMouseEnter() { this.#dispatch('dutch-word:hover') }
+    #onMouseLeave() { this.#dispatch('dutch-word:unhover') }
 }

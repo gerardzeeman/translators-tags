@@ -342,6 +342,36 @@ a:hover { text-decoration: underline; }
 .legend-item { display: flex; align-items: center; gap: .35rem; }
 .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
 
+
+/* ─── Hover highlights (lighter than click highlights) ──────────────────── */
+.source-word.hover-active {
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 2px rgba(122, 59, 30, .12);
+    background: #fef9f5;
+}
+
+.dutch-word.hover-highlighted {
+    background: #fef9e7;
+    outline: 2px solid #f5d87a;
+}
+
+/* Click highlights remain stronger */
+.source-word.active {
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 2px rgba(122, 59, 30, .35);
+    background: #fdf8f2;
+}
+
+.dutch-word.highlighted {
+    background: #fef3cd;
+    outline: 2px solid #f0c040;
+}
+
+/* Cursor pointer to indicate interactivity */
+.source-word { cursor: pointer; }
+.dutch-word  { cursor: pointer; }
+
+
 /* ─── Strong's panel ─────────────────────────────────────────────────────── */
 .strongs-detail h3 {
     font-family: var(--font-mono);
