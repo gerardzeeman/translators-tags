@@ -122,6 +122,22 @@ CREATE TABLE IF NOT EXISTS link_confidence (
     PRIMARY KEY (link_id, method)
 );
 
+-- Tracks source words manually confirmed as having NO Dutch translation.
+-- A word can appear here OR in word_links, not both simultaneously.
+CREATE TABLE IF NOT EXISTS manual_empty_links (
+    id              SERIAL      PRIMARY KEY,
+    source_language CHAR(2)     NOT NULL CHECK (source_language IN ('HE', 'GR')),
+    hebrew_word_id  INTEGER     REFERENCES hebrew_words(id) ON DELETE CASCADE,
+    greek_word_id   INTEGER     REFERENCES greek_words(id)  ON DELETE CASCADE,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    notes           TEXT,
+    CONSTRAINT mel_exactly_one_source CHECK (
+        (hebrew_word_id IS NOT NULL AND greek_word_id IS NULL AND source_language = 'HE')
+        OR
+        (greek_word_id  IS NOT NULL AND hebrew_word_id IS NULL AND source_language = 'GR')
+    )
+);
+
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Indexes
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -135,6 +151,10 @@ CREATE INDEX IF NOT EXISTS idx_tw_verse    ON translation_words  (verse_id);
 CREATE INDEX IF NOT EXISTS idx_wl_he       ON word_links         (hebrew_word_id);
 CREATE INDEX IF NOT EXISTS idx_wl_gr       ON word_links         (greek_word_id);
 CREATE INDEX IF NOT EXISTS idx_wl_tw       ON word_links         (translation_word_id);
+
+-- Partial unique indexes: at most one manual-empty record per source word
+CREATE UNIQUE INDEX IF NOT EXISTS idx_mel_he ON manual_empty_links (hebrew_word_id) WHERE hebrew_word_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_mel_gr ON manual_empty_links (greek_word_id)  WHERE greek_word_id  IS NOT NULL;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Seed data: books table (all 66 canonical books)

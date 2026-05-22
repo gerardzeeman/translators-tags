@@ -1,0 +1,73 @@
+{% extends 'base.html.twig' %}
+{% block title %}{{ strongs }} – Koppelen per Strong's{% endblock %}
+
+{% block body %}
+<div class="page-strongs-linking">
+
+    {# ── Header ───────────────────────────────────────────────────────────── #}
+    <div class="strongs-header">
+        <a href="{{ path('app_linking_strongs_home') }}" class="back-link">← Terug</a>
+        <h1 class="strongs-title">
+            <span class="strongs-badge">{{ strongs }}</span>
+        </h1>
+
+        {# Transliterations sorted by occurrence #}
+        {% if transliterations|length > 0 %}
+        <div class="translits-row">
+            {% for t in transliterations %}
+            <span class="translit-chip" title="{{ t.occurrence_count }} voorkomens">
+                {{ t.transliteration }}
+                <span class="occ-count">{{ t.occurrence_count }}×</span>
+            </span>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {# Progress bar #}
+        {% set total  = progress.total|default(0) %}
+        {% set manual = progress.manual|default(0) %}
+        {% set linked = progress.linked|default(0) %}
+        {% set pct_manual = total > 0 ? (manual / total * 100)|round : 0 %}
+        {% set pct_linked = total > 0 ? (linked / total * 100)|round : 0 %}
+
+        <div class="progress-block">
+            <div class="progress-labels">
+                <span>Voortgang koppelen</span>
+                <span>
+                    <strong id="progress-count-manual">{{ manual }}</strong> handmatig ·
+                    <strong id="progress-count-linked">{{ linked }}</strong> totaal gekoppeld ·
+                    <strong id="progress-count-total">{{ total }}</strong> woorden
+                </span>
+            </div>
+            <div class="progress-bar-track">
+                {# Layered bar: total linked (blue) underneath, manual (green) on top #}
+                <div id="progress-bar-linked" class="progress-bar-linked" style="width: {{ pct_linked }}%"></div>
+                <div id="progress-bar-manual" class="progress-bar-manual" style="width: {{ pct_manual }}%"></div>
+            </div>
+            <div id="progress-pct" class="progress-pct">{{ pct_manual }}% handmatig bevestigd</div>
+        </div>
+    </div>
+
+    {# ── Legend ───────────────────────────────────────────────────────────── #}
+    <div class="linking-legend" style="margin-bottom:1.5rem;">
+        <span><span class="dot method-manual"></span> Handmatig</span>
+        <span><span class="dot method-manual-empty"></span> Handmatig leeg</span>
+        <span><span class="dot method-pivot"></span> Pivot</span>
+        <span><span class="dot method-heuristic"></span> Heuristiek</span>
+        <span><span class="dot method-none"></span> Geen</span>
+    </div>
+
+    {# ── Verse list ───────────────────────────────────────────────────────── #}
+    {% if verses|length == 0 %}
+    <p class="no-results">Geen verzen gevonden voor {{ strongs }}.</p>
+    {% else %}
+
+    <div class="strongs-verses">
+        {% for v in verses %}
+            {% include 'linking/_strongs_verse_block.html.twig' with {v: v, strongs: strongs} %}
+        {% endfor %}
+    </div>
+    {% endif %}
+
+</div>
+{% endblock %}

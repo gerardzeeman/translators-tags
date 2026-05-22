@@ -1,0 +1,150 @@
+{% extends 'base.html.twig' %}
+{% block title %}{{ book.nameNl }} {{ chapter }}:{{ verse }} – Koppelen{% endblock %}
+
+{% block body %}
+<div class="page-linking" data-controller="word-linker"
+     data-word-linker-save-url-value="{{ path('api_linking_save') }}"
+     data-word-linker-delete-url-value="{{ path('api_linking_delete', {linkId: 0}) }}">
+
+    {# ── Top bar ──────────────────────────────────────────────────────────── #}
+    <div class="linking-topbar">
+        <nav class="breadcrumb">
+            <a href="{{ path('app_linking_home') }}">Koppelen</a> ›
+            <a href="{{ path('app_linking_home') }}">{{ book.nameNl }}</a> ›
+            <strong>{{ chapter }}:{{ verse }}</strong>
+        </nav>
+
+        <div class="linking-nav">
+            {% if nav.prev %}
+            <a href="{{ path('app_linking_passage', nav.prev) }}" class="nav-btn">‹ Vorig</a>
+            {% endif %}
+            <span class="verse-ref">{{ book.nameNl }} {{ chapter }}:{{ verse }}</span>
+            {% if nav.next %}
+            <a href="{{ path('app_linking_passage', nav.next) }}" class="nav-btn">Volgend ›</a>
+            {% endif %}
+        </div>
+
+        <div class="linking-legend">
+            <span><span class="dot method-manual"></span> Handmatig</span>
+            <span><span class="dot method-manual-empty"></span> Handmatig leeg</span>
+            <span><span class="dot method-pivot"></span> Pivot</span>
+            <span><span class="dot method-heuristic"></span> Heuristiek</span>
+            <span><span class="dot method-none"></span> Geen</span>
+        </div>
+    </div>
+
+    {# ── Status bar ───────────────────────────────────────────────────────── #}
+    <div class="linking-status" data-word-linker-target="status">
+        Klik een bronwoord om te selecteren, dan klik één of meerdere Nederlandse woorden.
+    </div>
+
+    {# ── Main linking area ────────────────────────────────────────────────── #}
+    <div class="linking-area">
+
+        {# Source language panel #}
+        <section class="link-panel link-panel-source">
+            <h2 class="panel-label">
+                {% if passage.testament == 'OT' %}
+                    <span class="lang-badge lang-he">עִבְרִית</span> Hebreeuws
+                {% else %}
+                    <span class="lang-badge lang-gk">Ἑλληνικά</span> Grieks
+                {% endif %}
+            </h2>
+
+            <div class="source-words-grid {% if passage.testament == 'OT' %}rtl{% endif %}">
+                {% for word in passage.source_words %}
+                {% set lang = passage.testament == 'OT' ? 'HE' : 'GR' %}
+                {% set linked_tw_ids = word.links|map(l => l.tw_id)|join(',') %}
+                {% set best_method = word.links|length > 0 ? word.links|first.method : (word.is_manually_empty ? 'manual-empty' : 'none') %}
+
+                <div class="src-word method-border-{{ best_method }}"
+                     data-manually-empty="{{ word.is_manually_empty ? '1' : '0' }}"
+                     data-source-id="{{ word.id }}"
+                     data-lang="{{ lang }}"
+                     data-strongs="{{ word.strongs }}"
+                     data-linked-tw-ids="{{ linked_tw_ids }}"
+                     data-action="click->word-linker#selectSource"
+                     data-word-linker-target="sourceWord">
+
+                    <span class="src-text">{{ word.word_text }}</span>
+
+                    {% if word.transliteration %}
+                    <span class="src-translit">{{ word.transliteration }}</span>
+                    {% endif %}
+
+                    {% if word.strongs %}
+                    <span class="src-strongs">{{ word.strongs }}</span>
+                    {% endif %}
+
+                    <div class="src-links">
+                        {% for link in word.links %}
+                        <span class="link-chip method-{{ link.method }}"
+                              data-link-id="{{ link.link_id }}"
+                              data-tw-id="{{ link.tw_id }}"
+                              title="{{ link.method }}: {{ ((link.score ?? 0) * 100)|round }}%">
+                            ×
+                        </span>
+                        {% endfor %}
+                        {% if word.is_manually_empty %}
+                        <span class="link-chip method-manual-empty" title="Handmatig: geen koppeling">∅</span>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+
+        {# Dutch translation panel #}
+        <section class="link-panel link-panel-dutch">
+            <h2 class="panel-label">
+                <span class="lang-badge lang-nl">NL</span> Statenvertaling
+            </h2>
+
+            <div class="dutch-words-flow">
+                {% for word in passage.dutch_words %}
+                {% set linked = word.links|length > 0 %}
+                {% set best_method = linked ? word.links|first.method : 'none' %}
+
+                <span class="nl-word method-underline-{{ best_method }}"
+                      data-tw-id="{{ word.id }}"
+                      data-action="click->word-linker#selectDutch"
+                      data-word-linker-target="dutchWord">
+                    {{- word.word_text -}}
+                </span>
+                {{ ' ' }}
+                {% endfor %}
+            </div>
+
+            {% if passage.dutch_words|length > 0 %}
+            <p class="verse-full-text">
+                <em>{{ passage.dutch_words|first.verse_text }}</em>
+            </p>
+            {% endif %}
+        </section>
+
+    </div>
+
+    {# ── Action bar (shown when a source word is selected) ────────────────── #}
+    <div class="action-bar" data-word-linker-target="actionBar" style="display:none">
+        <div class="action-bar-inner">
+            <span class="action-label">
+                Geselecteerd: <strong data-word-linker-target="selectedLabel">–</strong>
+            </span>
+            <span class="action-hint">
+                Klik Nederlandse woorden om te selecteren/deselecteren
+            </span>
+            <div class="action-buttons">
+                <button class="btn-save"
+                        data-action="click->word-linker#saveLinks">
+                    ✓ Koppeling opslaan
+                </button>
+                <button class="btn-cancel"
+                        data-action="click->word-linker#cancel">
+                    Annuleren
+                </button>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

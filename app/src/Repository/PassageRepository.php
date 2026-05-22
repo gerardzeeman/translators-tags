@@ -56,24 +56,34 @@ class PassageRepository
                 hw.morph_code,
                 hw.is_ketiv,
                 hw.has_qere,
-                -- Aggregate linked Dutch words as JSON
+                -- Best link per Dutch word, sorted by Dutch word position
                 COALESCE(
                     json_agg(
                         json_build_object(
-                            'tw_id',       tw.id,
-                            'word_text',   tw.word_text,
-                            'word_pos',    tw.word_position,
-                            'method',      lc.method,
-                            'score',       lc.score
+                            'tw_id',       best.tw_id,
+                            'word_text',   best.word_text,
+                            'word_pos',    best.word_position,
+                            'method',      best.method,
+                            'score',       best.score
                         )
-                        ORDER BY lc.score DESC
-                    ) FILTER (WHERE tw.id IS NOT NULL),
+                        ORDER BY best.word_position ASC
+                    ) FILTER (WHERE best.tw_id IS NOT NULL),
                     '[]'
                 ) AS dutch_links
             FROM hebrew_words hw
-            LEFT JOIN word_links wl      ON wl.hebrew_word_id = hw.id
-            LEFT JOIN translation_words tw ON tw.id = wl.translation_word_id
-            LEFT JOIN link_confidence lc ON lc.link_id = wl.id
+            LEFT JOIN LATERAL (
+                SELECT DISTINCT ON (tw.id)
+                    tw.id              AS tw_id,
+                    tw.word_text       AS word_text,
+                    tw.word_position   AS word_position,
+                    lc.method          AS method,
+                    lc.score           AS score
+                FROM word_links wl
+                JOIN translation_words tw ON tw.id = wl.translation_word_id
+                JOIN link_confidence lc   ON lc.link_id = wl.id
+                WHERE wl.hebrew_word_id = hw.id
+                ORDER BY tw.id, lc.score DESC
+            ) best ON true
             WHERE hw.book_id = :book_id
               AND hw.chapter = :chapter
               AND hw.verse   = :verse
@@ -103,23 +113,34 @@ class PassageRepository
                 gw.strongs,
                 gw.parse_code,
                 gw.transliteration,
+                -- Best link per Dutch word, sorted by Dutch word position
                 COALESCE(
                     json_agg(
                         json_build_object(
-                            'tw_id',       tw.id,
-                            'word_text',   tw.word_text,
-                            'word_pos',    tw.word_position,
-                            'method',      lc.method,
-                            'score',       lc.score
+                            'tw_id',       best.tw_id,
+                            'word_text',   best.word_text,
+                            'word_pos',    best.word_position,
+                            'method',      best.method,
+                            'score',       best.score
                         )
-                        ORDER BY lc.score DESC
-                    ) FILTER (WHERE tw.id IS NOT NULL),
+                        ORDER BY best.word_position ASC
+                    ) FILTER (WHERE best.tw_id IS NOT NULL),
                     '[]'
                 ) AS dutch_links
             FROM greek_words gw
-            LEFT JOIN word_links wl        ON wl.greek_word_id = gw.id
-            LEFT JOIN translation_words tw ON tw.id = wl.translation_word_id
-            LEFT JOIN link_confidence lc   ON lc.link_id = wl.id
+            LEFT JOIN LATERAL (
+                SELECT DISTINCT ON (tw.id)
+                    tw.id              AS tw_id,
+                    tw.word_text       AS word_text,
+                    tw.word_position   AS word_position,
+                    lc.method          AS method,
+                    lc.score           AS score
+                FROM word_links wl
+                JOIN translation_words tw ON tw.id = wl.translation_word_id
+                JOIN link_confidence lc   ON lc.link_id = wl.id
+                WHERE wl.greek_word_id = gw.id
+                ORDER BY tw.id, lc.score DESC
+            ) best ON true
             WHERE gw.book_id = :book_id
               AND gw.chapter = :chapter
               AND gw.verse   = :verse

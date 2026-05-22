@@ -1,0 +1,175 @@
+{% extends 'base.html.twig' %}
+{% block title %}Woorden koppelen – Bijbel Vergelijking{% endblock %}
+
+{% block body %}
+<div class="page-linking-home">
+
+    <div class="linking-header">
+        <h1>Woorden koppelen</h1>
+        <p class="linking-sub">Selecteer een methode om te beginnen met koppelen</p>
+    </div>
+
+    <div class="linking-method-grid">
+
+        {# Method 1: by passage #}
+        <div class="method-card">
+            <div class="method-icon">📖</div>
+            <h2>Per vers</h2>
+            <p>Selecteer een boek, hoofdstuk en vers om de woorden van dat vers te koppelen.</p>
+
+            <form class="passage-select-form"
+                  action="#"
+                  data-controller="passage-select">
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="testament-select">Testament</label>
+                        <select id="testament-select"
+                                data-passage-select-target="testament"
+                                data-action="change->passage-select#onTestamentChange">
+                            <option value="OT">Oude Testament</option>
+                            <option value="NT">Nieuwe Testament</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="book-select">Boek</label>
+                        <select id="book-select"
+                                data-passage-select-target="book"
+                                data-action="change->passage-select#onBookChange">
+                            <optgroup label="Oude Testament">
+                                {% for book in ot_books %}
+                                <option value="{{ book.usfmCode }}"
+                                        data-testament="OT"
+                                        data-max-chapter="{{ book.chapterCount }}">
+                                    {{ book.nameNl }}
+                                </option>
+                                {% endfor %}
+                            </optgroup>
+                            <optgroup label="Nieuwe Testament">
+                                {% for book in nt_books %}
+                                <option value="{{ book.usfmCode }}"
+                                        data-testament="NT"
+                                        data-max-chapter="{{ book.chapterCount }}">
+                                    {{ book.nameNl }}
+                                </option>
+                                {% endfor %}
+                            </optgroup>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="chapter-input">Hoofdstuk</label>
+                        <input type="number" id="chapter-input" min="1" value="1"
+                               data-passage-select-target="chapter"
+                               data-action="change->passage-select#onChapterChange">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="verse-input">Vers</label>
+                        <input type="number" id="verse-input" min="1" value="1"
+                               data-passage-select-target="verse">
+                    </div>
+                </div>
+
+                <button type="button"
+                        class="btn-primary"
+                        data-action="click->passage-select#navigate">
+                    Ga naar vers →
+                </button>
+            </form>
+        </div>
+
+        {# Method 2: by Strong's number #}
+        <div class="method-card">
+            <div class="method-icon">🔢</div>
+            <h2>Per Strong's nummer</h2>
+            <p>Koppel alle voorkomen van een specifiek Hebreeuws of Grieks woord tegelijk.</p>
+
+            <form class="strongs-select-form"
+                  data-controller="strongs-select"
+                  action="#">
+
+                <div class="form-group">
+                    <label for="strongs-input">Strong's nummer</label>
+                    <input type="text"
+                           id="strongs-input"
+                           placeholder="bijv. H0430 of G2316"
+                           data-strongs-select-target="input"
+                           data-action="keydown.enter->strongs-select#navigate">
+                    <p class="field-hint">
+                        H = Hebreeuws (OT) &nbsp;·&nbsp; G = Grieks (NT)
+                    </p>
+                </div>
+
+                <button type="button"
+                        class="btn-primary"
+                        data-action="click->strongs-select#navigate">
+                    Zoek woord →
+                </button>
+            </form>
+        </div>
+
+    </div>
+</div>
+
+<style>
+.page-linking-home { max-width: 900px; margin: 0 auto; }
+.linking-header { text-align: center; padding: 2rem 0 2.5rem; }
+.linking-header h1 { font-size: 2rem; font-weight: 500; }
+.linking-sub { color: var(--color-ink-muted); margin-top: .5rem; font-style: italic; }
+.linking-method-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; }
+@media (max-width: 700px) { .linking-method-grid { grid-template-columns: 1fr; } }
+
+.method-card {
+    background: #fff;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    padding: 2rem;
+    box-shadow: var(--shadow);
+}
+.method-icon { font-size: 2.5rem; margin-bottom: .75rem; }
+.method-card h2 { font-size: 1.3rem; font-weight: 500; margin-bottom: .5rem; }
+.method-card p { color: var(--color-ink-light); font-size: .95rem; margin-bottom: 1.5rem; line-height: 1.6; }
+
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.form-group { margin-bottom: 1rem; }
+.form-group label { display: block; font-size: .85rem; color: var(--color-ink-light); margin-bottom: .3rem; }
+.form-group select,
+.form-group input[type="number"],
+.form-group input[type="text"] {
+    width: 100%;
+    padding: .55rem .8rem;
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    font-family: var(--font-serif);
+    font-size: .95rem;
+    background: #fdfaf5;
+    color: var(--color-ink);
+}
+.form-group select:focus,
+.form-group input:focus {
+    outline: none;
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 3px rgba(122,59,30,.1);
+}
+.field-hint { font-size: .75rem; color: var(--color-ink-muted); margin-top: .3rem; }
+
+.btn-primary {
+    width: 100%;
+    padding: .65rem;
+    background: var(--color-accent);
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    font-family: var(--font-serif);
+    font-size: 1rem;
+    cursor: pointer;
+    margin-top: .5rem;
+    transition: background .15s;
+}
+.btn-primary:hover { background: #8a4522; }
+</style>
+{% endblock %}

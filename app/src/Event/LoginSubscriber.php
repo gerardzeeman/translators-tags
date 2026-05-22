@@ -1,6 +1,6 @@
 <?php
 
-namespace App\EventSubscriber;
+namespace App\Event;
 
 use App\Entity\User;
 use Doctrine\ORM\EntityManagerInterface;

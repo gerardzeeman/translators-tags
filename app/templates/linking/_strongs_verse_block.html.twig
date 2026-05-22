@@ -1,0 +1,96 @@
+{#
+  Partial: a single verse block on the Strong's linking page.
+  Variables: v (verse data array), strongs (string)
+#}
+<div class="strongs-verse-block"
+     id="verse-block-{{ v.usfm_code }}-{{ v.chapter }}-{{ v.verse }}"
+     data-controller="word-linker"
+     data-word-linker-save-url-value="{{ path('api_linking_save') }}"
+     data-word-linker-delete-url-value="{{ path('api_linking_delete', {linkId: 0}) }}"
+     data-word-linker-refresh-url-value="{{ path('api_linking_verse_block', {strongs: strongs, usfm: v.usfm_code, chapter: v.chapter, verse: v.verse}) }}"
+     data-word-linker-progress-url-value="{{ path('api_linking_progress', {strongs: strongs}) }}">
+
+    {# Verse reference header #}
+    <div class="verse-block-header">
+        <a href="{{ path('app_linking_passage', {
+            usfm: v.usfm_code, chapter: v.chapter, verse: v.verse
+        }) }}" class="verse-ref-link">
+            {{ v.book_name }} {{ v.chapter }}:{{ v.verse }}
+        </a>
+    </div>
+
+    {# Source words #}
+    <div class="source-words-grid {% if v.testament == 'OT' %}rtl{% endif %}">
+        {% for word in v.source_words %}
+        {% set lang = v.testament == 'OT' ? 'HE' : 'GR' %}
+        {% set linked_tw_ids = word.links|map(l => l.tw_id)|join(',') %}
+        {% set best_method = word.links|length > 0 ? word.links|first.method : (word.is_manually_empty ? 'manual-empty' : 'none') %}
+        {% set is_target = word.strongs == strongs %}
+
+        <div class="src-word method-border-{{ best_method }} {% if is_target %}src-word-target{% endif %}"
+             data-source-id="{{ word.id }}"
+             data-lang="{{ lang }}"
+             data-strongs="{{ word.strongs }}"
+             data-linked-tw-ids="{{ linked_tw_ids }}"
+             data-manually-empty="{{ word.is_manually_empty ? '1' : '0' }}"
+             data-action="click->word-linker#selectSource"
+             data-word-linker-target="sourceWord">
+
+            <span class="src-text">{{ word.word_text }}</span>
+            {% if word.transliteration %}
+            <span class="src-translit">{{ word.transliteration }}</span>
+            {% endif %}
+            <span class="src-strongs {% if is_target %}strongs-highlight{% endif %}">
+                {{ word.strongs }}
+            </span>
+
+            <div class="src-links">
+                {% for link in word.links %}
+                <span class="link-chip method-{{ link.method }}"
+                      data-link-id="{{ link.link_id }}"
+                      data-tw-id="{{ link.tw_id }}">×</span>
+                {% endfor %}
+                {% if word.is_manually_empty %}
+                <span class="link-chip method-manual-empty" title="Handmatig: geen koppeling">∅</span>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    {# Dutch words #}
+    <div class="dutch-words-flow" style="margin-top:.75rem;">
+        {% for word in v.dutch_words %}
+        {% set best_method = word.links|length > 0 ? word.links|first.method : 'none' %}
+        <span class="nl-word method-underline-{{ best_method }}"
+              data-tw-id="{{ word.id }}"
+              data-action="click->word-linker#selectDutch"
+              data-word-linker-target="dutchWord">
+            {{- word.word_text -}}
+        </span>
+        {{ ' ' }}
+        {% endfor %}
+    </div>
+
+    {# Action bar per verse block #}
+    <div class="action-bar action-bar-inline"
+         data-word-linker-target="actionBar"
+         style="display:none; margin-top:.75rem;">
+        <div class="action-bar-inner">
+            <span class="action-label">
+                Geselecteerd: <strong data-word-linker-target="selectedLabel">–</strong>
+            </span>
+            <div class="action-buttons">
+                <button class="btn-save"
+                        data-action="click->word-linker#saveLinks">
+                    ✓ Opslaan
+                </button>
+                <button class="btn-cancel"
+                        data-action="click->word-linker#cancel">
+                    Annuleren
+                </button>
+            </div>
+        </div>
+    </div>
+
+</div>

@@ -13,3 +13,7 @@ services:
     App\Repository\PassageRepository:
         arguments:
             $connection: '@doctrine.dbal.default_connection'
+
+    App\Repository\LinkingRepository:
+        arguments:
+            $connection: '@doctrine.dbal.default_connection'
