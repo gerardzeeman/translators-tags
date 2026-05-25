@@ -29,8 +29,9 @@
             </div>
             <div class="stat-methods">
                 <span class="badge badge-manual">Handmatig: {{ row.manual_links }}</span>
-                <span class="badge badge-pivot">Pivot: {{ row.pivot_links }}</span>
-                <span class="badge badge-heuristic">Heuristiek: {{ row.heuristic_links }}</span>
+                <span class="badge badge-manual-hint">Hint: {{ row.manual_hint_links }}</span>
+                <span class="badge badge-proper-noun">Eigennaam: {{ row.proper_noun_links }}</span>
+                <span class="badge badge-positional">Positioneel: {{ row.positional_links }}</span>
             </div>
         </div>
         {% endfor %}

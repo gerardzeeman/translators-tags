@@ -224,24 +224,26 @@ class PassageRepository
         $sql = <<<SQL
             SELECT
                 'OT' AS testament,
-                COUNT(DISTINCT hw.id)                                         AS total_words,
-                COUNT(DISTINCT wl.hebrew_word_id)                             AS linked_words,
-                COUNT(DISTINCT CASE WHEN lc.method = 'manual'    THEN wl.id END) AS manual_links,
-                COUNT(DISTINCT CASE WHEN lc.method = 'pivot'     THEN wl.id END) AS pivot_links,
-                COUNT(DISTINCT CASE WHEN lc.method = 'heuristic' THEN wl.id END) AS heuristic_links
+                COUNT(DISTINCT hw.id)                                               AS total_words,
+                COUNT(DISTINCT wl.hebrew_word_id)                                   AS linked_words,
+                COUNT(DISTINCT CASE WHEN lc.method = 'manual'      THEN wl.id END) AS manual_links,
+                COUNT(DISTINCT CASE WHEN lc.method = 'manual_hint' THEN wl.id END) AS manual_hint_links,
+                COUNT(DISTINCT CASE WHEN lc.method = 'proper_noun' THEN wl.id END) AS proper_noun_links,
+                COUNT(DISTINCT CASE WHEN lc.method = 'positional'  THEN wl.id END) AS positional_links
             FROM hebrew_words hw
-            LEFT JOIN word_links wl    ON wl.hebrew_word_id = hw.id
+            LEFT JOIN word_links wl      ON wl.hebrew_word_id = hw.id
             LEFT JOIN link_confidence lc ON lc.link_id = wl.id
             UNION ALL
             SELECT
                 'NT',
                 COUNT(DISTINCT gw.id),
                 COUNT(DISTINCT wl.greek_word_id),
-                COUNT(DISTINCT CASE WHEN lc.method = 'manual'    THEN wl.id END),
-                COUNT(DISTINCT CASE WHEN lc.method = 'pivot'     THEN wl.id END),
-                COUNT(DISTINCT CASE WHEN lc.method = 'heuristic' THEN wl.id END)
+                COUNT(DISTINCT CASE WHEN lc.method = 'manual'      THEN wl.id END),
+                COUNT(DISTINCT CASE WHEN lc.method = 'manual_hint' THEN wl.id END),
+                COUNT(DISTINCT CASE WHEN lc.method = 'proper_noun' THEN wl.id END),
+                COUNT(DISTINCT CASE WHEN lc.method = 'positional'  THEN wl.id END)
             FROM greek_words gw
-            LEFT JOIN word_links wl    ON wl.greek_word_id = gw.id
+            LEFT JOIN word_links wl      ON wl.greek_word_id = gw.id
             LEFT JOIN link_confidence lc ON lc.link_id = wl.id
         SQL;
 

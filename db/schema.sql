@@ -114,7 +114,7 @@ CREATE TABLE IF NOT EXISTS word_links (
 
 CREATE TABLE IF NOT EXISTS link_confidence (
     link_id    INTEGER     NOT NULL REFERENCES word_links(id) ON DELETE CASCADE,
-    method     VARCHAR(20) NOT NULL CHECK (method IN ('pivot', 'heuristic', 'manual')),
+    method     VARCHAR(20) NOT NULL CHECK (method IN ('manual', 'manual_hint', 'proper_noun', 'positional')),
     score      NUMERIC(4,3) CHECK (score BETWEEN 0 AND 1),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     created_by TEXT,                            -- NULL = automated

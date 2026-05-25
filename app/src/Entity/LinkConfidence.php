@@ -53,10 +53,11 @@ class LinkConfidence
     public function getMethodLabel(): string
     {
         return match ($this->method) {
-            'pivot'     => 'ESV Pivot',
-            'heuristic' => 'Heuristic',
-            'manual'    => 'Manual',
-            default     => ucfirst($this->method),
+            'manual'      => 'Handmatig',
+            'manual_hint' => 'Hint (handmatig)',
+            'proper_noun' => 'Eigennaam',
+            'positional'  => 'Positioneel',
+            default       => ucfirst($this->method),
         };
     }
 }
