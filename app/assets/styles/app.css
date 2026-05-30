@@ -816,6 +816,17 @@ a:hover { text-decoration: underline; }
 .verse-ref-link:hover { text-decoration: underline; }
 .no-results { text-align: center; color: var(--color-ink-muted); font-style: italic; padding: 3rem; }
 
+/* ── Strong's badge (small, inline) ──────────────────────────────────────── */
+.strongs-badge-small {
+    font-family: var(--font-mono);
+    font-size: .75rem;
+    background: var(--color-parchment);
+    border: 1px solid var(--color-border);
+    border-radius: 3px;
+    padding: .1rem .45rem;
+    color: var(--color-ink-muted);
+}
+
 /* ── Strong's dictionary entry panel ─────────────────────────────────────── */
 .strongs-entry {
     background: #fff;

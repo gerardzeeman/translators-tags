@@ -1,10 +1,60 @@
 <turbo-frame id="strongs-panel">
+{% if strongs_entry %}
+<div class="strongs-entry">
+    <div class="strongs-entry-word">
+        {% if strongs_entry.lemma %}
+        <span class="strongs-lemma {% if strongs_entry.lang == 'HE' %}strongs-lemma-he{% endif %}">
+            {{- strongs_entry.lemma -}}
+        </span>
+        {% endif %}
+        <span class="strongs-badge-small">{{ strongs_number }}</span>
+        {% if strongs_entry.transliteration %}
+        <span class="strongs-translit">{{ strongs_entry.transliteration }}</span>
+        {% endif %}
+        {% if strongs_entry.pronunciation %}
+        <span class="strongs-pronun">({{ strongs_entry.pronunciation }})</span>
+        {% endif %}
+        {% if strongs_entry.pos %}
+        <span class="strongs-pos">{{ strongs_entry.pos }}</span>
+        {% endif %}
+    </div>
+
+    {% if strongs_entry.short_def %}
+    <p class="strongs-short-def">{{ strongs_entry.short_def }}</p>
+    {% endif %}
+
+    {% if strongs_entry.definition %}
+    <ol class="strongs-definition">
+        {% for line in strongs_entry.definition|split('\n') %}
+        {% if line|trim %}
+        <li>{{ line|replace({'1) ': '', '2) ': '', '3) ': '', '4) ': '', '5) ': '', '6) ': '', '7) ': '', '8) ': '', '9) ': ''})|trim }}</li>
+        {% endif %}
+        {% endfor %}
+    </ol>
+    {% endif %}
+
+    <div class="strongs-meta">
+        {% if strongs_entry.etymology %}
+        <div class="strongs-meta-row">
+            <span class="strongs-meta-label">Herkomst</span>
+            <span>{{ strongs_entry.etymology }}</span>
+        </div>
+        {% endif %}
+        {% if strongs_entry.kjv_renderings %}
+        <div class="strongs-meta-row">
+            <span class="strongs-meta-label">KJV</span>
+            <span>{{ strongs_entry.kjv_renderings }}</span>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% else %}
 <div class="strongs-detail">
     <h3 class="strongs-number">{{ strongs_number }}</h3>
-    <p class="strongs-note">
-        Gedetailleerde Strong's lexiconinformatie wordt in een toekomstige versie toegevoegd
-        via integratie met een publiek domein Grieks/Hebreeuws woordenboek.
+    <p class="strongs-note" style="color:var(--color-ink-muted); font-style:italic; font-size:.9rem;">
+        Geen woordenboekgegevens beschikbaar voor {{ strongs_number }}.
+        Voer de ingest opnieuw uit om de Strong's data te laden.
     </p>
-    <p class="strongs-number-raw">Nummer: <code>{{ strongs_number }}</code></p>
 </div>
+{% endif %}
 </turbo-frame>

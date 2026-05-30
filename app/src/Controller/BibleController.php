@@ -3,6 +3,7 @@
 namespace App\Controller;
 
 use App\Repository\BookRepository;
+use App\Repository\LinkingRepository;
 use App\Repository\PassageRepository;
 use App\Repository\TranslationRepository;
 use App\Service\MorphologyParser;
@@ -18,6 +19,7 @@ class BibleController extends AbstractController
         private readonly PassageRepository     $passageRepository,
         private readonly TranslationRepository $translationRepository,
         private readonly MorphologyParser      $morphologyParser,
+        private readonly LinkingRepository     $linkingRepository,
     ) {}
 
     /**
@@ -163,6 +165,7 @@ class BibleController extends AbstractController
     {
         return $this->render('bible/strongs.html.twig', [
             'strongs_number' => $number,
+            'strongs_entry'  => $this->linkingRepository->fetchStrongsEntry($number),
         ]);
     }
 

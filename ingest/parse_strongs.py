@@ -55,6 +55,17 @@ def _clean(text: str | None) -> str | None:
     return text or None
 
 
+def _canonical_id(prefix: str, raw: str) -> str:
+    """Return canonical Strong's ID: prefix + integer (no leading zeros).
+
+    e.g. ('H', '0853') -> 'H853', ('G', '00037') -> 'G37'
+    """
+    try:
+        return f"{prefix}{int(raw)}"
+    except (ValueError, TypeError):
+        return f"{prefix}{raw}"
+
+
 def _inner_text(el) -> str:
     """Flatten all text content inside an element (handles child tags like <hi>)."""
     return _clean("".join(el.itertext())) or ""
@@ -77,9 +88,12 @@ def _parse_hebrew(path: Path) -> list[dict]:
         if w_el is None:
             continue
 
-        strongs_id = w_el.get("ID")          # e.g. "H1"
-        if not strongs_id or not strongs_id.startswith("H"):
+        raw_id = w_el.get("ID", "")           # e.g. "H1" or "H0853"
+        if not raw_id.startswith("H"):
             continue
+        # Strip any trailing letter variant suffix (e.g. "H7225G" -> "H7225")
+        raw_num = re.sub(r"[A-Za-z]+$", "", raw_id[1:])
+        strongs_id = _canonical_id("H", raw_num)
 
         lemma           = w_el.get("lemma")  # pointed form with vowel marks
         transliteration = w_el.get("xlit")
@@ -145,7 +159,7 @@ def _parse_greek(path: Path) -> list[dict]:
         if not num:
             continue
 
-        strongs_id = f"G{num}"
+        strongs_id = _canonical_id("G", num)
 
         # Greek word
         greek_el = entry.find("greek")

@@ -400,10 +400,32 @@ class LinkingRepository
                     pos, morph, definition, etymology, kjv_renderings, short_def
              FROM strongs_entries
              WHERE strongs_id = :id",
-            ['id' => strtoupper($strongs)]
+            ['id' => $this->normalizeStrongsId($strongs)]
         );
 
         return $row ?: null;
+    }
+
+    /**
+     * Normalize a Strong's number to the canonical form stored in strongs_entries:
+     *   prefix letter (H or G) + integer with no leading zeros.
+     *
+     * Handles:
+     *   H7225G  → H7225   (TAHOT trailing variant letter)
+     *   H0853   → H853    (leading zeros in hebrew_words)
+     *   G0037   → G37     (leading zeros in greek_words)
+     */
+    private function normalizeStrongsId(string $strongs): string
+    {
+        $strongs = strtoupper(trim($strongs));
+
+        // Strip trailing non-digit suffix (e.g. 'G' in H7225G)
+        $strongs = (string) preg_replace('/^([HG]\d+)[A-Z]+$/', '$1', $strongs);
+
+        // Strip leading zeros from the numeric part
+        $strongs = (string) preg_replace('/^([HG])0+(\d)/', '$1$2', $strongs);
+
+        return $strongs;
     }
 
     /**
