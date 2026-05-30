@@ -7,13 +7,14 @@
      data-controller="word-linker"
      data-word-linker-save-url-value="{{ path('api_linking_save') }}"
      data-word-linker-delete-url-value="{{ path('api_linking_delete', {linkId: 0}) }}"
-     data-word-linker-refresh-url-value="{{ path('api_linking_verse_block', {strongs: strongs, usfm: v.usfm_code, chapter: v.chapter, verse: v.verse}) }}"
-     data-word-linker-progress-url-value="{{ path('api_linking_progress', {strongs: strongs}) }}">
+     data-word-linker-refresh-url-value="{{ path('api_linking_verse_block', {translation: translation.code, strongs: strongs, usfm: v.usfm_code, chapter: v.chapter, verse: v.verse}) }}"
+     data-word-linker-progress-url-value="{{ path('api_linking_progress', {translation: translation.code, strongs: strongs}) }}"
+     data-word-linker-translation-id-value="{{ translation.id }}">
 
     {# Verse reference header #}
     <div class="verse-block-header">
         <a href="{{ path('app_linking_passage', {
-            usfm: v.usfm_code, chapter: v.chapter, verse: v.verse
+            translation: translation.code, usfm: v.usfm_code, chapter: v.chapter, verse: v.verse
         }) }}" class="verse-ref-link">
             {{ v.book_name }} {{ v.chapter }}:{{ v.verse }}
         </a>

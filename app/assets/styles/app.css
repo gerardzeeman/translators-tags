@@ -211,13 +211,44 @@ a:hover { text-decoration: underline; }
 }
 .nav-btn:hover { border-color: var(--color-accent); text-decoration: none; }
 
+/* Translation switcher (verse page + linking pages) */
+.translation-switcher { display: flex; gap: .4rem; flex-wrap: wrap; }
+.trans-btn {
+    display: inline-flex;
+    align-items: center;
+    padding: .25rem .65rem;
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    font-size: .8rem;
+    font-family: var(--font-mono);
+    color: var(--color-ink-light);
+    background: var(--color-surface);
+    text-decoration: none;
+    transition: border-color .15s, background .15s;
+}
+.trans-btn:hover { border-color: var(--color-accent); text-decoration: none; }
+.trans-btn-active {
+    border-color: var(--color-accent);
+    background: var(--color-accent);
+    color: #fff;
+    font-weight: 600;
+}
+
 .verse-compare-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    grid-template-rows: auto auto;
     gap: 1.5rem;
+    align-items: start;
 }
 @media (max-width: 1000px) { .verse-compare-grid { grid-template-columns: 1fr; } }
+
+/* Each column stacks its panels independently so SV sits flush above HSV
+   regardless of how tall the source / strongs panels are on the left. */
+.compare-col {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
 
 .panel {
     background: #fff;
@@ -226,7 +257,25 @@ a:hover { text-decoration: underline; }
     padding: 1.5rem;
     box-shadow: var(--shadow);
 }
-.panel-strongs { grid-column: 1 / -1; }
+
+/* ── Translation indicator toggle (inside source panel heading) ─────────── */
+.translation-indicator-toggle {
+    display: flex;
+    align-items: center;
+    gap: .35rem;
+    margin-left: auto;
+}
+.toggle-label {
+    font-size: .75rem;
+    color: var(--color-ink-muted);
+    font-family: var(--font-mono);
+    white-space: nowrap;
+}
+
+/* ── Indicator visibility: CSS attr-selector toggle ─────────────────────── */
+/* Default: show SV indicators, hide HSV indicators */
+[data-active-translation="SV"]  .hsv-indicators { display: none; }
+[data-active-translation="HSV"] .sv-indicators  { display: none; }
 
 .panel-heading {
     font-size: 1rem;
@@ -766,3 +815,82 @@ a:hover { text-decoration: underline; }
 }
 .verse-ref-link:hover { text-decoration: underline; }
 .no-results { text-align: center; color: var(--color-ink-muted); font-style: italic; padding: 3rem; }
+
+/* ── Strong's dictionary entry panel ─────────────────────────────────────── */
+.strongs-entry {
+    background: #fff;
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    padding: 1.25rem 1.5rem;
+    box-shadow: var(--shadow);
+    margin-bottom: 1.25rem;
+}
+.strongs-entry-word {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: .5rem;
+    margin-bottom: .75rem;
+}
+.strongs-lemma {
+    font-size: 2rem;
+    font-family: var(--font-serif);
+    color: var(--color-gk);
+    line-height: 1;
+}
+.strongs-lemma-he {
+    color: var(--color-he);
+    direction: rtl;
+}
+.strongs-translit {
+    font-style: italic;
+    color: var(--color-ink-light);
+    font-size: 1.1rem;
+}
+.strongs-pronun {
+    color: var(--color-ink-muted);
+    font-size: .9rem;
+    font-family: var(--font-mono);
+}
+.strongs-pos {
+    font-size: .8rem;
+    font-family: var(--font-mono);
+    background: var(--color-parchment);
+    border: 1px solid var(--color-border);
+    border-radius: 3px;
+    padding: .1rem .4rem;
+    color: var(--color-ink-light);
+}
+.strongs-short-def {
+    font-style: italic;
+    color: var(--color-ink-light);
+    margin-bottom: .75rem;
+    font-size: .95rem;
+}
+.strongs-definition {
+    margin: 0 0 .75rem 1.5rem;
+    font-size: .95rem;
+    color: var(--color-ink);
+    line-height: 1.6;
+}
+.strongs-meta {
+    display: flex;
+    flex-direction: column;
+    gap: .35rem;
+    border-top: 1px solid var(--color-border-light);
+    padding-top: .75rem;
+    font-size: .88rem;
+    color: var(--color-ink-light);
+}
+.strongs-meta-row {
+    display: flex;
+    gap: .75rem;
+}
+.strongs-meta-label {
+    font-weight: 600;
+    min-width: 5rem;
+    color: var(--color-ink-muted);
+    font-family: var(--font-mono);
+    font-size: .8rem;
+    padding-top: .15rem;
+}

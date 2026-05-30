@@ -2,7 +2,7 @@
 import { Controller } from '@hotwired/stimulus'
 
 export default class extends Controller {
-    static targets = ['testament', 'book', 'chapter', 'verse']
+    static targets = ['testament', 'book', 'chapter', 'verse', 'translation']
 
     connect() {
         this.#filterBooks()
@@ -27,12 +27,13 @@ export default class extends Controller {
     }
 
     navigate() {
-        const usfm    = this.bookTarget.value
-        const chapter = this.chapterTarget.value
-        const verse   = this.verseTarget.value
+        const usfm        = this.bookTarget.value
+        const chapter     = this.chapterTarget.value
+        const verse       = this.verseTarget.value
+        const translation = this.hasTranslationTarget ? this.translationTarget.value : 'SV'
 
         if (usfm && chapter && verse) {
-            window.location.href = `/link/passage/${usfm}/${chapter}/${verse}`
+            window.location.href = `/link/passage/${encodeURIComponent(translation)}/${usfm}/${chapter}/${verse}`
         }
     }
 

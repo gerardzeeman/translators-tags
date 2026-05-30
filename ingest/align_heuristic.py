@@ -24,7 +24,6 @@ from tqdm import tqdm
 from db.connection import get_connection
 from db.loaders import insert_word_link, insert_link_confidence
 
-TRANSLATION_ID        = 1
 PROPER_NOUN_MIN_SCORE = 0.72   # high bar – proper nouns should match closely
 POSITIONAL_SCORE      = 0.30   # low confidence for positional fallback
 PROPER_NOUN_MORPH_HE  = {"NP", "Np"}   # OpenScriptures proper-noun morph codes
@@ -50,6 +49,21 @@ def similarity(a: str, b: str) -> float:
 
 # ─── Book resolver ────────────────────────────────────────────────────────────
 
+def resolve_translation(code: str) -> int:
+    """Return translation_id for a translation code (e.g. 'SV' → 1).
+    Raises ValueError if the code is not found."""
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id FROM translations WHERE code = %s",
+                (code.upper(),),
+            )
+            row = cur.fetchone()
+            if not row:
+                raise ValueError(f"Translation '{code}' not found in the database.")
+            return row[0]
+
+
 def resolve_book(usfm_code: str) -> tuple[int, str]:
     """Return (book_id, testament) for a USFM code (e.g. 'GEN' → (1, 'OT')).
     Raises ValueError if the code is not found."""
@@ -69,18 +83,30 @@ def resolve_book(usfm_code: str) -> tuple[int, str]:
 
 AUTOMATED_METHODS = ('manual_hint', 'proper_noun', 'positional')
 
-def delete_heuristic_links(book_id: int | None = None) -> int:
+def delete_heuristic_links(translation_id: int, book_id: int | None = None) -> int:
     """
     Remove automated word_links (manual_hint / proper_noun / positional) that
-    have no 'manual' confidence row. Manual links are never touched.
+    have no 'manual' confidence row, scoped to a specific translation.
+    Manual links are never touched.
     If book_id is given, only links belonging to words in that book are removed.
     Returns the number of rows deleted.
     """
+    # Base condition: automated method, no manual row, and belongs to translation_id
+    translation_filter = """
+        AND EXISTS (
+            SELECT 1
+            FROM translation_words tw
+            JOIN translation_verses tv ON tv.id = tw.verse_id
+            WHERE tw.id = wl.translation_word_id
+              AND tv.translation_id = %(translation_id)s
+        )
+    """
+
     with get_connection() as conn:
         with conn.cursor() as cur:
             if book_id is None:
                 cur.execute(
-                    """
+                    f"""
                     DELETE FROM word_links wl
                     USING link_confidence lc
                     WHERE lc.link_id = wl.id
@@ -90,11 +116,13 @@ def delete_heuristic_links(book_id: int | None = None) -> int:
                           WHERE lc2.link_id = wl.id
                             AND lc2.method = 'manual'
                       )
-                    """
+                      {translation_filter}
+                    """,
+                    {"translation_id": translation_id},
                 )
             else:
                 cur.execute(
-                    """
+                    f"""
                     DELETE FROM word_links wl
                     USING link_confidence lc
                     WHERE lc.link_id = wl.id
@@ -104,27 +132,28 @@ def delete_heuristic_links(book_id: int | None = None) -> int:
                           WHERE lc2.link_id = wl.id
                             AND lc2.method = 'manual'
                       )
+                      {translation_filter}
                       AND (
                           EXISTS (
                               SELECT 1 FROM hebrew_words hw
-                              WHERE hw.id = wl.hebrew_word_id AND hw.book_id = %s
+                              WHERE hw.id = wl.hebrew_word_id AND hw.book_id = %(book_id)s
                           )
                           OR EXISTS (
                               SELECT 1 FROM greek_words gw
-                              WHERE gw.id = wl.greek_word_id AND gw.book_id = %s
+                              WHERE gw.id = wl.greek_word_id AND gw.book_id = %(book_id)s
                           )
                       )
                     """,
-                    (book_id, book_id),
+                    {"translation_id": translation_id, "book_id": book_id},
                 )
             return cur.rowcount
 
 
 # ─── Data loading ─────────────────────────────────────────────────────────────
 
-def load_manual_hints() -> dict[str, dict[str, int]]:
+def load_manual_hints(translation_id: int) -> dict[str, dict[str, int]]:
     """
-    Build {strongs: {word_normalised: count}} from all existing manual links.
+    Build {strongs: {word_normalised: count}} from manual links for the given translation.
 
     The special key '__empty__' counts manual "no Dutch translation" annotations
     stored in manual_empty_links. If this is the dominant key for a Strong's
@@ -147,10 +176,13 @@ def load_manual_hints() -> dict[str, dict[str, int]]:
                 FROM word_links wl
                 JOIN link_confidence lc ON lc.link_id = wl.id AND lc.method = 'manual'
                 JOIN translation_words tw ON tw.id = wl.translation_word_id
+                JOIN translation_verses tv ON tv.id = tw.verse_id
                 JOIN hebrew_words hw ON hw.id = wl.hebrew_word_id
                 WHERE hw.strongs IS NOT NULL
+                  AND tv.translation_id = %s
                 GROUP BY hw.strongs, tw.word_normalised
-                """
+                """,
+                (translation_id,),
             )
             for strongs, word_norm, cnt in cur.fetchall():
                 add(strongs, word_norm, int(cnt))
@@ -162,10 +194,13 @@ def load_manual_hints() -> dict[str, dict[str, int]]:
                 FROM word_links wl
                 JOIN link_confidence lc ON lc.link_id = wl.id AND lc.method = 'manual'
                 JOIN translation_words tw ON tw.id = wl.translation_word_id
+                JOIN translation_verses tv ON tv.id = tw.verse_id
                 JOIN greek_words gw ON gw.id = wl.greek_word_id
                 WHERE gw.strongs IS NOT NULL
+                  AND tv.translation_id = %s
                 GROUP BY gw.strongs, tw.word_normalised
-                """
+                """,
+                (translation_id,),
             )
             for strongs, word_norm, cnt in cur.fetchall():
                 add(strongs, word_norm, int(cnt))
@@ -177,8 +212,10 @@ def load_manual_hints() -> dict[str, dict[str, int]]:
                 FROM manual_empty_links mel
                 JOIN hebrew_words hw ON hw.id = mel.hebrew_word_id
                 WHERE hw.strongs IS NOT NULL
+                  AND mel.translation_id = %s
                 GROUP BY hw.strongs
-                """
+                """,
+                (translation_id,),
             )
             for strongs, cnt in cur.fetchall():
                 add(strongs, "__empty__", int(cnt))
@@ -190,8 +227,10 @@ def load_manual_hints() -> dict[str, dict[str, int]]:
                 FROM manual_empty_links mel
                 JOIN greek_words gw ON gw.id = mel.greek_word_id
                 WHERE gw.strongs IS NOT NULL
+                  AND mel.translation_id = %s
                 GROUP BY gw.strongs
-                """
+                """,
+                (translation_id,),
             )
             for strongs, cnt in cur.fetchall():
                 add(strongs, "__empty__", int(cnt))
@@ -199,8 +238,9 @@ def load_manual_hints() -> dict[str, dict[str, int]]:
     return hints
 
 
-def load_unlinked_hebrew(book_id: int | None = None) -> list[dict]:
-    """Load Hebrew words that have no word_links entry and no manual_empty_links entry.
+def load_unlinked_hebrew(translation_id: int, book_id: int | None = None) -> list[dict]:
+    """Load Hebrew words that have no word_links entry (for this translation)
+    and no manual_empty_links entry (for this translation).
     If book_id is given, only words from that book are returned."""
     with get_connection() as conn:
         with conn.cursor() as cur:
@@ -209,24 +249,32 @@ def load_unlinked_hebrew(book_id: int | None = None) -> list[dict]:
                        hw.word_position, hw.transliteration, hw.morph_code, hw.strongs
                 FROM hebrew_words hw
                 WHERE NOT EXISTS (
-                    SELECT 1 FROM word_links WHERE hebrew_word_id = hw.id
+                    SELECT 1
+                    FROM word_links wl
+                    JOIN translation_words tw  ON tw.id = wl.translation_word_id
+                    JOIN translation_verses tv ON tv.id = tw.verse_id
+                    WHERE wl.hebrew_word_id = hw.id
+                      AND tv.translation_id = %(translation_id)s
                 )
                 AND NOT EXISTS (
-                    SELECT 1 FROM manual_empty_links WHERE hebrew_word_id = hw.id
+                    SELECT 1 FROM manual_empty_links
+                    WHERE hebrew_word_id = hw.id
+                      AND translation_id = %(translation_id)s
                 )
             """
-            params: list = []
+            params: dict = {"translation_id": translation_id}
             if book_id is not None:
-                sql += " AND hw.book_id = %s"
-                params.append(book_id)
+                sql += " AND hw.book_id = %(book_id)s"
+                params["book_id"] = book_id
             sql += " ORDER BY hw.book_id, hw.chapter, hw.verse, hw.word_position"
             cur.execute(sql, params)
             cols = [d[0] for d in cur.description]
             return [dict(zip(cols, row)) for row in cur.fetchall()]
 
 
-def load_unlinked_greek(book_id: int | None = None) -> list[dict]:
-    """Load Greek words that have no word_links entry and no manual_empty_links entry.
+def load_unlinked_greek(translation_id: int, book_id: int | None = None) -> list[dict]:
+    """Load Greek words that have no word_links entry (for this translation)
+    and no manual_empty_links entry (for this translation).
     If book_id is given, only words from that book are returned."""
     with get_connection() as conn:
         with conn.cursor() as cur:
@@ -235,23 +283,30 @@ def load_unlinked_greek(book_id: int | None = None) -> list[dict]:
                        gw.word_position, gw.parse_code, gw.strongs
                 FROM greek_words gw
                 WHERE NOT EXISTS (
-                    SELECT 1 FROM word_links WHERE greek_word_id = gw.id
+                    SELECT 1
+                    FROM word_links wl
+                    JOIN translation_words tw  ON tw.id = wl.translation_word_id
+                    JOIN translation_verses tv ON tv.id = tw.verse_id
+                    WHERE wl.greek_word_id = gw.id
+                      AND tv.translation_id = %(translation_id)s
                 )
                 AND NOT EXISTS (
-                    SELECT 1 FROM manual_empty_links WHERE greek_word_id = gw.id
+                    SELECT 1 FROM manual_empty_links
+                    WHERE greek_word_id = gw.id
+                      AND translation_id = %(translation_id)s
                 )
             """
-            params: list = []
+            params: dict = {"translation_id": translation_id}
             if book_id is not None:
-                sql += " AND gw.book_id = %s"
-                params.append(book_id)
+                sql += " AND gw.book_id = %(book_id)s"
+                params["book_id"] = book_id
             sql += " ORDER BY gw.book_id, gw.chapter, gw.verse, gw.word_position"
             cur.execute(sql, params)
             cols = [d[0] for d in cur.description]
             return [dict(zip(cols, row)) for row in cur.fetchall()]
 
 
-def load_verse_dutch_words(book_id: int, chapter: int, verse: int) -> list[dict]:
+def load_verse_dutch_words(translation_id: int, book_id: int, chapter: int, verse: int) -> list[dict]:
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -263,7 +318,7 @@ def load_verse_dutch_words(book_id: int, chapter: int, verse: int) -> list[dict]
                   AND tv.book_id = %s AND tv.chapter = %s AND tv.verse = %s
                 ORDER BY tw.word_position
                 """,
-                (TRANSLATION_ID, book_id, chapter, verse),
+                (translation_id, book_id, chapter, verse),
             )
             cols = [d[0] for d in cur.description]
             return [dict(zip(cols, row)) for row in cur.fetchall()]
@@ -455,17 +510,17 @@ def _align_word(word: dict, lang: str, dutch: list[dict],
     return tw_id, score, "positional"
 
 
-def align_heuristic(book_id: int | None = None, testament: str | None = None,
-                    book_label: str = "all books") -> None:
+def align_heuristic(translation_id: int, book_id: int | None = None,
+                    testament: str | None = None, book_label: str = "all books") -> None:
     # ── Step 1: remove stale heuristic links ──────────────────────────────────
     scope = f"book {book_label}" if book_id else "all books"
     print(f"  Removing previous heuristic links ({scope}) …")
-    deleted = delete_heuristic_links(book_id)
+    deleted = delete_heuristic_links(translation_id, book_id)
     print(f"  Deleted {deleted:,} heuristic-only links")
 
     # ── Step 2: build manual-hint index ───────────────────────────────────────
     print("  Loading manual hints …")
-    manual_hints = load_manual_hints()
+    manual_hints = load_manual_hints(translation_id)
     strong_count = len(manual_hints)
     hint_count   = sum(sum(v.values()) for v in manual_hints.values())
     print(f"  Manual hint index: {strong_count:,} Strong's numbers, "
@@ -476,8 +531,8 @@ def align_heuristic(book_id: int | None = None, testament: str | None = None,
     do_greek  = testament in (None, "NT")
 
     print(f"  Loading unlinked source words ({scope}) …")
-    hebrew_unlinked = load_unlinked_hebrew(book_id) if do_hebrew else []
-    greek_unlinked  = load_unlinked_greek(book_id)  if do_greek  else []
+    hebrew_unlinked = load_unlinked_hebrew(translation_id, book_id) if do_hebrew else []
+    greek_unlinked  = load_unlinked_greek(translation_id, book_id)  if do_greek  else []
     source_counts   = load_verse_source_counts()
 
     print(f"  Unlinked Hebrew words: {len(hebrew_unlinked):,}")
@@ -488,7 +543,7 @@ def align_heuristic(book_id: int | None = None, testament: str | None = None,
     def get_dutch(book_id: int, chapter: int, verse: int) -> list[dict]:
         key = (book_id, chapter, verse)
         if key not in dutch_cache:
-            dutch_cache[key] = load_verse_dutch_words(book_id, chapter, verse)
+            dutch_cache[key] = load_verse_dutch_words(translation_id, book_id, chapter, verse)
         return dutch_cache[key]
 
     inserted_hint       = 0
@@ -577,18 +632,33 @@ if __name__ == "__main__":
         help="Only process a single Bible book, identified by its USFM code "
              "(e.g. GEN, EXO, MAT, REV). Omit to process all books.",
     )
+    parser.add_argument(
+        "--translation",
+        metavar="CODE",
+        default="SV",
+        help="Translation code to align against (e.g. SV, NBG51). Defaults to SV.",
+    )
     args = parser.parse_args()
+
+    # Resolve translation
+    try:
+        translation_id = resolve_translation(args.translation)
+        print(f"Translation: {args.translation} (id={translation_id})")
+    except ValueError as e:
+        parser.error(str(e))
 
     book_id: int | None = None
     testament: str | None = None
     if args.book:
         try:
             book_id, testament = resolve_book(args.book)
-            print("Selected book:")
-            print(args.book)
-            print("Testament:")
-            print(testament)
+            print(f"Selected book: {args.book}  ({testament})")
         except ValueError as e:
             parser.error(str(e))
 
-    align_heuristic(book_id=book_id, testament=testament, book_label=args.book or "all")
+    align_heuristic(
+        translation_id=translation_id,
+        book_id=book_id,
+        testament=testament,
+        book_label=args.book or "all",
+    )

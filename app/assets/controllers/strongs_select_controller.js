@@ -2,7 +2,7 @@
 import { Controller } from '@hotwired/stimulus'
 
 export default class extends Controller {
-    static targets = ['input']
+    static targets = ['input', 'translation']
 
     navigate() {
         const val = this.inputTarget.value.trim().toUpperCase()
@@ -16,6 +16,8 @@ export default class extends Controller {
             return `${prefix}${padded}${suffix}`
         })
 
-        window.location.href = `/link/strongs/${normalised}`
+        const translation = this.hasTranslationTarget ? this.translationTarget.value : 'SV'
+
+        window.location.href = `/link/strongs/${encodeURIComponent(translation)}/${encodeURIComponent(normalised)}`
     }
 }

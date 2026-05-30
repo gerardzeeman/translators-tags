@@ -4,6 +4,7 @@ namespace App\Controller;
 
 use App\Repository\BookRepository;
 use App\Repository\PassageRepository;
+use App\Repository\TranslationRepository;
 use App\Service\MorphologyParser;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
@@ -13,9 +14,10 @@ use Symfony\Component\Routing\Attribute\Route;
 class BibleController extends AbstractController
 {
     public function __construct(
-        private readonly BookRepository   $bookRepository,
-        private readonly PassageRepository $passageRepository,
-        private readonly MorphologyParser $morphologyParser,
+        private readonly BookRepository        $bookRepository,
+        private readonly PassageRepository     $passageRepository,
+        private readonly TranslationRepository $translationRepository,
+        private readonly MorphologyParser      $morphologyParser,
     ) {}
 
     /**
@@ -77,42 +79,79 @@ class BibleController extends AbstractController
 
     /**
      * Verse view — the main comparison screen.
+     * The {translation} segment is optional, defaults to 'SV'.
      */
-    #[Route('/book/{usfm}/{chapter<\d+>}/{verse<\d+>}', name: 'app_verse')]
-    public function verse(string $usfm, int $chapter, int $verse, Request $request): Response
+    #[Route('/book/{usfm}/{chapter<\d+>}/{verse<\d+>}/{translation}', name: 'app_verse', defaults: ['translation' => 'SV'])]
+    public function verse(string $usfm, int $chapter, int $verse, string $translation, Request $request): Response
     {
         $book = $this->bookRepository->findByUsfmCode($usfm);
         if (!$book) {
             throw $this->createNotFoundException("Book '{$usfm}' not found.");
         }
 
-        $passage = $this->passageRepository->fetchPassage($book->getId(), $chapter, $verse);
+        $translationEntity = $this->translationRepository->findByCode($translation);
+        if (!$translationEntity) {
+            throw $this->createNotFoundException("Translation '{$translation}' not found.");
+        }
 
-        // Enrich source words with decoded morphology
-        foreach ($passage['source_words'] as &$word) {
-            if ($passage['testament'] === 'NT' && !empty($word['parse_code'])) {
+        $allTranslations = $this->translationRepository->findAllOrderedById();
+
+        // Fetch passage data for every translation
+        $allPassages = [];
+        foreach ($allTranslations as $trans) {
+            $allPassages[$trans->getCode()] = $this->passageRepository->fetchPassage(
+                $book->getId(), $chapter, $verse, $trans->getId()
+            );
+        }
+
+        // SV is the canonical source for testament + Hebrew/Greek word list
+        $basePassage = $allPassages['SV'] ?? reset($allPassages);
+
+        // Enrich source words with morphology + per-translation link data
+        foreach ($basePassage['source_words'] as $i => &$word) {
+            if ($basePassage['testament'] === 'NT' && !empty($word['parse_code'])) {
                 $word['morph_description'] = $this->morphologyParser->describeGreek($word['parse_code']);
-            } elseif ($passage['testament'] === 'OT' && !empty($word['morph_code'])) {
+            } elseif ($basePassage['testament'] === 'OT' && !empty($word['morph_code'])) {
                 $word['morph_description'] = $this->morphologyParser->describeHebrew($word['morph_code']);
             } else {
                 $word['morph_description'] = '';
             }
+
+            // Add per-translation link arrays (e.g. links_sv, links_hsv)
+            foreach ($allTranslations as $trans) {
+                $code = $trans->getCode();
+                $word['links_' . strtolower($code)] =
+                    $allPassages[$code]['source_words'][$i]['dutch_links'] ?? [];
+            }
+            unset($word['dutch_links']);
         }
         unset($word);
 
-        // Navigation: prev/next verse
-        $nav = $this->buildNavigation($book->getId(), $chapter, $verse, $usfm);
+        // Build the combined passage structure
+        $passage = [
+            'testament'    => $basePassage['testament'],
+            'source_words' => $basePassage['source_words'],
+        ];
+        foreach ($allTranslations as $trans) {
+            $code = $trans->getCode();
+            $passage['dutch_verse_' . strtolower($code)] = $allPassages[$code]['dutch_verse'];
+        }
+
+        // Navigation: prev/next verse (carry the current translation code for breadcrumb)
+        $nav = $this->buildNavigation($book->getId(), $chapter, $verse, $usfm, $translation);
 
         $template = $request->headers->get('Turbo-Frame')
             ? 'bible/verse_frame.html.twig'
             : 'bible/verse.html.twig';
 
         return $this->render($template, [
-            'book'    => $book,
-            'chapter' => $chapter,
-            'verse'   => $verse,
-            'passage' => $passage,
-            'nav'     => $nav,
+            'book'         => $book,
+            'chapter'      => $chapter,
+            'verse'        => $verse,
+            'passage'      => $passage,
+            'nav'          => $nav,
+            'translation'  => $translationEntity,
+            'translations' => $allTranslations,
         ]);
     }
 
@@ -129,7 +168,7 @@ class BibleController extends AbstractController
 
     // ── helpers ──────────────────────────────────────────────────────────────
 
-    private function buildNavigation(int $bookId, int $chapter, int $verse, string $usfm): array
+    private function buildNavigation(int $bookId, int $chapter, int $verse, string $usfm, string $translation): array
     {
         $counts = $this->passageRepository->getChapterVerseCounts($bookId);
         $verseCount = collect_verse_count($counts, $chapter);
@@ -137,18 +176,18 @@ class BibleController extends AbstractController
         $prev = $next = null;
 
         if ($verse > 1) {
-            $prev = ['usfm' => $usfm, 'chapter' => $chapter, 'verse' => $verse - 1];
+            $prev = ['usfm' => $usfm, 'chapter' => $chapter, 'verse' => $verse - 1, 'translation' => $translation];
         } elseif ($chapter > 1) {
             $prevCount = collect_verse_count($counts, $chapter - 1);
-            $prev = ['usfm' => $usfm, 'chapter' => $chapter - 1, 'verse' => $prevCount];
+            $prev = ['usfm' => $usfm, 'chapter' => $chapter - 1, 'verse' => $prevCount, 'translation' => $translation];
         }
 
         if ($verse < $verseCount) {
-            $next = ['usfm' => $usfm, 'chapter' => $chapter, 'verse' => $verse + 1];
+            $next = ['usfm' => $usfm, 'chapter' => $chapter, 'verse' => $verse + 1, 'translation' => $translation];
         } else {
             $chapterCount = count($counts);
             if ($chapter < $chapterCount) {
-                $next = ['usfm' => $usfm, 'chapter' => $chapter + 1, 'verse' => 1];
+                $next = ['usfm' => $usfm, 'chapter' => $chapter + 1, 'verse' => 1, 'translation' => $translation];
             }
         }
 

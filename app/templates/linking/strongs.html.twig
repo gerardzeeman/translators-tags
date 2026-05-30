@@ -11,6 +11,18 @@
             <span class="strongs-badge">{{ strongs }}</span>
         </h1>
 
+        {# Translation switcher — HSV only shown to users with ROLE_HSV #}
+        <div class="translation-switcher">
+            {% for t in translations %}
+            {% if t.code == 'SV' or is_granted('ROLE_HSV') %}
+            <a href="{{ path('app_linking_strongs', {translation: t.code, strongs: strongs}) }}"
+               class="trans-btn {% if t.id == translation.id %}trans-btn-active{% endif %}">
+                {{ t.code }}
+            </a>
+            {% endif %}
+            {% endfor %}
+        </div>
+
         {# Transliterations sorted by occurrence #}
         {% if transliterations|length > 0 %}
         <div class="translits-row">
@@ -47,6 +59,57 @@
             <div id="progress-pct" class="progress-pct">{{ pct_manual }}% handmatig bevestigd</div>
         </div>
     </div>
+
+    {# ── Strong's dictionary entry ───────────────────────────────────────── #}
+    {% if strongs_entry %}
+    <div class="strongs-entry">
+        <div class="strongs-entry-word">
+            {% if strongs_entry.lemma %}
+            <span class="strongs-lemma {% if strongs_entry.lang == 'HE' %}strongs-lemma-he{% endif %}">
+                {{- strongs_entry.lemma -}}
+            </span>
+            {% endif %}
+            {% if strongs_entry.transliteration %}
+            <span class="strongs-translit">{{ strongs_entry.transliteration }}</span>
+            {% endif %}
+            {% if strongs_entry.pronunciation %}
+            <span class="strongs-pronun">({{ strongs_entry.pronunciation }})</span>
+            {% endif %}
+            {% if strongs_entry.pos %}
+            <span class="strongs-pos">{{ strongs_entry.pos }}</span>
+            {% endif %}
+        </div>
+
+        {% if strongs_entry.short_def %}
+        <p class="strongs-short-def">{{ strongs_entry.short_def }}</p>
+        {% endif %}
+
+        {% if strongs_entry.definition %}
+        <ol class="strongs-definition">
+            {% for line in strongs_entry.definition|split('\n') %}
+            {% if line|trim %}
+            <li>{{ line|replace({'1) ': '', '2) ': '', '3) ': '', '4) ': '', '5) ': '', '6) ': '', '7) ': '', '8) ': '', '9) ': ''})|trim }}</li>
+            {% endif %}
+            {% endfor %}
+        </ol>
+        {% endif %}
+
+        <div class="strongs-meta">
+            {% if strongs_entry.etymology %}
+            <div class="strongs-meta-row">
+                <span class="strongs-meta-label">Herkomst</span>
+                <span>{{ strongs_entry.etymology }}</span>
+            </div>
+            {% endif %}
+            {% if strongs_entry.kjv_renderings %}
+            <div class="strongs-meta-row">
+                <span class="strongs-meta-label">KJV</span>
+                <span>{{ strongs_entry.kjv_renderings }}</span>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
 
     {# ── Legend ───────────────────────────────────────────────────────────── #}
     <div class="linking-legend" style="margin-bottom:1.5rem;">

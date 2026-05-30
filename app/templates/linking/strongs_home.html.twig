@@ -11,25 +11,41 @@
     <div style="background:#fff; border:1px solid var(--color-border); border-radius:8px; padding:2rem; box-shadow:var(--shadow);">
         <div class="form-group" style="margin-bottom:1rem;">
             <label style="display:block; font-size:.85rem; color:var(--color-ink-light); margin-bottom:.4rem; text-align:left;">
+                Vertaling
+            </label>
+            <select id="strongs-translation"
+                    style="width:100%; padding:.55rem .8rem; border:1px solid var(--color-border); border-radius:4px; font-family:var(--font-serif); font-size:.95rem; background:#fdfaf5; color:var(--color-ink); margin-bottom:.75rem;">
+                {% for t in translations %}
+                {% if t.code == 'SV' or is_granted('ROLE_HSV') %}
+                <option value="{{ t.code }}">{{ t.name }}</option>
+                {% endif %}
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group" style="margin-bottom:1rem;">
+            <label style="display:block; font-size:.85rem; color:var(--color-ink-light); margin-bottom:.4rem; text-align:left;">
                 Strong's nummer
             </label>
             <input type="text"
                    id="strongs-search"
                    placeholder="bijv. H0430 of G2316"
                    style="width:100%; padding:.65rem .9rem; border:1px solid var(--color-border); border-radius:4px; font-family:var(--font-serif); font-size:1.1rem; text-align:center;"
-                   data-controller="strongs-select"
-                   data-strongs-select-target="input"
-                   data-action="keydown.enter->strongs-select#navigate">
+                   onkeydown="if(event.key==='Enter') goToStrongs()">
             <p style="font-size:.75rem; color:var(--color-ink-muted); margin-top:.35rem;">
                 H = Hebreeuws (OT) &nbsp;·&nbsp; G = Grieks (NT)
             </p>
         </div>
-        <button onclick="
-            const v = document.getElementById('strongs-search').value.trim().toUpperCase();
-            if (v) window.location = '/link/strongs/' + v;
-        " class="btn-primary" style="width:100%; padding:.7rem; background:var(--color-accent); color:#fff; border:none; border-radius:4px; font-family:var(--font-serif); font-size:1rem; cursor:pointer;">
+        <button onclick="goToStrongs()" class="btn-primary"
+                style="width:100%; padding:.7rem; background:var(--color-accent); color:#fff; border:none; border-radius:4px; font-family:var(--font-serif); font-size:1rem; cursor:pointer;">
             Zoek woord →
         </button>
     </div>
 </div>
+<script>
+function goToStrongs() {
+    const v = document.getElementById('strongs-search').value.trim().toUpperCase();
+    const t = document.getElementById('strongs-translation').value;
+    if (v) window.location = '/link/strongs/' + encodeURIComponent(t) + '/' + encodeURIComponent(v);
+}
+</script>
 {% endblock %}

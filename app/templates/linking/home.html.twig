@@ -23,6 +23,20 @@
 
                 <div class="form-row">
                     <div class="form-group">
+                        <label for="passage-translation-select">Vertaling</label>
+                        <select id="passage-translation-select"
+                                data-passage-select-target="translation">
+                            {% for t in translations %}
+                            {% if t.code == 'SV' or is_granted('ROLE_HSV') %}
+                            <option value="{{ t.code }}">{{ t.name }}</option>
+                            {% endif %}
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
                         <label for="testament-select">Testament</label>
                         <select id="testament-select"
                                 data-passage-select-target="testament"
@@ -91,6 +105,18 @@
             <form class="strongs-select-form"
                   data-controller="strongs-select"
                   action="#">
+
+                <div class="form-group">
+                    <label for="strongs-translation-select">Vertaling</label>
+                    <select id="strongs-translation-select"
+                            data-strongs-select-target="translation">
+                        {% for t in translations %}
+                        {% if t.code == 'SV' or is_granted('ROLE_HSV') %}
+                        <option value="{{ t.code }}">{{ t.name }}</option>
+                        {% endif %}
+                        {% endfor %}
+                    </select>
+                </div>
 
                 <div class="form-group">
                     <label for="strongs-input">Strong's nummer</label>

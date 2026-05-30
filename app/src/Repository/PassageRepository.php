@@ -23,18 +23,18 @@ class PassageRepository
      *   testament: string
      * }
      */
-    public function fetchPassage(int $bookId, int $chapter, int $verse): array
+    public function fetchPassage(int $bookId, int $chapter, int $verse, int $translationId): array
     {
         // Determine testament
         $testament = $bookId <= 39 ? 'OT' : 'NT';
 
         if ($testament === 'OT') {
-            $sourceWords = $this->fetchHebrewWords($bookId, $chapter, $verse);
+            $sourceWords = $this->fetchHebrewWords($bookId, $chapter, $verse, $translationId);
         } else {
-            $sourceWords = $this->fetchGreekWords($bookId, $chapter, $verse);
+            $sourceWords = $this->fetchGreekWords($bookId, $chapter, $verse, $translationId);
         }
 
-        $dutchVerse = $this->fetchDutchVerse($bookId, $chapter, $verse);
+        $dutchVerse = $this->fetchDutchVerse($bookId, $chapter, $verse, $translationId);
 
         return [
             'testament'    => $testament,
@@ -43,7 +43,7 @@ class PassageRepository
         ];
     }
 
-    private function fetchHebrewWords(int $bookId, int $chapter, int $verse): array
+    private function fetchHebrewWords(int $bookId, int $chapter, int $verse, int $translationId): array
     {
         $sql = <<<SQL
             SELECT
@@ -56,7 +56,7 @@ class PassageRepository
                 hw.morph_code,
                 hw.is_ketiv,
                 hw.has_qere,
-                -- Best link per Dutch word, sorted by Dutch word position
+                -- Best link per Dutch word (for this translation), sorted by Dutch word position
                 COALESCE(
                     json_agg(
                         json_build_object(
@@ -79,9 +79,11 @@ class PassageRepository
                     lc.method          AS method,
                     lc.score           AS score
                 FROM word_links wl
-                JOIN translation_words tw ON tw.id = wl.translation_word_id
-                JOIN link_confidence lc   ON lc.link_id = wl.id
+                JOIN translation_words tw  ON tw.id = wl.translation_word_id
+                JOIN translation_verses tv ON tv.id = tw.verse_id
+                JOIN link_confidence lc    ON lc.link_id = wl.id
                 WHERE wl.hebrew_word_id = hw.id
+                  AND tv.translation_id = :translation_id
                 ORDER BY tw.id, lc.score DESC
             ) best ON true
             WHERE hw.book_id = :book_id
@@ -92,9 +94,10 @@ class PassageRepository
         SQL;
 
         $rows = $this->connection->fetchAllAssociative($sql, [
-            'book_id' => $bookId,
-            'chapter' => $chapter,
-            'verse'   => $verse,
+            'book_id'        => $bookId,
+            'chapter'        => $chapter,
+            'verse'          => $verse,
+            'translation_id' => $translationId,
         ]);
 
         return array_map(fn($row) => array_merge($row, [
@@ -102,7 +105,7 @@ class PassageRepository
         ]), $rows);
     }
 
-    private function fetchGreekWords(int $bookId, int $chapter, int $verse): array
+    private function fetchGreekWords(int $bookId, int $chapter, int $verse, int $translationId): array
     {
         $sql = <<<SQL
             SELECT
@@ -113,7 +116,7 @@ class PassageRepository
                 gw.strongs,
                 gw.parse_code,
                 gw.transliteration,
-                -- Best link per Dutch word, sorted by Dutch word position
+                -- Best link per Dutch word (for this translation), sorted by Dutch word position
                 COALESCE(
                     json_agg(
                         json_build_object(
@@ -136,9 +139,11 @@ class PassageRepository
                     lc.method          AS method,
                     lc.score           AS score
                 FROM word_links wl
-                JOIN translation_words tw ON tw.id = wl.translation_word_id
-                JOIN link_confidence lc   ON lc.link_id = wl.id
+                JOIN translation_words tw  ON tw.id = wl.translation_word_id
+                JOIN translation_verses tv ON tv.id = tw.verse_id
+                JOIN link_confidence lc    ON lc.link_id = wl.id
                 WHERE wl.greek_word_id = gw.id
+                  AND tv.translation_id = :translation_id
                 ORDER BY tw.id, lc.score DESC
             ) best ON true
             WHERE gw.book_id = :book_id
@@ -149,9 +154,10 @@ class PassageRepository
         SQL;
 
         $rows = $this->connection->fetchAllAssociative($sql, [
-            'book_id' => $bookId,
-            'chapter' => $chapter,
-            'verse'   => $verse,
+            'book_id'        => $bookId,
+            'chapter'        => $chapter,
+            'verse'          => $verse,
+            'translation_id' => $translationId,
         ]);
 
         return array_map(fn($row) => array_merge($row, [
@@ -159,7 +165,7 @@ class PassageRepository
         ]), $rows);
     }
 
-    private function fetchDutchVerse(int $bookId, int $chapter, int $verse): array
+    private function fetchDutchVerse(int $bookId, int $chapter, int $verse, int $translationId): array
     {
         $sql = <<<SQL
             SELECT
@@ -189,7 +195,7 @@ class PassageRepository
                 ) AS best_score
             FROM translation_verses tv
             JOIN translation_words tw ON tw.verse_id = tv.id
-            WHERE tv.translation_id = 1
+            WHERE tv.translation_id = :translation_id
               AND tv.book_id = :book_id
               AND tv.chapter = :chapter
               AND tv.verse   = :verse
@@ -197,9 +203,10 @@ class PassageRepository
         SQL;
 
         return $this->connection->fetchAllAssociative($sql, [
-            'book_id' => $bookId,
-            'chapter' => $chapter,
-            'verse'   => $verse,
+            'translation_id' => $translationId,
+            'book_id'        => $bookId,
+            'chapter'        => $chapter,
+            'verse'          => $verse,
         ]);
     }
 

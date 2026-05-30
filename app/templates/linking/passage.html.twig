@@ -4,7 +4,8 @@
 {% block body %}
 <div class="page-linking" data-controller="word-linker"
      data-word-linker-save-url-value="{{ path('api_linking_save') }}"
-     data-word-linker-delete-url-value="{{ path('api_linking_delete', {linkId: 0}) }}">
+     data-word-linker-delete-url-value="{{ path('api_linking_delete', {linkId: 0}) }}"
+     data-word-linker-translation-id-value="{{ translation.id }}">
 
     {# ── Top bar ──────────────────────────────────────────────────────────── #}
     <div class="linking-topbar">
@@ -22,6 +23,19 @@
             {% if nav.next %}
             <a href="{{ path('app_linking_passage', nav.next) }}" class="nav-btn">Volgend ›</a>
             {% endif %}
+
+        </div>
+
+        {# Translation switcher — HSV only shown to users with ROLE_HSV #}
+        <div class="translation-switcher">
+            {% for t in translations %}
+            {% if t.code == 'SV' or is_granted('ROLE_HSV') %}
+            <a href="{{ path('app_linking_passage', {translation: t.code, usfm: book.usfmCode, chapter: chapter, verse: verse}) }}"
+               class="trans-btn {% if t.id == translation.id %}trans-btn-active{% endif %}">
+                {{ t.code }}
+            </a>
+            {% endif %}
+            {% endfor %}
         </div>
 
         <div class="linking-legend">
@@ -98,7 +112,7 @@
         {# Dutch translation panel #}
         <section class="link-panel link-panel-dutch">
             <h2 class="panel-label">
-                <span class="lang-badge lang-nl">NL</span> Statenvertaling
+                <span class="lang-badge lang-nl">NL</span> {{ translation.name }}
             </h2>
 
             <div class="dutch-words-flow">

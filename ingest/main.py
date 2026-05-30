@@ -10,6 +10,7 @@ Steps:
   4. parse_statenvertaling – Dutch verses + words → translation_verses / translation_words
   5. align_pivot     – ESV pivot alignment → word_links (method=pivot)
   6. align_heuristic – positional + proper-noun fallback → word_links (method=heuristic)
+  7. parse_strongs   – Strong's dictionary → strongs_entries
 """
 import sys
 import time
@@ -42,7 +43,10 @@ def main():
     step("5/6  Pivot alignment (ESV → Dutch)", align_pivot)
 
     from align_heuristic import align_heuristic
-    step("6/6  Heuristic alignment (fallback)", align_heuristic)
+    step("6/7  Heuristic alignment (fallback)", align_heuristic)
+
+    from parse_strongs import parse_strongs
+    step("7/7  Strong's dictionary", parse_strongs)
 
     print("\n" + "═" * 60)
     print("  ✓ Ingest pipeline complete.")

@@ -3,18 +3,18 @@ import { Controller } from '@hotwired/stimulus'
 
 export default class extends Controller {
     connect() {
-        this.element.addEventListener('click',      this.#onClick.bind(this))
-        this.element.addEventListener('mouseenter', this.#onMouseEnter.bind(this))
-        this.element.addEventListener('mouseleave', this.#onMouseLeave.bind(this))
+        this.element.addEventListener('click',      this.#onClick)
+        this.element.addEventListener('mouseenter', this.#onMouseEnter)
+        this.element.addEventListener('mouseleave', this.#onMouseLeave)
     }
 
     disconnect() {
-        this.element.removeEventListener('click',      this.#onClick.bind(this))
-        this.element.removeEventListener('mouseenter', this.#onMouseEnter.bind(this))
-        this.element.removeEventListener('mouseleave', this.#onMouseLeave.bind(this))
+        this.element.removeEventListener('click',      this.#onClick)
+        this.element.removeEventListener('mouseenter', this.#onMouseEnter)
+        this.element.removeEventListener('mouseleave', this.#onMouseLeave)
     }
 
-    #dispatch(type) {
+    #dispatch = (type) => {
         this.element.dispatchEvent(new CustomEvent(type, {
             bubbles: true,
             detail: {
@@ -25,7 +25,7 @@ export default class extends Controller {
         }))
     }
 
-    #onClick()      { this.#dispatch('dutch-word:activate') }
-    #onMouseEnter() { this.#dispatch('dutch-word:hover') }
-    #onMouseLeave() { this.#dispatch('dutch-word:unhover') }
+    #onClick      = () => this.#dispatch('dutch-word:activate')
+    #onMouseEnter = () => this.#dispatch('dutch-word:hover')
+    #onMouseLeave = () => this.#dispatch('dutch-word:unhover')
 }

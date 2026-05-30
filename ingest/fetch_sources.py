@@ -23,6 +23,12 @@ REPOS = [
         "dest": SOURCES_DIR / "elzevir",
         "depth": 1,
     },
+    {
+        "name": "strongs",
+        "url": "https://github.com/openscriptures/strongs.git",
+        "dest": SOURCES_DIR / "strongs",
+        "depth": 1,
+    },
 ]
 
 DIRECT_FILES = [

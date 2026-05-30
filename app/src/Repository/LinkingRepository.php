@@ -17,15 +17,15 @@ class LinkingRepository
     /**
      * Full passage data for linking: source words + dutch words with current links.
      */
-    public function fetchPassageForLinking(int $bookId, int $chapter, int $verse): array
+    public function fetchPassageForLinking(int $bookId, int $chapter, int $verse, int $translationId): array
     {
         $testament = $bookId <= 39 ? 'OT' : 'NT';
 
         $sourceWords = $testament === 'OT'
-            ? $this->fetchHebrewForLinking($bookId, $chapter, $verse)
-            : $this->fetchGreekForLinking($bookId, $chapter, $verse);
+            ? $this->fetchHebrewForLinking($bookId, $chapter, $verse, $translationId)
+            : $this->fetchGreekForLinking($bookId, $chapter, $verse, $translationId);
 
-        $dutchWords = $this->fetchDutchForLinking($bookId, $chapter, $verse);
+        $dutchWords = $this->fetchDutchForLinking($bookId, $chapter, $verse, $translationId);
 
         return [
             'testament'    => $testament,
@@ -34,7 +34,7 @@ class LinkingRepository
         ];
     }
 
-    private function fetchHebrewForLinking(int $bookId, int $chapter, int $verse): array
+    private function fetchHebrewForLinking(int $bookId, int $chapter, int $verse, int $translationId): array
     {
         $sql = <<<SQL
             SELECT
@@ -52,19 +52,22 @@ class LinkingRepository
                             'method',  lc_best.method,
                             'score',   lc_best.score
                         ) ORDER BY tw.word_position
-                    ) FILTER (WHERE wl.id IS NOT NULL),
+                    ) FILTER (WHERE wl.id IS NOT NULL AND tv.id IS NOT NULL),
                     '[]'
                 ) AS links,
                 CASE WHEN mel.id IS NOT NULL THEN 1 ELSE 0 END AS is_manually_empty
             FROM hebrew_words hw
-            LEFT JOIN word_links wl ON wl.hebrew_word_id = hw.id
-            LEFT JOIN translation_words tw ON tw.id = wl.translation_word_id
+            LEFT JOIN word_links wl         ON wl.hebrew_word_id = hw.id
+            LEFT JOIN translation_words tw  ON tw.id = wl.translation_word_id
+            LEFT JOIN translation_verses tv ON tv.id = tw.verse_id
+                                           AND tv.translation_id = :translation_id
             LEFT JOIN LATERAL (
                 SELECT method, score FROM link_confidence
                 WHERE link_id = wl.id
                 ORDER BY score DESC LIMIT 1
             ) lc_best ON true
             LEFT JOIN manual_empty_links mel ON mel.hebrew_word_id = hw.id
+                                            AND mel.translation_id = :translation_id
             WHERE hw.book_id = :book_id
               AND hw.chapter = :chapter
               AND hw.verse   = :verse
@@ -72,10 +75,10 @@ class LinkingRepository
             ORDER BY hw.word_position
         SQL;
 
-        return $this->fetchWithJsonLinks($sql, $bookId, $chapter, $verse);
+        return $this->fetchWithJsonLinks($sql, $bookId, $chapter, $verse, $translationId);
     }
 
-    private function fetchGreekForLinking(int $bookId, int $chapter, int $verse): array
+    private function fetchGreekForLinking(int $bookId, int $chapter, int $verse, int $translationId): array
     {
         $sql = <<<SQL
             SELECT
@@ -93,19 +96,22 @@ class LinkingRepository
                             'method',  lc_best.method,
                             'score',   lc_best.score
                         ) ORDER BY tw.word_position
-                    ) FILTER (WHERE wl.id IS NOT NULL),
+                    ) FILTER (WHERE wl.id IS NOT NULL AND tv.id IS NOT NULL),
                     '[]'
                 ) AS links,
                 CASE WHEN mel.id IS NOT NULL THEN 1 ELSE 0 END AS is_manually_empty
             FROM greek_words gw
-            LEFT JOIN word_links wl ON wl.greek_word_id = gw.id
-            LEFT JOIN translation_words tw ON tw.id = wl.translation_word_id
+            LEFT JOIN word_links wl         ON wl.greek_word_id = gw.id
+            LEFT JOIN translation_words tw  ON tw.id = wl.translation_word_id
+            LEFT JOIN translation_verses tv ON tv.id = tw.verse_id
+                                           AND tv.translation_id = :translation_id
             LEFT JOIN LATERAL (
                 SELECT method, score FROM link_confidence
                 WHERE link_id = wl.id
                 ORDER BY score DESC LIMIT 1
             ) lc_best ON true
             LEFT JOIN manual_empty_links mel ON mel.greek_word_id = gw.id
+                                            AND mel.translation_id = :translation_id
             WHERE gw.book_id = :book_id
               AND gw.chapter = :chapter
               AND gw.verse   = :verse
@@ -113,15 +119,16 @@ class LinkingRepository
             ORDER BY gw.word_position
         SQL;
 
-        return $this->fetchWithJsonLinks($sql, $bookId, $chapter, $verse);
+        return $this->fetchWithJsonLinks($sql, $bookId, $chapter, $verse, $translationId);
     }
 
-    private function fetchWithJsonLinks(string $sql, int $bookId, int $chapter, int $verse): array
+    private function fetchWithJsonLinks(string $sql, int $bookId, int $chapter, int $verse, int $translationId): array
     {
         $rows = $this->connection->fetchAllAssociative($sql, [
-            'book_id' => $bookId,
-            'chapter' => $chapter,
-            'verse'   => $verse,
+            'book_id'        => $bookId,
+            'chapter'        => $chapter,
+            'verse'          => $verse,
+            'translation_id' => $translationId,
         ]);
 
         return array_map(fn($row) => array_merge($row, [
@@ -129,7 +136,7 @@ class LinkingRepository
         ]), $rows);
     }
 
-    private function fetchDutchForLinking(int $bookId, int $chapter, int $verse): array
+    private function fetchDutchForLinking(int $bookId, int $chapter, int $verse, int $translationId): array
     {
         $sql = <<<SQL
             SELECT
@@ -159,7 +166,7 @@ class LinkingRepository
                 WHERE link_id = wl.id
                 ORDER BY score DESC LIMIT 1
             ) lc_best ON true
-            WHERE tv.translation_id = 1
+            WHERE tv.translation_id = :translation_id
               AND tv.book_id = :book_id
               AND tv.chapter = :chapter
               AND tv.verse   = :verse
@@ -168,9 +175,10 @@ class LinkingRepository
         SQL;
 
         $rows = $this->connection->fetchAllAssociative($sql, [
-            'book_id' => $bookId,
-            'chapter' => $chapter,
-            'verse'   => $verse,
+            'translation_id' => $translationId,
+            'book_id'        => $bookId,
+            'chapter'        => $chapter,
+            'verse'          => $verse,
         ]);
 
         return array_map(fn($row) => array_merge($row, [
@@ -206,12 +214,10 @@ class LinkingRepository
     /**
      * All verses containing a Strong's number, with source + Dutch words for linking.
      */
-    public function fetchStrongsVerses(string $strongs): array
+    public function fetchStrongsVerses(string $strongs, int $translationId): array
     {
         $testament = str_starts_with($strongs, 'H') ? 'OT' : 'NT';
         $table     = $testament === 'OT' ? 'hebrew_words' : 'greek_words';
-        $lang      = $testament === 'OT' ? 'HE' : 'GR';
-        $id_col    = $testament === 'OT' ? 'hebrew_word_id' : 'greek_word_id';
 
         // Get all distinct verses containing this Strong's number
         $sql = <<<SQL
@@ -233,18 +239,18 @@ class LinkingRepository
         $result = [];
         foreach ($verses as $v) {
             $passage = $testament === 'OT'
-                ? $this->fetchHebrewForLinking($v['book_id'], $v['chapter'], $v['verse'])
-                : $this->fetchGreekForLinking($v['book_id'], $v['chapter'], $v['verse']);
+                ? $this->fetchHebrewForLinking($v['book_id'], $v['chapter'], $v['verse'], $translationId)
+                : $this->fetchGreekForLinking($v['book_id'], $v['chapter'], $v['verse'], $translationId);
 
-            $dutch = $this->fetchDutchForLinking($v['book_id'], $v['chapter'], $v['verse']);
+            $dutch = $this->fetchDutchForLinking($v['book_id'], $v['chapter'], $v['verse'], $translationId);
 
             $result[] = [
-                'book_id'   => $v['book_id'],
-                'chapter'   => $v['chapter'],
-                'verse'     => $v['verse'],
-                'book_name' => $v['book_name'],
-                'usfm_code' => $v['usfm_code'],
-                'testament' => $testament,
+                'book_id'      => $v['book_id'],
+                'chapter'      => $v['chapter'],
+                'verse'        => $v['verse'],
+                'book_name'    => $v['book_name'],
+                'usfm_code'    => $v['usfm_code'],
+                'testament'    => $testament,
                 'source_words' => $passage,
                 'dutch_words'  => $dutch,
             ];
@@ -256,7 +262,7 @@ class LinkingRepository
     /**
      * Progress: how many words with this Strong's have at least one manual link.
      */
-    public function fetchStrongsProgress(string $strongs): array
+    public function fetchStrongsProgress(string $strongs, int $translationId): array
     {
         $testament = str_starts_with($strongs, 'H') ? 'OT' : 'NT';
         $table     = $testament === 'OT' ? 'hebrew_words' : 'greek_words';
@@ -269,12 +275,18 @@ class LinkingRepository
                 COUNT(DISTINCT CASE WHEN lc.method = 'manual'
                     THEN wl.{$id_col} END)                                     AS manual
             FROM {$table} sw
-            LEFT JOIN word_links wl ON wl.{$id_col} = sw.id
-            LEFT JOIN link_confidence lc ON lc.link_id = wl.id
+            LEFT JOIN word_links wl         ON wl.{$id_col} = sw.id
+            LEFT JOIN translation_words tw  ON tw.id = wl.translation_word_id
+            LEFT JOIN translation_verses tv ON tv.id = tw.verse_id
+                                           AND tv.translation_id = :translation_id
+            LEFT JOIN link_confidence lc    ON lc.link_id = wl.id
             WHERE sw.strongs = :strongs
         SQL;
 
-        return $this->connection->fetchAssociative($sql, ['strongs' => $strongs]);
+        return $this->connection->fetchAssociative($sql, [
+            'strongs'        => $strongs,
+            'translation_id' => $translationId,
+        ]);
     }
 
     // ── Link mutation helpers (used by LinkingController) ─────────────────────
@@ -284,46 +296,58 @@ class LinkingRepository
      * OR record that the source word intentionally has no Dutch translation.
      *
      * When $twIds is empty the word is saved as "manually confirmed: no link",
-     * stored in manual_empty_links. All existing word_links are removed either way.
+     * stored in manual_empty_links. Existing word_links for this source word
+     * within the given translation are removed either way.
      */
-    public function saveManualLinks(string $lang, int $sourceWordId, array $twIds): void
+    public function saveManualLinks(string $lang, int $sourceWordId, array $twIds, int $translationId): void
     {
         $idCol = $lang === 'HE' ? 'hebrew_word_id' : 'greek_word_id';
 
-        // Delete ALL existing word_links for this source word (any method).
-        // Manual confirmation replaces automatic links entirely.
+        // Delete existing word_links for this source word scoped to this translation.
+        // (word_links → translation_words → translation_verses.translation_id)
         $this->connection->executeStatement(
-            "DELETE FROM word_links WHERE {$idCol} = :src_id",
-            ['src_id' => $sourceWordId]
+            "DELETE FROM word_links wl
+             WHERE wl.{$idCol} = :src_id
+               AND EXISTS (
+                   SELECT 1
+                   FROM translation_words tw
+                   JOIN translation_verses tv ON tv.id = tw.verse_id
+                   WHERE tw.id = wl.translation_word_id
+                     AND tv.translation_id = :translation_id
+               )",
+            ['src_id' => $sourceWordId, 'translation_id' => $translationId]
         );
 
         if (empty($twIds)) {
             // ── "No translation" path ────────────────────────────────────────
-            // Upsert a manual_empty_links record (partial unique index handles dedup).
+            // Upsert a manual_empty_links record (composite unique index handles dedup).
             $this->connection->executeStatement(
-                "INSERT INTO manual_empty_links (source_language, {$idCol}, created_at)
-                 VALUES (:lang, :src_id, NOW())
-                 ON CONFLICT ({$idCol}) WHERE {$idCol} IS NOT NULL
+                "INSERT INTO manual_empty_links (source_language, {$idCol}, translation_id, created_at)
+                 VALUES (:lang, :src_id, :translation_id, NOW())
+                 ON CONFLICT ({$idCol}, translation_id) WHERE {$idCol} IS NOT NULL
                  DO UPDATE SET created_at = NOW()",
-                ['lang' => $lang, 'src_id' => $sourceWordId]
+                ['lang' => $lang, 'src_id' => $sourceWordId, 'translation_id' => $translationId]
             );
         } else {
             // ── Normal linking path ──────────────────────────────────────────
-            // Remove any previous "no translation" annotation for this word.
+            // Remove any previous "no translation" annotation for this word + translation.
             $this->connection->executeStatement(
-                "DELETE FROM manual_empty_links WHERE {$idCol} = :src_id",
-                ['src_id' => $sourceWordId]
+                "DELETE FROM manual_empty_links WHERE {$idCol} = :src_id AND translation_id = :translation_id",
+                ['src_id' => $sourceWordId, 'translation_id' => $translationId]
             );
 
             // Insert new links with manual confidence.
+            // ON CONFLICT … DO UPDATE (no-op update) ensures RETURNING always gives us the id,
+            // whether this is a fresh row or an already-existing one.
             foreach ($twIds as $twId) {
-                $this->connection->executeStatement(
+                $linkId = $this->connection->fetchOne(
                     "INSERT INTO word_links (source_language, {$idCol}, translation_word_id)
-                     VALUES (:lang, :src_id, :tw_id)",
+                     VALUES (:lang, :src_id, :tw_id)
+                     ON CONFLICT ({$idCol}, translation_word_id) WHERE {$idCol} IS NOT NULL
+                     DO UPDATE SET source_language = EXCLUDED.source_language
+                     RETURNING id",
                     ['lang' => $lang, 'src_id' => $sourceWordId, 'tw_id' => (int) $twId]
                 );
-
-                $linkId = $this->connection->lastInsertId();
 
                 $this->connection->executeStatement(
                     "INSERT INTO link_confidence (link_id, method, score, created_at)
@@ -344,5 +368,60 @@ class LinkingRepository
             "DELETE FROM word_links WHERE id = :id",
             ['id' => $linkId]
         );
+    }
+
+    /**
+     * Check whether a source word ID exists in the appropriate language table.
+     * Used to validate input before writing links.
+     */
+    public function sourceWordExists(string $lang, int $id): bool
+    {
+        $table = $lang === 'HE' ? 'hebrew_words' : 'greek_words';
+        return (bool) $this->connection->fetchOne(
+            "SELECT 1 FROM {$table} WHERE id = :id",
+            ['id' => $id]
+        );
+    }
+
+    /**
+     * Return the Strong's dictionary entry for a given Strong's number,
+     * or null if the strongs_entries table has not been populated yet.
+     *
+     * @return array{strongs_id:string, lang:string, lemma:string|null,
+     *               transliteration:string|null, pronunciation:string|null,
+     *               pos:string|null, morph:string|null, definition:string|null,
+     *               etymology:string|null, kjv_renderings:string|null,
+     *               short_def:string|null}|null
+     */
+    public function fetchStrongsEntry(string $strongs): ?array
+    {
+        $row = $this->connection->fetchAssociative(
+            "SELECT strongs_id, lang, lemma, transliteration, pronunciation,
+                    pos, morph, definition, etymology, kjv_renderings, short_def
+             FROM strongs_entries
+             WHERE strongs_id = :id",
+            ['id' => strtoupper($strongs)]
+        );
+
+        return $row ?: null;
+    }
+
+    /**
+     * Return the translation code (e.g. 'SV', 'HSV') for a given word_links row.
+     * Used to authorise delete requests.
+     */
+    public function findTranslationCodeByLinkId(int $linkId): ?string
+    {
+        $code = $this->connection->fetchOne(
+            "SELECT t.code
+             FROM word_links wl
+             JOIN translation_words tw  ON tw.id  = wl.translation_word_id
+             JOIN translation_verses tv ON tv.id  = tw.verse_id
+             JOIN translations t        ON t.id   = tv.translation_id
+             WHERE wl.id = :link_id",
+            ['link_id' => $linkId]
+        );
+
+        return $code ?: null;
     }
 }

@@ -122,13 +122,15 @@ CREATE TABLE IF NOT EXISTS link_confidence (
     PRIMARY KEY (link_id, method)
 );
 
--- Tracks source words manually confirmed as having NO Dutch translation.
--- A word can appear here OR in word_links, not both simultaneously.
+-- Tracks source words manually confirmed as having NO Dutch translation
+-- for a specific translation. A word can appear here OR in word_links for
+-- the same translation, not both simultaneously.
 CREATE TABLE IF NOT EXISTS manual_empty_links (
     id              SERIAL      PRIMARY KEY,
     source_language CHAR(2)     NOT NULL CHECK (source_language IN ('HE', 'GR')),
     hebrew_word_id  INTEGER     REFERENCES hebrew_words(id) ON DELETE CASCADE,
     greek_word_id   INTEGER     REFERENCES greek_words(id)  ON DELETE CASCADE,
+    translation_id  SMALLINT    NOT NULL REFERENCES translations(id) ON DELETE CASCADE,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     notes           TEXT,
     CONSTRAINT mel_exactly_one_source CHECK (
@@ -152,9 +154,34 @@ CREATE INDEX IF NOT EXISTS idx_wl_he       ON word_links         (hebrew_word_id
 CREATE INDEX IF NOT EXISTS idx_wl_gr       ON word_links         (greek_word_id);
 CREATE INDEX IF NOT EXISTS idx_wl_tw       ON word_links         (translation_word_id);
 
--- Partial unique indexes: at most one manual-empty record per source word
-CREATE UNIQUE INDEX IF NOT EXISTS idx_mel_he ON manual_empty_links (hebrew_word_id) WHERE hebrew_word_id IS NOT NULL;
-CREATE UNIQUE INDEX IF NOT EXISTS idx_mel_gr ON manual_empty_links (greek_word_id)  WHERE greek_word_id  IS NOT NULL;
+-- Partial unique indexes: at most one link per source word + Dutch word pair
+CREATE UNIQUE INDEX IF NOT EXISTS idx_wl_he_tw ON word_links (hebrew_word_id, translation_word_id) WHERE hebrew_word_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_wl_gr_tw ON word_links (greek_word_id,  translation_word_id) WHERE greek_word_id  IS NOT NULL;
+
+-- Partial unique indexes: at most one manual-empty record per source word + translation
+CREATE UNIQUE INDEX IF NOT EXISTS idx_mel_he ON manual_empty_links (hebrew_word_id, translation_id) WHERE hebrew_word_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_mel_gr ON manual_empty_links (greek_word_id,  translation_id) WHERE greek_word_id  IS NOT NULL;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Strong's dictionary entries (Hebrew + Greek)
+-- Populated by ingest/parse_strongs.py from the openscriptures/strongs repo.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS strongs_entries (
+    strongs_id      VARCHAR(10)  PRIMARY KEY,   -- e.g. 'H1', 'G1'
+    lang            CHAR(2)      NOT NULL CHECK (lang IN ('HE', 'GR')),
+    lemma           TEXT,                        -- pointed Hebrew / Greek Unicode
+    transliteration TEXT,                        -- romanised form
+    pronunciation   TEXT,                        -- phonetic guide
+    pos             TEXT,                        -- part of speech (POS attribute)
+    morph           TEXT,                        -- morphology code
+    definition      TEXT,                        -- numbered definitions joined
+    etymology       TEXT,                        -- origin / derivation note
+    kjv_renderings  TEXT,                        -- KJV translation renderings
+    short_def       TEXT                         -- brief gloss / explanation
+);
+
+CREATE INDEX IF NOT EXISTS idx_strongs_entries_lang ON strongs_entries (lang);
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Seed data: books table (all 66 canonical books)
@@ -231,7 +258,8 @@ INSERT INTO books (id, usfm_code, testament, name_nl, chapter_count) VALUES
 (66, 'REV', 'NT', 'Openbaring',          22)
 ON CONFLICT (id) DO NOTHING;
 
--- Seed data: Statenvertaling translation record
-INSERT INTO translations (id, code, name, language, direction)
-VALUES (1, 'SV', 'Statenvertaling', 'nld', 'LTR')
+-- Seed data: translation records
+INSERT INTO translations (id, code, name, language, direction) VALUES
+    (1, 'SV',  'Statenvertaling',          'nld', 'LTR'),
+    (2, 'HSV', 'Herziene Statenvertaling', 'nld', 'LTR')
 ON CONFLICT (id) DO NOTHING;

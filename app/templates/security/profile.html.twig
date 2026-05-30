@@ -21,7 +21,16 @@
     <section style="background:#fff; border:1px solid var(--color-border); border-radius:6px; padding:1.5rem 2rem; margin-bottom:1.5rem; box-shadow:var(--shadow);">
         <h2 style="font-size:1.1rem; margin-bottom:1rem; border-bottom:1px solid var(--color-border-light); padding-bottom:.5rem;">Accountgegevens</h2>
         <p style="margin-bottom:.35rem;"><strong>E-mail:</strong> {{ user.email }}</p>
-        <p style="margin-bottom:.35rem;"><strong>Rol:</strong> {{ user.admin ? 'Beheerder' : 'Gebruiker' }}</p>
+        {% set role_labels = {
+            'ROLE_ADMIN':  'Beheerder',
+            'ROLE_LINKER': 'Koppelaar (SV)',
+            'ROLE_HSV':    'Herziene Statenvertaling',
+            'ROLE_VIEWER': 'Lezer',
+        } %}
+        {% set named_roles = user.roles|filter(r => r != 'ROLE_USER')|map(r => role_labels[r] ?? r)|sort %}
+        <p style="margin-bottom:.35rem;"><strong>Rollen:</strong>
+            {{ named_roles|length > 0 ? named_roles|join(', ') : '–' }}
+        </p>
         <p style="margin-bottom:.35rem;"><strong>Lid sinds:</strong> {{ user.createdAt|date('d-m-Y') }}</p>
         {% if user.lastLoginAt %}
         <p><strong>Laatste login:</strong> {{ user.lastLoginAt|date('d-m-Y H:i') }}</p>

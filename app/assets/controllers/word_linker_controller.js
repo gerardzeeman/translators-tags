@@ -3,7 +3,7 @@ import { Controller } from '@hotwired/stimulus'
 
 export default class extends Controller {
     static targets = ['sourceWord', 'dutchWord', 'actionBar', 'selectedLabel', 'status']
-    static values  = { saveUrl: String, deleteUrl: String, refreshUrl: String, progressUrl: String }
+    static values  = { saveUrl: String, deleteUrl: String, refreshUrl: String, progressUrl: String, translationId: Number }
 
     #selectedSourceId   = null
     #selectedSourceLang = null
@@ -96,6 +96,7 @@ export default class extends Controller {
                     lang:           this.#selectedSourceLang,
                     source_word_id: parseInt(this.#selectedSourceId),
                     tw_ids:         twIds.map(Number),
+                    translation_id: this.translationIdValue,
                 }),
             })
 
