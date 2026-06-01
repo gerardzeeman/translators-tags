@@ -70,8 +70,18 @@ def upsert_translation_verse(translation_id: int, book_id: int,
 
 
 def bulk_insert_translation_words(rows: list[dict]) -> None:
+    """Insert translation word rows.
+
+    Each row must contain: verse_id, word_position, word_text,
+    word_normalised, char_start, char_end.
+    Optional: is_filler (bool, default False).
+    """
     if not rows:
         return
+    # Ensure is_filler has a default so SV rows (which don't set it) still work
+    for row in rows:
+        row.setdefault("is_filler", False)
+
     with get_connection() as conn:
         with conn.cursor() as cur:
             # Delete existing words for this verse first (re-tokenise cleanly)
@@ -84,10 +94,11 @@ def bulk_insert_translation_words(rows: list[dict]) -> None:
                 """
                 INSERT INTO translation_words
                     (verse_id, word_position, word_text, word_normalised,
-                     char_start, char_end)
+                     char_start, char_end, is_filler)
                 VALUES
                     (%(verse_id)s, %(word_position)s, %(word_text)s,
-                     %(word_normalised)s, %(char_start)s, %(char_end)s)
+                     %(word_normalised)s, %(char_start)s, %(char_end)s,
+                     %(is_filler)s)
                 ON CONFLICT (verse_id, word_position) DO NOTHING
                 """,
                 rows,

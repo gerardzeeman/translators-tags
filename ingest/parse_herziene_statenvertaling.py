@@ -181,35 +181,77 @@ _NOISE_CLASSES = {
 }
 
 
-def _extract_verse_text(span: Tag) -> str:
+def _extract_verse_tokens(span: Tag) -> tuple[str, list[dict]]:
     """
-    Extract clean verse text from the *second* verse-span element.
+    Extract verse text and word tokens from a verse-span element.
 
-    Strips:
-      - All <a> tags (cross-references to other Bible passages)
-      - Elements whose class intersects with _NOISE_CLASSES
-      - Leading/trailing whitespace; collapses internal whitespace runs
+    Words inside ``<span class="add">`` are marked ``is_filler=True`` — these
+    are the HSV cursive/bracketed words that have no direct source-language
+    backing (e.g. "maar" in "Houd [maar] op").
+
+    Returns
+    -------
+    verse_text : str
+        Full plain-text verse string (for translation_verses.verse_text).
+    tokens : list[dict]
+        One dict per word with keys:
+          word_position, word_text, word_normalised,
+          char_start, char_end, is_filler
     """
-    # Work on a copy so we don't mutate the soup
+    from bs4 import NavigableString
+
+    # Work on a deep copy so we don't mutate the live soup
     span = BeautifulSoup(str(span), "lxml").find("span")
     if span is None:
-        return ""
+        return "", []
 
-    # Remove cross-reference links
+    # ── strip noise ───────────────────────────────────────────────────────────
     for a in span.find_all("a"):
         a.decompose()
-
-    # Remove known noise elements by class
     for tag in span.find_all(True):
-        tag_classes = set(tag.get("class") or [])
-        if tag_classes & _NOISE_CLASSES:
+        if set(tag.get("class") or []) & _NOISE_CLASSES:
             tag.decompose()
 
-    # Collect remaining text nodes
-    text = span.get_text(separator=" ")
-    # Collapse whitespace and strip
-    text = re.sub(r"\s+", " ", text).strip()
-    return text
+    # ── walk DOM collecting (raw_token, is_filler) pairs ─────────────────────
+    raw_words: list[tuple[str, bool]] = []
+
+    def _walk(node, in_filler: bool) -> None:
+        if isinstance(node, NavigableString):
+            for m in re.finditer(r"\S+", str(node)):
+                raw_words.append((m.group(), in_filler))
+        else:
+            classes = set(node.get("class") or [])
+            _walk_filler = in_filler or ("add" in classes)
+            for child in node.children:
+                _walk(child, _walk_filler)
+
+    _walk(span, False)
+
+    # ── build tokens and verse text ───────────────────────────────────────────
+    tokens: list[dict] = []
+    verse_parts: list[str] = []
+    position   = 1
+    char_offset = 0
+
+    for raw_token, is_filler in raw_words:
+        clean = _PUNCT_EDGE.sub("", raw_token)
+        verse_parts.append(raw_token)
+
+        if clean:
+            tokens.append({
+                "word_position":   position,
+                "word_text":       clean,
+                "word_normalised": normalise(clean),
+                "char_start":      char_offset,
+                "char_end":        char_offset + len(raw_token),
+                "is_filler":       is_filler,
+            })
+            position += 1
+
+        char_offset += len(raw_token) + 1  # +1 for the space separator
+
+    verse_text = re.sub(r"\s+", " ", " ".join(verse_parts)).strip()
+    return verse_text, tokens
 
 
 def _parse_verse_id(verse_id: str) -> tuple[str, int, int] | None:
@@ -306,6 +348,13 @@ def iter_verses(html: str, expected_usfm: str | None = None
         if verse_id in closed:
             continue
 
+        # Skip verse-spans nested inside <span class="add"> — these are
+        # filler-word markers whose content is already captured when we
+        # walk the parent span in _extract_verse_tokens.
+        parent = span.parent
+        if parent and "add" in (parent.get("class") or []):
+            continue
+
         raw_text = span.get_text(separator="").strip()
         is_number_span = bool(re.match(r"^\d+$", raw_text))
 
@@ -326,9 +375,24 @@ def iter_verses(html: str, expected_usfm: str | None = None
         if parsed is None:
             continue
         usfm, chapter, verse = parsed
-        parts = [t for s in spans if (t := _extract_verse_text(s))]
-        if parts:
-            yield usfm, chapter, verse, re.sub(r"\s+", " ", " ".join(parts)).strip()
+
+        # Extract tokens (with filler flags) and verse text from each span,
+        # then merge into a single verse.
+        all_tokens: list[dict] = []
+        verse_parts: list[str] = []
+        position = 1
+        for span in spans:
+            verse_text_part, span_tokens = _extract_verse_tokens(span)
+            if verse_text_part:
+                verse_parts.append(verse_text_part)
+            for tok in span_tokens:
+                tok["word_position"] = position
+                all_tokens.append(tok)
+                position += 1
+
+        if all_tokens:
+            verse_text = re.sub(r"\s+", " ", " ".join(verse_parts)).strip()
+            yield usfm, chapter, verse, verse_text, all_tokens
 
 
 # ─── DB helpers ───────────────────────────────────────────────────────────────
@@ -363,9 +427,13 @@ def scrape_book(book_id: int, usfm: str, chapter_count: int, slug: str,
             time.sleep(REQUEST_DELAY)
             continue
 
-        for verse_usfm, verse_ch, verse_num, verse_text in iter_verses(html, expected_usfm=usfm):
+        for verse_usfm, verse_ch, verse_num, verse_text, tokens in iter_verses(html, expected_usfm=usfm):
             if dry_run:
-                print(f"  {verse_usfm} {verse_ch}:{verse_num}  {verse_text[:120]}")
+                filler_count = sum(1 for t in tokens if t["is_filler"])
+                print(f"  {verse_usfm} {verse_ch}:{verse_num}  "
+                      f"{verse_text[:100]}"
+                      f"  [{filler_count} filler]" if filler_count else
+                      f"  {verse_usfm} {verse_ch}:{verse_num}  {verse_text[:120]}")
                 continue
 
             # Resolve book_id from the data-verse-id usfm code
@@ -380,7 +448,6 @@ def scrape_book(book_id: int, usfm: str, chapter_count: int, slug: str,
             )
             total_verses += 1
 
-            tokens = tokenise_verse(verse_text)
             for token in tokens:
                 word_batch.append({"verse_id": verse_id, **token})
                 total_words += 1

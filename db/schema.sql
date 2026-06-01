@@ -19,11 +19,14 @@ CREATE TABLE IF NOT EXISTS books (
 );
 
 CREATE TABLE IF NOT EXISTS translations (
-    id        SMALLINT PRIMARY KEY,
-    code      VARCHAR(20) NOT NULL UNIQUE,      -- 'SV', 'NBG51', …
-    name      TEXT        NOT NULL,             -- 'Statenvertaling'
-    language  CHAR(3)     NOT NULL,             -- ISO 639-3: 'nld'
-    direction VARCHAR(3)  NOT NULL DEFAULT 'LTR' CHECK (direction IN ('LTR', 'RTL'))
+    id                    SMALLINT PRIMARY KEY,
+    code                  VARCHAR(20) NOT NULL UNIQUE,      -- 'SV', 'HSV', …
+    name                  TEXT        NOT NULL,             -- 'Statenvertaling'
+    language              CHAR(3)     NOT NULL,             -- ISO 639-3: 'nld'
+    direction             VARCHAR(3)  NOT NULL DEFAULT 'LTR' CHECK (direction IN ('LTR', 'RTL')),
+    family                VARCHAR(20),                      -- e.g. 'SV' groups SV editions + HSV
+    source_lang_authority BOOLEAN     NOT NULL DEFAULT FALSE -- TRUE: this translation's word_links
+                                                            --   are the anchor for propagation
 );
 
 -- Versification difference mapping (OT: Hebrew tradition vs Dutch)
@@ -85,13 +88,17 @@ CREATE TABLE IF NOT EXISTS translation_verses (
 );
 
 CREATE TABLE IF NOT EXISTS translation_words (
-    id             SERIAL   PRIMARY KEY,
-    verse_id       INTEGER  NOT NULL REFERENCES translation_verses(id) ON DELETE CASCADE,
-    word_position  SMALLINT NOT NULL,           -- 1-based within verse
-    word_text      TEXT     NOT NULL,           -- Dutch token (no punct)
-    word_normalised TEXT    NOT NULL,           -- lowercase, NFD, no diacritics
-    char_start     SMALLINT NOT NULL,           -- byte offset in verse_text
-    char_end       SMALLINT NOT NULL,           -- exclusive end offset
+    id              SERIAL   PRIMARY KEY,
+    verse_id        INTEGER  NOT NULL REFERENCES translation_verses(id) ON DELETE CASCADE,
+    word_position   SMALLINT NOT NULL,           -- 1-based within verse
+    word_text       TEXT     NOT NULL,           -- Dutch token (no punct)
+    word_normalised TEXT     NOT NULL,           -- lowercase, NFD, no diacritics
+    char_start      SMALLINT NOT NULL,           -- byte offset in verse_text
+    char_end        SMALLINT NOT NULL,           -- exclusive end offset
+    is_filler       BOOLEAN  NOT NULL DEFAULT FALSE,
+                                                 -- TRUE for HSV cursive/"add" words:
+                                                 -- no direct source-language backing;
+                                                 -- excluded from source-link propagation
     UNIQUE (verse_id, word_position)
 );
 
@@ -141,6 +148,28 @@ CREATE TABLE IF NOT EXISTS manual_empty_links (
 );
 
 -- ─────────────────────────────────────────────────────────────────────────────
+-- Inter-translation alignment
+-- ─────────────────────────────────────────────────────────────────────────────
+
+-- Links a word in one translation to the semantically equivalent word in
+-- another translation within the same verse.
+-- word_a_id < word_b_id enforced so (A,B) and (B,A) are always one row.
+CREATE TABLE IF NOT EXISTS inter_translation_links (
+    id          SERIAL       PRIMARY KEY,
+    word_a_id   INTEGER      NOT NULL REFERENCES translation_words(id) ON DELETE CASCADE,
+    word_b_id   INTEGER      NOT NULL REFERENCES translation_words(id) ON DELETE CASCADE,
+    method      VARCHAR(30)  NOT NULL DEFAULT 'auto_source_pivot'
+                    CHECK (method IN (
+                        'auto_source_pivot', 'auto_sequence', 'auto_positional',
+                        'manual', 'manual_empty'
+                    )),
+    confidence  SMALLINT     CHECK (confidence BETWEEN 0 AND 100),
+    created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    CONSTRAINT itl_ordered CHECK (word_a_id < word_b_id),
+    UNIQUE (word_a_id, word_b_id)
+);
+
+-- ─────────────────────────────────────────────────────────────────────────────
 -- Indexes
 -- ─────────────────────────────────────────────────────────────────────────────
 
@@ -150,9 +179,11 @@ CREATE INDEX IF NOT EXISTS idx_gw_ref      ON greek_words        (book_id, chapt
 CREATE INDEX IF NOT EXISTS idx_gw_strongs  ON greek_words        (strongs);
 CREATE INDEX IF NOT EXISTS idx_tv_ref      ON translation_verses (translation_id, book_id, chapter, verse);
 CREATE INDEX IF NOT EXISTS idx_tw_verse    ON translation_words  (verse_id);
-CREATE INDEX IF NOT EXISTS idx_wl_he       ON word_links         (hebrew_word_id);
-CREATE INDEX IF NOT EXISTS idx_wl_gr       ON word_links         (greek_word_id);
-CREATE INDEX IF NOT EXISTS idx_wl_tw       ON word_links         (translation_word_id);
+CREATE INDEX IF NOT EXISTS idx_wl_he       ON word_links              (hebrew_word_id);
+CREATE INDEX IF NOT EXISTS idx_wl_gr       ON word_links              (greek_word_id);
+CREATE INDEX IF NOT EXISTS idx_wl_tw       ON word_links              (translation_word_id);
+CREATE INDEX IF NOT EXISTS idx_itl_word_a  ON inter_translation_links (word_a_id);
+CREATE INDEX IF NOT EXISTS idx_itl_word_b  ON inter_translation_links (word_b_id);
 
 -- Partial unique indexes: at most one link per source word + Dutch word pair
 CREATE UNIQUE INDEX IF NOT EXISTS idx_wl_he_tw ON word_links (hebrew_word_id, translation_word_id) WHERE hebrew_word_id IS NOT NULL;
@@ -262,7 +293,11 @@ INSERT INTO books (id, usfm_code, testament, name_nl, chapter_count) VALUES
 ON CONFLICT (id) DO NOTHING;
 
 -- Seed data: translation records
-INSERT INTO translations (id, code, name, language, direction) VALUES
-    (1, 'SV',  'Statenvertaling',          'nld', 'LTR'),
-    (2, 'HSV', 'Herziene Statenvertaling', 'nld', 'LTR')
-ON CONFLICT (id) DO NOTHING;
+-- SV (Jongbloed) is the source_lang_authority: its word_links to Hebrew/Greek
+-- propagate to all other SV-family translations via inter_translation_links.
+INSERT INTO translations (id, code, name, language, direction, family, source_lang_authority) VALUES
+    (1, 'SV',  'Statenvertaling (Jongbloed)', 'nld', 'LTR', 'SV', TRUE),
+    (2, 'HSV', 'Herziene Statenvertaling',    'nld', 'LTR', 'SV', FALSE)
+ON CONFLICT (id) DO UPDATE SET
+    family                = EXCLUDED.family,
+    source_lang_authority = EXCLUDED.source_lang_authority;
