@@ -42,7 +42,10 @@ class LinkingRepository
                 hw.word_position,
                 hw.word_text,
                 hw.transliteration,
-                hw.strongs,
+                regexp_replace(
+                    regexp_replace(hw.strongs, '[A-Za-z]+$', ''),
+                    '^([HG])0+(\d)', '\1\2'
+                ) AS strongs,
                 hw.morph_code,
                 COALESCE(
                     json_agg(
@@ -86,7 +89,10 @@ class LinkingRepository
                 gw.word_position,
                 gw.word_text,
                 gw.transliteration,
-                gw.strongs,
+                regexp_replace(
+                    regexp_replace(gw.strongs, '[A-Za-z]+$', ''),
+                    '^([HG])0+(\d)', '\1\2'
+                ) AS strongs,
                 gw.parse_code,
                 COALESCE(
                     json_agg(
@@ -201,14 +207,14 @@ class LinkingRepository
                 transliteration,
                 COUNT(*) AS occurrence_count
             FROM {$table}
-            WHERE strongs = :strongs
+            WHERE regexp_replace(strongs, '[A-Za-z]+$', '') = :strongs
               AND transliteration IS NOT NULL
               AND transliteration <> ''
             GROUP BY transliteration
             ORDER BY occurrence_count DESC, transliteration
         SQL;
 
-        return $this->connection->fetchAllAssociative($sql, ['strongs' => $strongs]);
+        return $this->connection->fetchAllAssociative($sql, ['strongs' => $this->padStrongsId($strongs)]);
     }
 
     /**
@@ -229,11 +235,11 @@ class LinkingRepository
                 b.usfm_code
             FROM {$table} sw
             JOIN books b ON b.id = sw.book_id
-            WHERE sw.strongs = :strongs
+            WHERE regexp_replace(sw.strongs, '[A-Za-z]+$', '') = :strongs
             ORDER BY sw.book_id, sw.chapter, sw.verse
         SQL;
 
-        $verses = $this->connection->fetchAllAssociative($sql, ['strongs' => $strongs]);
+        $verses = $this->connection->fetchAllAssociative($sql, ['strongs' => $this->padStrongsId($strongs)]);
 
         // For each verse, fetch the full linking data
         $result = [];
@@ -280,11 +286,11 @@ class LinkingRepository
             LEFT JOIN translation_verses tv ON tv.id = tw.verse_id
                                            AND tv.translation_id = :translation_id
             LEFT JOIN link_confidence lc    ON lc.link_id = wl.id
-            WHERE sw.strongs = :strongs
+            WHERE regexp_replace(sw.strongs, '[A-Za-z]+$', '') = :strongs
         SQL;
 
         return $this->connection->fetchAssociative($sql, [
-            'strongs'        => $strongs,
+            'strongs'        => $this->padStrongsId($strongs),
             'translation_id' => $translationId,
         ]);
     }
@@ -397,7 +403,8 @@ class LinkingRepository
     {
         $row = $this->connection->fetchAssociative(
             "SELECT strongs_id, lang, lemma, transliteration, pronunciation,
-                    pos, morph, definition, etymology, kjv_renderings, short_def
+                    pos, morph, definition, etymology, kjv_renderings, short_def,
+                    definition_nl, etymology_nl, short_def_nl
              FROM strongs_entries
              WHERE strongs_id = :id",
             ['id' => $this->normalizeStrongsId($strongs)]
@@ -426,6 +433,40 @@ class LinkingRepository
         $strongs = (string) preg_replace('/^([HG])0+(\d)/', '$1$2', $strongs);
 
         return $strongs;
+    }
+
+    /**
+     * Convert a canonical Strong's ID (e.g. 'H1', 'H853') to the zero-padded
+     * 4-digit format stored in hebrew_words / greek_words by parse_tahot.py
+     * (e.g. 'H0001', 'H0853').  Suffix letters (H5921A) are preserved.
+     */
+    private function padStrongsId(string $strongs): string
+    {
+        $strongs = strtoupper(trim($strongs));
+        if (preg_match('/^([HG])(\d+)([A-Z]?)$/', $strongs, $m)) {
+            return $m[1] . str_pad($m[2], 4, '0', STR_PAD_LEFT) . $m[3];
+        }
+        return $strongs;
+    }
+
+    /**
+     * Save Dutch translation fields for a Strong's entry.
+     */
+    public function saveStrongsTranslation(string $strongs, ?string $shortDefNl, ?string $definitionNl, ?string $etymologyNl): void
+    {
+        $this->connection->executeStatement(
+            "UPDATE strongs_entries
+             SET short_def_nl  = :short_def_nl,
+                 definition_nl = :definition_nl,
+                 etymology_nl  = :etymology_nl
+             WHERE strongs_id  = :id",
+            [
+                'id'           => $this->normalizeStrongsId($strongs),
+                'short_def_nl' => $shortDefNl ?: null,
+                'definition_nl'=> $definitionNl ?: null,
+                'etymology_nl' => $etymologyNl ?: null,
+            ]
+        );
     }
 
     /**

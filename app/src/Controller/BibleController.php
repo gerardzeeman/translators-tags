@@ -160,7 +160,7 @@ class BibleController extends AbstractController
     /**
      * Strong's lookup — AJAX/Turbo endpoint showing all words with a given number.
      */
-    #[Route('/strongs/{number}', name: 'app_strongs')]
+    #[Route('/strongs/{number}', name: 'app_strongs', requirements: ['number' => '[HGhg]\d+[A-Za-z]?'])]
     public function strongs(string $number): Response
     {
         return $this->render('bible/strongs.html.twig', [

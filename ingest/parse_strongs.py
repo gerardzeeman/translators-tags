@@ -71,6 +71,47 @@ def _inner_text(el) -> str:
     return _clean("".join(el.itertext())) or ""
 
 
+def _note_text(note_el) -> str:
+    """Extract text from a <note> element, rendering <w> link elements as
+    'H{src} ({lemma}, {xlit})' instead of silently dropping them.
+
+    Example input XML:
+      (Aramaic) corresponding to <w lemma="אָב" POS="awb" src="1" xlit="ʼâb"/>
+    Output:
+      (Aramaic) corresponding to H1 (אָב, ʼâb)
+    """
+    parts = []
+    # Text before first child
+    if note_el.text:
+        parts.append(note_el.text)
+
+    for child in note_el:
+        tag = child.tag.split("}")[-1] if "}" in child.tag else child.tag  # strip namespace
+        if tag == "w":
+            src   = child.get("src")
+            lemma = child.get("lemma")
+            xlit  = child.get("xlit")
+            # Build the inline reference: 'H1 (אָב, ʼâb)'
+            if src:
+                try:
+                    ref = f"H{int(src)}"
+                except ValueError:
+                    ref = f"H{src}"
+                detail_parts = [p for p in [lemma, xlit] if p]
+                if detail_parts:
+                    ref += f" ({', '.join(detail_parts)})"
+                parts.append(ref)
+        else:
+            # For any other child (e.g. <hi>), just use its text
+            if child.text:
+                parts.append(child.text)
+
+        if child.tail:
+            parts.append(child.tail)
+
+    return _clean("".join(parts)) or ""
+
+
 # ── Hebrew parser ─────────────────────────────────────────────────────────────
 
 def _parse_hebrew(path: Path) -> list[dict]:
@@ -114,13 +155,13 @@ def _parse_hebrew(path: Path) -> list[dict]:
         kjv_renderings = None
         for note in entry.findall("o:note", ns):
             note_type = note.get("type")
-            text = _inner_text(note)
             if note_type == "exegesis":
-                etymology = text
+                # Use _note_text to preserve <w> cross-references
+                etymology = _note_text(note)
             elif note_type == "explanation":
-                short_def = text
+                short_def = _inner_text(note)
             elif note_type == "translation":
-                kjv_renderings = text
+                kjv_renderings = _inner_text(note)
 
         rows.append({
             "strongs_id":      strongs_id,

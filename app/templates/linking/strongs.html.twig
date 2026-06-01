@@ -80,25 +80,29 @@
             {% endif %}
         </div>
 
-        {% if strongs_entry.short_def %}
-        <p class="strongs-short-def">{{ strongs_entry.short_def }}</p>
+        {% set short_def_display   = strongs_entry.short_def_nl|default(null) ?: strongs_entry.short_def|default(null) %}
+        {% set definition_display  = strongs_entry.definition_nl|default(null) ?: strongs_entry.definition|default(null) %}
+        {% set etymology_display   = strongs_entry.etymology_nl|default(null) ?: strongs_entry.etymology|default(null) %}
+
+        {% if short_def_display %}
+        <p class="strongs-short-def">{{ short_def_display }}</p>
         {% endif %}
 
-        {% if strongs_entry.definition %}
-        <ol class="strongs-definition">
-            {% for line in strongs_entry.definition|split('\n') %}
+        {% if definition_display %}
+        <ul class="strongs-definition">
+            {% for line in definition_display|split('\n') %}
             {% if line|trim %}
             <li>{{ line|replace({'1) ': '', '2) ': '', '3) ': '', '4) ': '', '5) ': '', '6) ': '', '7) ': '', '8) ': '', '9) ': ''})|trim }}</li>
             {% endif %}
             {% endfor %}
-        </ol>
+        </ul>
         {% endif %}
 
         <div class="strongs-meta">
-            {% if strongs_entry.etymology %}
+            {% if etymology_display %}
             <div class="strongs-meta-row">
                 <span class="strongs-meta-label">Herkomst</span>
-                <span>{{ strongs_entry.etymology }}</span>
+                <span>{{ etymology_display }}</span>
             </div>
             {% endif %}
             {% if strongs_entry.kjv_renderings %}

@@ -36,17 +36,19 @@ security:
                 path: /
 
     role_hierarchy:
-        ROLE_VIEWER:  [ROLE_USER]
-        ROLE_LINKER:  [ROLE_VIEWER]
-        ROLE_HSV:     [ROLE_VIEWER]
-        ROLE_ADMIN:   [ROLE_LINKER, ROLE_HSV]
+        ROLE_VIEWER:            [ROLE_USER]
+        ROLE_LINKER:            [ROLE_VIEWER]
+        ROLE_HSV:               [ROLE_VIEWER]
+        ROLE_EDIT_STRONG_TRNL:  [ROLE_VIEWER]
+        ROLE_ADMIN:             [ROLE_LINKER, ROLE_HSV, ROLE_EDIT_STRONG_TRNL]
 
     access_control:
-        - { path: ^/login,    roles: PUBLIC_ACCESS }
-        - { path: ^/register, roles: PUBLIC_ACCESS }
-        - { path: ^/link,     roles: ROLE_LINKER }
-        - { path: ^/book,     roles: ROLE_VIEWER }
-        - { path: ^/,         roles: ROLE_USER }
+        - { path: ^/login,             roles: PUBLIC_ACCESS }
+        - { path: ^/register,          roles: PUBLIC_ACCESS }
+        - { path: ^/strongs/translate, roles: ROLE_EDIT_STRONG_TRNL }
+        - { path: ^/link,              roles: ROLE_LINKER }
+        - { path: ^/book,              roles: ROLE_VIEWER }
+        - { path: ^/,                  roles: ROLE_USER }
 
 when@test:
     security:

@@ -39,7 +39,8 @@ class SecurityHeadersSubscriber implements EventSubscriberInterface
             "script-src 'self' data: " .
                 "'sha256-yz1FnBjYE3IRDro+PwRcgrDgsHOR5S2cmWOM3yUTCLU=' " .
                 "'sha256-ECLG8qY1BzpZZkmvGwzIAvYx4rYATTBbdp22iY7QEhs=' " .
-                "'sha256-6PeNBy+owUm6Gd8Z5yEum0eIWDj1/qFaCZ3n8xIKraY='; " .
+                "'sha256-6PeNBy+owUm6Gd8Z5yEum0eIWDj1/qFaCZ3n8xIKraY=' " .
+                "'sha256-zrQsxlpBhYKr5BaUD6lKOzP/Zwum0kXIjOc9jbGM03k='; " .
             "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " .
             "font-src 'self' https://fonts.gstatic.com; " .
             "img-src 'self' data:; " .

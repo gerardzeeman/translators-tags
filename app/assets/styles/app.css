@@ -816,6 +816,180 @@ a:hover { text-decoration: underline; }
 .verse-ref-link:hover { text-decoration: underline; }
 .no-results { text-align: center; color: var(--color-ink-muted); font-style: italic; padding: 3rem; }
 
+/* ── Strong's Translation Editor ─────────────────────────────────────────── */
+.translate-screen {
+    max-width: 1300px;
+    margin: 0 auto;
+    padding: 1.5rem 1rem 3rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+/* Top bar */
+.translate-topbar {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    background: #fff;
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    padding: 1rem 1.5rem;
+    box-shadow: var(--shadow);
+}
+.translate-selector-form {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+}
+.translate-selector-label {
+    font-size: .9rem;
+    font-weight: 500;
+    color: var(--color-ink-light);
+    white-space: nowrap;
+}
+.translate-selector-input {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: .4rem .75rem;
+    font-family: var(--font-mono);
+    font-size: 1rem;
+    width: 140px;
+    background: var(--color-parchment);
+    color: var(--color-ink);
+}
+.translate-selector-input:focus {
+    outline: 2px solid var(--color-accent-2);
+    outline-offset: 1px;
+}
+.translate-saved-notice {
+    margin-left: auto;
+    color: var(--color-manual);
+    font-weight: 500;
+    font-size: .95rem;
+}
+
+/* Panels */
+.translate-form { display: contents; }
+.translate-panels {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.25rem;
+    align-items: start;
+}
+.translate-panel {
+    background: #fff;
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    padding: 1.5rem;
+}
+.translate-panel--nl {
+    border-color: var(--color-accent-2);
+}
+.translate-panel-header {
+    display: flex;
+    align-items: baseline;
+    gap: .75rem;
+    padding-bottom: .75rem;
+    border-bottom: 1px solid var(--color-border-light);
+    flex-wrap: wrap;
+}
+.translate-panel-lang {
+    font-size: .75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--color-ink-muted);
+}
+.translate-panel--nl .translate-panel-lang {
+    color: var(--color-accent-2);
+}
+.translate-panel-id {
+    font-family: var(--font-mono);
+    font-size: .85rem;
+    color: var(--color-ink-muted);
+}
+
+/* Field groups */
+.translate-field-group {
+    display: flex;
+    flex-direction: column;
+    gap: .35rem;
+}
+.translate-field-group--grow { flex: 1; }
+.translate-field-label {
+    font-size: .78rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: var(--color-ink-muted);
+}
+.translate-field-readonly {
+    font-size: .95rem;
+    color: var(--color-ink-light);
+    background: var(--color-parchment);
+    border: 1px solid var(--color-border-light);
+    border-radius: var(--radius);
+    padding: .5rem .75rem;
+    min-height: 2.5rem;
+    line-height: 1.5;
+}
+.translate-field-readonly--pre {
+    white-space: pre-wrap;
+    font-size: .85rem;
+}
+.translate-field-input,
+.translate-field-textarea {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: .5rem .75rem;
+    font-family: var(--font-serif);
+    font-size: .95rem;
+    color: var(--color-ink);
+    background: #fff;
+    width: 100%;
+    transition: border-color .15s;
+}
+.translate-field-input:focus,
+.translate-field-textarea:focus {
+    outline: none;
+    border-color: var(--color-accent-2);
+}
+.translate-field-textarea {
+    resize: vertical;
+    min-height: 18rem;
+    line-height: 1.5;
+    font-size: .88rem;
+    font-family: var(--font-mono);
+}
+
+/* Footer save button */
+.translate-panel-footer {
+    padding-top: .75rem;
+    border-top: 1px solid var(--color-border-light);
+    display: flex;
+    justify-content: flex-end;
+}
+.btn-save {
+    min-width: 110px;
+}
+
+/* Empty state */
+.translate-empty {
+    text-align: center;
+    color: var(--color-ink-muted);
+    font-style: italic;
+    padding: 3rem;
+}
+
+@media (max-width: 800px) {
+    .translate-panels { grid-template-columns: 1fr; }
+}
+
 /* ── Strong's badge (small, inline) ──────────────────────────────────────── */
 .strongs-badge-small {
     font-family: var(--font-mono);

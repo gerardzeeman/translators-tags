@@ -178,7 +178,10 @@ CREATE TABLE IF NOT EXISTS strongs_entries (
     definition      TEXT,                        -- numbered definitions joined
     etymology       TEXT,                        -- origin / derivation note
     kjv_renderings  TEXT,                        -- KJV translation renderings
-    short_def       TEXT                         -- brief gloss / explanation
+    short_def       TEXT,                        -- brief gloss / explanation
+    definition_nl   TEXT,                        -- Dutch translation of definition
+    etymology_nl    TEXT,                        -- Dutch translation of etymology
+    short_def_nl    TEXT                         -- Dutch translation of short_def
 );
 
 CREATE INDEX IF NOT EXISTS idx_strongs_entries_lang ON strongs_entries (lang);

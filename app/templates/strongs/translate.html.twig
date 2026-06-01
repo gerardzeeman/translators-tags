@@ -1,0 +1,138 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Strong's Vertaling{{ strongs_id ? ' – ' ~ strongs_id }}{% endblock %}
+
+{% block body %}
+<div class="translate-screen">
+
+    {# ── Top bar: Strong's number selector ───────────────────────────────── #}
+    <div class="translate-topbar">
+        <form class="translate-selector-form" id="strongs-selector-form">
+            <label for="strongs-input" class="translate-selector-label">Strong's nummer</label>
+            <input
+                type="text"
+                id="strongs-input"
+                class="translate-selector-input"
+                placeholder="bijv. H1, G37"
+                value="{{ strongs_id ?? '' }}"
+                autocomplete="off"
+                autofocus
+            >
+            <button type="button" class="btn-primary" id="strongs-open-btn">Openen</button>
+        </form>
+        {% if saved %}
+        <div class="translate-saved-notice">✓ Opgeslagen</div>
+        {% endif %}
+    </div>
+
+    {% if strongs_entry %}
+    {# ── Two-panel editor ─────────────────────────────────────────────────── #}
+    <form method="post" action="{{ path('app_strongs_translate_save', {strongs: strongs_id}) }}" class="translate-form">
+
+        <div class="translate-panels">
+
+            {# Left: English (read-only) #}
+            <div class="translate-panel translate-panel--en">
+                <div class="translate-panel-header">
+                    <span class="translate-panel-lang">Engels</span>
+                    <span class="translate-panel-id">{{ strongs_id }}</span>
+                    {% if strongs_entry.lemma %}
+                    <span class="strongs-lemma {% if strongs_entry.lang == 'HE' %}strongs-lemma-he{% endif %}">
+                        {{- strongs_entry.lemma -}}
+                    </span>
+                    {% endif %}
+                    {% if strongs_entry.transliteration %}
+                    <span class="strongs-translit">{{ strongs_entry.transliteration }}</span>
+                    {% endif %}
+                </div>
+
+                <div class="translate-field-group">
+                    <label class="translate-field-label">Korte definitie</label>
+                    <div class="translate-field-readonly">{{ strongs_entry.short_def ?? '—' }}</div>
+                </div>
+
+                <div class="translate-field-group">
+                    <label class="translate-field-label">Definitie</label>
+                    <div class="translate-field-readonly translate-field-readonly--pre">{{ strongs_entry.definition ?? '—' }}</div>
+                </div>
+
+                <div class="translate-field-group">
+                    <label class="translate-field-label">Etymologie</label>
+                    <div class="translate-field-readonly">{{ strongs_entry.etymology ?? '—' }}</div>
+                </div>
+            </div>
+
+            {# Right: Dutch (editable) #}
+            <div class="translate-panel translate-panel--nl">
+                <div class="translate-panel-header">
+                    <span class="translate-panel-lang">Nederlands</span>
+                </div>
+
+                <div class="translate-field-group">
+                    <label class="translate-field-label" for="short_def_nl">Korte definitie</label>
+                    <input
+                        type="text"
+                        id="short_def_nl"
+                        name="short_def_nl"
+                        class="translate-field-input"
+                        value="{{ strongs_entry.short_def_nl ?? '' }}"
+                        placeholder="{{ strongs_entry.short_def ?? '' }}"
+                    >
+                </div>
+
+                <div class="translate-field-group translate-field-group--grow">
+                    <label class="translate-field-label" for="definition_nl">Definitie</label>
+                    <textarea
+                        id="definition_nl"
+                        name="definition_nl"
+                        class="translate-field-textarea"
+                        placeholder="{{ strongs_entry.definition ?? '' }}"
+                        rows="14"
+                    >{{ strongs_entry.definition_nl ?? '' }}</textarea>
+                </div>
+
+                <div class="translate-field-group">
+                    <label class="translate-field-label" for="etymology_nl">Etymologie</label>
+                    <input
+                        type="text"
+                        id="etymology_nl"
+                        name="etymology_nl"
+                        class="translate-field-input"
+                        value="{{ strongs_entry.etymology_nl ?? '' }}"
+                        placeholder="{{ strongs_entry.etymology ?? '' }}"
+                    >
+                </div>
+
+                <div class="translate-panel-footer">
+                    <button type="submit" class="btn-primary btn-save">Opslaan</button>
+                </div>
+            </div>
+
+        </div>{# /.translate-panels #}
+    </form>
+
+    {% else %}
+    <div class="translate-empty">
+        <p>Voer een Strong's nummer in om de vertaling te bewerken.</p>
+    </div>
+    {% endif %}
+
+</div>{# /.translate-screen #}
+{% endblock %}
+
+{% block javascripts %}
+{{ parent() }}
+<script>
+function strongsNavigate() {
+    const val = document.getElementById('strongs-input').value.trim().toUpperCase();
+    if (val) {
+        window.location.href = '{{ path('app_strongs_translate_home') }}/' + encodeURIComponent(val);
+    }
+}
+document.getElementById('strongs-selector-form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    strongsNavigate();
+});
+document.getElementById('strongs-open-btn').addEventListener('click', strongsNavigate);
+</script>
+{% endblock %}

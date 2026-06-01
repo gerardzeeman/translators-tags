@@ -25,6 +25,9 @@
             <a href="{{ path('app_home') }}">Bijbelboeken</a>
             <a href="{{ path('app_linking_home') }}">Koppelen</a>
             <a href="{{ path('app_linking_strongs_home') }}">Koppelen Strong's</a>
+            {% if is_granted('ROLE_EDIT_STRONG_TRNL') %}
+            <a href="{{ path('app_strongs_translate_home') }}">Vertalen Strong's</a>
+            {% endif %}
             {% if app.user %}
             <div class="nav-user">
                 <button class="nav-user-btn" type="button">
