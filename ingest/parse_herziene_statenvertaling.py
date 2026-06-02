@@ -335,6 +335,7 @@ def iter_verses(html: str, expected_usfm: str | None = None
     seen_number: set[str] = set()           # verse_ids whose number span was seen
     closed: set[str] = set()                # verse_ids where SV column was detected
     verse_text_spans: dict[str, list] = {}  # verse_id → list of candidate spans
+    seen_add_spans: set[int] = set()        # id() of add-spans already captured
 
     for span in all_spans:
         verse_id = span.get("data-verse-id", "").strip()
@@ -348,11 +349,19 @@ def iter_verses(html: str, expected_usfm: str | None = None
         if verse_id in closed:
             continue
 
-        # Skip verse-spans nested inside <span class="add"> — these are
-        # filler-word markers whose content is already captured when we
-        # walk the parent span in _extract_verse_tokens.
+        # Filler-word structure on the HSV site:
+        #   <span class="add"><span class="verse-span" data-verse-id="...">maar</span></span>
+        #
+        # The <span class="add"> is a SIBLING of the regular verse-spans, not a
+        # wrapper around the whole verse.  We must NOT skip it entirely — instead
+        # we capture the parent add-span once (in document order) so that
+        # _extract_verse_tokens can walk it and mark the words as is_filler=True.
         parent = span.parent
         if parent and "add" in (parent.get("class") or []):
+            add_id = id(parent)
+            if verse_id in seen_number and add_id not in seen_add_spans:
+                seen_add_spans.add(add_id)
+                verse_text_spans[verse_id].append(parent)   # add-span carries filler words
             continue
 
         raw_text = span.get_text(separator="").strip()

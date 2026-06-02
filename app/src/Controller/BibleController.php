@@ -109,6 +109,26 @@ class BibleController extends AbstractController
         // SV is the canonical source for testament + Hebrew/Greek word list
         $basePassage = $allPassages['SV'] ?? reset($allPassages);
 
+        // For non-SV translations in the same family, propagate SV source links via ITL
+        $svTranslation = null;
+        foreach ($allTranslations as $t) {
+            if ($t->getCode() === 'SV') { $svTranslation = $t; break; }
+        }
+        $propagatedLinks = [];
+        if ($svTranslation) {
+            foreach ($allTranslations as $trans) {
+                if ($trans->getCode() === 'SV') {
+                    continue;
+                }
+                $propagatedLinks[$trans->getCode()] = $this->passageRepository->fetchPropagatedLinksForVerse(
+                    $book->getId(), $chapter, $verse,
+                    $basePassage['testament'],
+                    $svTranslation->getId(),
+                    $trans->getId(),
+                );
+            }
+        }
+
         // Enrich source words with morphology + per-translation link data
         foreach ($basePassage['source_words'] as $i => &$word) {
             if ($basePassage['testament'] === 'NT' && !empty($word['parse_code'])) {
@@ -122,8 +142,15 @@ class BibleController extends AbstractController
             // Add per-translation link arrays (e.g. links_sv, links_hsv)
             foreach ($allTranslations as $trans) {
                 $code = $trans->getCode();
-                $word['links_' . strtolower($code)] =
-                    $allPassages[$code]['source_words'][$i]['dutch_links'] ?? [];
+                if ($code === 'SV') {
+                    $word['links_sv'] = $allPassages['SV']['source_words'][$i]['dutch_links'] ?? [];
+                } else {
+                    // Prefer direct word_links (e.g. manually linked HSV words).
+                    // Fall back to ITL-propagated links when no direct links exist.
+                    $direct    = $allPassages[$code]['source_words'][$i]['dutch_links'] ?? [];
+                    $propagated = $propagatedLinks[$code][$word['id']] ?? [];
+                    $word['links_' . strtolower($code)] = !empty($direct) ? $direct : $propagated;
+                }
             }
             unset($word['dutch_links']);
         }

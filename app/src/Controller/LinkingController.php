@@ -51,9 +51,18 @@ class LinkingController extends AbstractController
             throw $this->createNotFoundException("Translation '{$translation}' not found.");
         }
 
-        $passage = $this->linkingRepo->fetchPassageForLinking(
-            $book->getId(), $chapter, $verse, $translationEntity->getId()
-        );
+        // For non-authority translations (e.g. HSV), augment empty source-word
+        // links with propagated ITL suggestions so the user can confirm them.
+        $authorityId = $this->linkingRepo->findAuthorityTranslationId($translationEntity->getId());
+        if ($authorityId !== null) {
+            $passage = $this->linkingRepo->fetchPassageForLinkingWithPropagation(
+                $book->getId(), $chapter, $verse, $translationEntity->getId(), $authorityId
+            );
+        } else {
+            $passage = $this->linkingRepo->fetchPassageForLinking(
+                $book->getId(), $chapter, $verse, $translationEntity->getId()
+            );
+        }
 
         $chapterCounts = $this->passageRepo->getChapterVerseCounts($book->getId());
         $nav = $this->buildNavigation($book->getId(), $chapter, $verse, $usfm, $translation, $chapterCounts);

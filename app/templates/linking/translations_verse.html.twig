@@ -1,0 +1,174 @@
+{% extends 'base.html.twig' %}
+{% block title %}{{ trans_a.code }} ↔ {{ trans_b.code }} – {{ book.nameNl }} {{ chapter }}:{{ verse }}{% endblock %}
+
+{% block body %}
+<div class="trans-linking-screen"
+     data-controller="translation-linker"
+     data-translation-linker-save-url-value="{{ save_url }}"
+     data-translation-linker-delete-url-value="{{ delete_url }}"
+     data-translation-linker-reset-url-value="{{ reset_url }}">
+
+    {# ── Top bar ─────────────────────────────────────────────────────────── #}
+    <div class="trans-linking-topbar">
+        <div class="trans-linking-breadcrumb">
+            <a href="{{ path('app_trans_linking_home') }}">Vertalingen koppelen</a>
+            <span class="breadcrumb-sep">›</span>
+            <strong>{{ trans_a.code }} ↔ {{ trans_b.code }}</strong>
+            <span class="breadcrumb-sep">›</span>
+            {{ book.nameNl }} {{ chapter }}:{{ verse }}
+        </div>
+
+        <div class="trans-linking-nav">
+            {% if nav.prev %}
+            <a class="btn btn-sm"
+               href="{{ path('app_trans_linking_verse', nav.prev) }}">← Vorig</a>
+            {% endif %}
+            <span class="nav-pos">{{ verse }} / {{ nav.verse_count }}</span>
+            {% if nav.next %}
+            <a class="btn btn-sm"
+               href="{{ path('app_trans_linking_verse', nav.next) }}">Volgend →</a>
+            {% endif %}
+        </div>
+
+        <div class="trans-linking-actions">
+            <button type="button"
+                    class="btn btn-outline-danger btn-sm"
+                    data-action="click->translation-linker#resetAuto">
+                Auto-links resetten
+            </button>
+        </div>
+    </div>
+
+    {# ── Status bar ──────────────────────────────────────────────────────── #}
+    <div class="trans-linking-status"
+         data-translation-linker-target="status">
+        Klik een woord links, dan een woord rechts om te koppelen. Klik een gekoppeld woord om de koppeling te verwijderen.
+    </div>
+
+    {# ── Two-column linking area ──────────────────────────────────────────── #}
+    <div class="trans-linking-columns">
+
+        {# Column A (authority / SV) #}
+        <div class="trans-linking-col trans-linking-col-a">
+            <div class="trans-col-header">
+                <span class="trans-badge">{{ trans_a.code }}</span>
+                <span class="trans-col-name">{{ trans_a.name }}</span>
+            </div>
+
+            {% if words_a is empty %}
+            <em class="no-verse">Vers niet gevonden.</em>
+            {% else %}
+            <div class="trans-word-list">
+                {% for word in words_a %}
+                <span class="trans-word{% if word.is_filler %} word-filler{% endif %}"
+                      data-translation-linker-target="wordA"
+                      data-tw-id="{{ word.id }}"
+                      data-action="click->translation-linker#selectWordA">
+                    {{ word.word_text }}
+                    {% if word.is_filler %}
+                    <span class="filler-marker" title="Aanvullend woord (geen bronwoord)">*</span>
+                    {% endif %}
+                </span>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+
+        {# Column B (target / HSV) #}
+        <div class="trans-linking-col trans-linking-col-b">
+            <div class="trans-col-header">
+                <span class="trans-badge">{{ trans_b.code }}</span>
+                <span class="trans-col-name">{{ trans_b.name }}</span>
+            </div>
+
+            {% if words_b is empty %}
+            <em class="no-verse">Vers niet gevonden.</em>
+            {% else %}
+            <div class="trans-word-list">
+                {% for word in words_b %}
+                <span class="trans-word{% if word.is_filler %} word-filler{% endif %}"
+                      data-translation-linker-target="wordB"
+                      data-tw-id="{{ word.id }}"
+                      data-action="click->translation-linker#selectWordB">
+                    {{ word.word_text }}
+                    {% if word.is_filler %}
+                    <span class="filler-marker" title="Aanvullend woord (geen bronwoord)">*</span>
+                    {% endif %}
+                </span>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+
+    </div>{# /trans-linking-columns #}
+
+    {# ── Link overview panel ─────────────────────────────────────────────── #}
+    <div class="trans-links-panel">
+        <h3 class="trans-links-heading">Huidige koppelingen</h3>
+
+        {% if links is empty %}
+        <p class="no-results">Nog geen koppelingen voor dit vers.</p>
+        {% else %}
+        <table class="trans-links-table">
+            <thead>
+                <tr>
+                    <th>{{ trans_a.code }}</th>
+                    <th>{{ trans_b.code }}</th>
+                    <th>Methode</th>
+                    <th>Conf.</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody data-translation-linker-target="linksTable">
+            {% for link in links %}
+                {% set text_a = word_map[link.word_a_id] ?? '?' %}
+                {% set text_b = word_map[link.word_b_id] ?? '?' %}
+            <tr data-link-a="{{ link.word_a_id }}" data-link-b="{{ link.word_b_id }}">
+                <td>{{ text_a }}</td>
+                <td>{{ text_b }}</td>
+                <td>
+                    <span class="method-badge method-badge-{{ link.method }}">{{ link.method|replace({'auto_': '', '_': ' '}) }}</span>
+                </td>
+                <td>
+                    {% if link.confidence is not null %}
+                    <span class="confidence-badge conf-{{ link.confidence >= 80 ? 'high' : (link.confidence >= 50 ? 'mid' : 'low') }}">
+                        {{ link.confidence }}%
+                    </span>
+                    {% else %}
+                    <span class="confidence-badge conf-manual">✓</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <button type="button"
+                            class="btn-icon btn-delete"
+                            data-action="click->translation-linker#deleteLink"
+                            data-word-a="{{ link.word_a_id }}"
+                            data-word-b="{{ link.word_b_id }}"
+                            title="Verwijder koppeling">×</button>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+
+        {# Data for JS: word ID lists for reset #}
+        <span style="display:none"
+              data-translation-linker-target="wordIdsA"
+              data-ids="{{ words_a|map(w => w.id)|join(',') }}"></span>
+        <span style="display:none"
+              data-translation-linker-target="wordIdsB"
+              data-ids="{{ words_b|map(w => w.id)|join(',') }}"></span>
+    </div>
+
+    {# ── Confidence legend ────────────────────────────────────────────────── #}
+    <div class="trans-linking-legend">
+        <span class="legend-item"><span class="method-badge method-badge-manual">handmatig</span> Handmatig bevestigd</span>
+        <span class="legend-item"><span class="method-badge method-badge-auto_source_pivot">bron-pivot</span> Gedeeld bronwoord</span>
+        <span class="legend-item"><span class="method-badge method-badge-auto_sequence">volgorde</span> Volgorde-uitlijning</span>
+        <span class="legend-item"><span class="method-badge method-badge-auto_positional">positie</span> Positioneel</span>
+        <span class="legend-item word-filler" style="padding: .2rem .5rem">cursief*</span> Aanvullend woord (geen bronwoord)
+    </div>
+
+</div>{# /trans-linking-screen #}
+{% endblock %}

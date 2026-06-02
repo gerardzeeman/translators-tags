@@ -5,25 +5,13 @@
 {% block body %}
 <div class="page-verse" data-controller="verse-compare">
 
-    {# Breadcrumb + navigation #}
-    <nav class="verse-nav" aria-label="Vers navigatie">
+    {# Static part of breadcrumb — book never changes during in-page navigation #}
+    <nav class="verse-nav-static" aria-label="Boek navigatie">
         <a href="{{ path('app_book', {usfm: book.usfmCode}) }}">{{ book.nameNl }}</a>
-        <span>›</span>
-        <a href="{{ path('app_chapter', {usfm: book.usfmCode, chapter: chapter}) }}">Hoofdstuk {{ chapter }}</a>
-        <span>›</span>
-        <strong>Vers {{ verse }}</strong>
-
-        <div class="nav-arrows">
-            {% if nav.prev %}
-            <a href="{{ path('app_verse', nav.prev) }}" class="nav-btn" title="Vorig vers" data-turbo-frame="verse-frame">‹</a>
-            {% endif %}
-            {% if nav.next %}
-            <a href="{{ path('app_verse', nav.next) }}" class="nav-btn" title="Volgend vers" data-turbo-frame="verse-frame">›</a>
-            {% endif %}
-        </div>
-
     </nav>
 
+    {# Everything from chapter/verse onward lives inside the frame so it updates
+       correctly when the prev/next arrows are clicked. #}
     <turbo-frame id="verse-frame">
         {% include 'bible/verse_frame.html.twig' %}
     </turbo-frame>

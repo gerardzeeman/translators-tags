@@ -176,22 +176,46 @@ class PassageRepository
                 tw.word_text,
                 tw.char_start,
                 tw.char_end,
-                -- Best link info for colour-coding
-                (
-                    SELECT lc2.method
-                    FROM word_links wl2
-                    JOIN link_confidence lc2 ON lc2.link_id = wl2.id
-                    WHERE wl2.translation_word_id = tw.id
-                    ORDER BY lc2.score DESC
-                    LIMIT 1
+                tw.is_filler::int AS is_filler,
+                -- Best link info for colour-coding.
+                -- First tries direct word_links (manual HSV links, or SV links).
+                -- Falls back to inter_translation_links propagation so HSV words
+                -- still get a colour when linked via ITL rather than word_links.
+                COALESCE(
+                    (SELECT lc2.method
+                     FROM word_links wl2
+                     JOIN link_confidence lc2 ON lc2.link_id = wl2.id
+                     WHERE wl2.translation_word_id = tw.id
+                     ORDER BY lc2.score DESC
+                     LIMIT 1),
+                    (SELECT itl.method
+                     FROM inter_translation_links itl
+                     WHERE (itl.word_a_id = tw.id OR itl.word_b_id = tw.id)
+                       AND itl.method != 'manual_empty'
+                     ORDER BY CASE itl.method
+                         WHEN 'manual'            THEN 0
+                         WHEN 'auto_source_pivot' THEN 1
+                         WHEN 'auto_sequence'     THEN 2
+                         ELSE 3 END
+                     LIMIT 1)
                 ) AS best_method,
-                (
-                    SELECT lc2.score
-                    FROM word_links wl2
-                    JOIN link_confidence lc2 ON lc2.link_id = wl2.id
-                    WHERE wl2.translation_word_id = tw.id
-                    ORDER BY lc2.score DESC
-                    LIMIT 1
+                COALESCE(
+                    (SELECT lc2.score
+                     FROM word_links wl2
+                     JOIN link_confidence lc2 ON lc2.link_id = wl2.id
+                     WHERE wl2.translation_word_id = tw.id
+                     ORDER BY lc2.score DESC
+                     LIMIT 1),
+                    (SELECT itl.confidence::float / 100.0
+                     FROM inter_translation_links itl
+                     WHERE (itl.word_a_id = tw.id OR itl.word_b_id = tw.id)
+                       AND itl.method != 'manual_empty'
+                     ORDER BY CASE itl.method
+                         WHEN 'manual'            THEN 0
+                         WHEN 'auto_source_pivot' THEN 1
+                         WHEN 'auto_sequence'     THEN 2
+                         ELSE 3 END
+                     LIMIT 1)
                 ) AS best_score
             FROM translation_verses tv
             JOIN translation_words tw ON tw.verse_id = tv.id
@@ -202,12 +226,129 @@ class PassageRepository
             ORDER BY tw.word_position
         SQL;
 
-        return $this->connection->fetchAllAssociative($sql, [
+        $rows = $this->connection->fetchAllAssociative($sql, [
             'translation_id' => $translationId,
             'book_id'        => $bookId,
             'chapter'        => $chapter,
             'verse'          => $verse,
         ]);
+
+        return self::addPunctuation($rows);
+    }
+
+    /**
+     * Compute punct_after by scanning verse_text in word order.
+     * For each word, find it at/after the current scan position and collect
+     * any non-word, non-space characters that immediately follow it.
+     */
+    private static function addPunctuation(array $rows): array
+    {
+        if (empty($rows)) {
+            return $rows;
+        }
+        $verseText = $rows[0]['verse_text'] ?? '';
+        $verseLen  = mb_strlen($verseText);
+        $scanPos   = 0;
+
+        foreach ($rows as &$row) {
+            $word    = $row['word_text'];
+            $wordLen = mb_strlen($word);
+            $found   = mb_strpos($verseText, $word, $scanPos);
+
+            if ($found === false) {
+                $row['punct_after'] = '';
+                continue;
+            }
+
+            $after = $found + $wordLen;
+            $punct = '';
+            while ($after < $verseLen) {
+                $ch = mb_substr($verseText, $after, 1);
+                if ($ch === ' ' || preg_match('/\w/u', $ch)) {
+                    break;
+                }
+                $punct .= $ch;
+                $after++;
+            }
+
+            $row['punct_after'] = $punct;
+            $scanPos = $found + $wordLen;
+        }
+        unset($row);
+        return $rows;
+    }
+
+    /**
+     * Fetch source-language link propagation for a non-authority translation.
+     *
+     * Walks the chain: source_word → word_links → authority_tw → inter_translation_links → target_tw
+     * Returns a map of source_word_id → [array of link arrays].
+     */
+    public function fetchPropagatedLinksForVerse(
+        int    $bookId,
+        int    $chapter,
+        int    $verse,
+        string $testament,
+        int    $authorityTranslationId,
+        int    $targetTranslationId,
+    ): array {
+        $sourceIdCol = $testament === 'OT' ? 'hebrew_word_id' : 'greek_word_id';
+
+        $sql = <<<SQL
+            WITH authority_links AS (
+                SELECT
+                    wl.{$sourceIdCol}   AS source_word_id,
+                    tw_auth.id          AS auth_tw_id
+                FROM word_links wl
+                JOIN translation_words tw_auth  ON tw_auth.id = wl.translation_word_id
+                JOIN translation_verses tv_auth ON tv_auth.id = tw_auth.verse_id
+                WHERE tv_auth.translation_id = :authority_id
+                  AND tv_auth.book_id = :book_id
+                  AND tv_auth.chapter = :chapter
+                  AND tv_auth.verse   = :verse
+            )
+            SELECT
+                al.source_word_id,
+                tw_t.id            AS tw_id,
+                tw_t.word_text,
+                tw_t.word_position,
+                itl.method         AS itl_method,
+                itl.confidence
+            FROM authority_links al
+            JOIN inter_translation_links itl
+                ON (itl.word_a_id = al.auth_tw_id OR itl.word_b_id = al.auth_tw_id)
+               AND itl.method != 'manual_empty'
+            JOIN translation_words tw_t
+                ON tw_t.id = CASE
+                    WHEN itl.word_a_id = al.auth_tw_id THEN itl.word_b_id
+                    ELSE itl.word_a_id
+                END
+            JOIN translation_verses tv_t ON tv_t.id = tw_t.verse_id
+                AND tv_t.translation_id = :target_id
+            ORDER BY al.source_word_id, tw_t.word_position
+        SQL;
+
+        $rows = $this->connection->fetchAllAssociative($sql, [
+            'authority_id' => $authorityTranslationId,
+            'target_id'    => $targetTranslationId,
+            'book_id'      => $bookId,
+            'chapter'      => $chapter,
+            'verse'        => $verse,
+        ]);
+
+        $result = [];
+        foreach ($rows as $row) {
+            $srcId            = $row['source_word_id'];
+            $result[$srcId][] = [
+                'tw_id'     => $row['tw_id'],
+                'word_text' => $row['word_text'],
+                'word_pos'  => (int) $row['word_position'],
+                'method'    => $row['itl_method'],
+                'score'     => $row['confidence'] !== null ? (float) $row['confidence'] / 100.0 : null,
+            ];
+        }
+
+        return $result;
     }
 
     /** Returns verse counts per chapter for a book/testament combination. */

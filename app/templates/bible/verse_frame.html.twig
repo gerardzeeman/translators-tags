@@ -1,4 +1,26 @@
 <turbo-frame id="verse-frame">
+
+{# Nav lives inside the frame so chapter/verse breadcrumb and arrows update on every navigation #}
+<nav class="verse-nav" aria-label="Vers navigatie">
+    <span>›</span>
+    <a href="{{ path('app_chapter', {usfm: book.usfmCode, chapter: chapter}) }}">Hoofdstuk {{ chapter }}</a>
+    <span>›</span>
+    <strong>Vers {{ verse }}</strong>
+
+    <div class="nav-arrows">
+        {% if nav.prev %}
+        <a href="{{ path('app_verse', nav.prev) }}"
+           class="nav-btn" title="Vorig vers"
+           data-turbo-action="advance">‹</a>
+        {% endif %}
+        {% if nav.next %}
+        <a href="{{ path('app_verse', nav.next) }}"
+           class="nav-btn" title="Volgend vers"
+           data-turbo-action="advance">›</a>
+        {% endif %}
+    </div>
+</nav>
+
 <div class="verse-compare-grid" data-active-translation="{{ translation.code }}">
 <div class="compare-col compare-col-left">
 
@@ -76,8 +98,9 @@
                     {% if word.links_hsv|length > 0 %}
                         {% for link in word.links_hsv %}
                         {% set score = link.score|default(0) %}
-                        <span class="link-dot method-{{ link.method }}"
-                              title="{{ link.word_text }} ({{ link.method }}: {{ (score * 100)|round }}%)">
+                        {% set isPropagated = link.method in ['auto_source_pivot','auto_sequence','auto_positional'] %}
+                        <span class="link-dot method-{{ link.method }}{% if isPropagated %} link-dot-propagated{% endif %}"
+                              title="{{ link.word_text }} ({{ link.method }}: {{ score is not null ? (score * 100)|round ~ '%' : '✓' }})">
                             {{ link.word_text }}
                         </span>
                         {% endfor %}
@@ -117,8 +140,7 @@
                   data-score="{{ word.best_score ?? 0 }}"
                   data-controller="dutch-word">
                 {{- word.word_text -}}
-                {%- if not loop.last %} {% endif -%}
-            </span>
+            </span>{{- word.punct_after ?? '' -}}{%- if not loop.last %} {% endif -%}
             {% else %}
             <em class="no-verse">Vers niet gevonden in de Statenvertaling.</em>
             {% endfor %}
@@ -144,14 +166,14 @@
 
         <div class="dutch-verse">
             {% for word in passage.dutch_verse_hsv %}
-            <span class="dutch-word"
+            <span class="dutch-word{% if word.is_filler %} word-filler{% endif %}"
                   data-tw-id="{{ word.word_id }}"
                   data-method="{{ word.best_method ?? 'none' }}"
                   data-score="{{ word.best_score ?? 0 }}"
+                  data-filler="{{ word.is_filler ? '1' : '0' }}"
                   data-controller="dutch-word">
                 {{- word.word_text -}}
-                {%- if not loop.last %} {% endif -%}
-            </span>
+            </span>{{- word.punct_after ?? '' -}}{%- if not loop.last %} {% endif -%}
             {% else %}
             <em class="no-verse">Vers niet gevonden in de Herziene Statenvertaling.</em>
             {% endfor %}
@@ -162,6 +184,7 @@
             <span class="legend-item"><span class="dot method-manual_hint"></span> Hint</span>
             <span class="legend-item"><span class="dot method-proper_noun"></span> Eigennaam</span>
             <span class="legend-item"><span class="dot method-positional"></span> Positioneel</span>
+            <span class="legend-item"><span class="dot method-auto_source_pivot"></span> Afgeleid (SV-koppeling)</span>
             <span class="legend-item"><span class="dot method-none"></span> Geen koppeling</span>
         </div>
 

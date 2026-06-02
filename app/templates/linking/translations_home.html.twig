@@ -1,0 +1,52 @@
+{% extends 'base.html.twig' %}
+{% block title %}Vertalingen koppelen – Bijbel Vergelijking{% endblock %}
+
+{% block body %}
+<div class="page-trans-home">
+
+    <div class="linking-header">
+        <h1>Vertalingen koppelen</h1>
+        <p class="linking-sub">Koppel woorden van verwante vertalingen aan elkaar (bijv. SV ↔ HSV).</p>
+    </div>
+
+    {% if pairs is empty %}
+    <p class="no-results">Geen vertaalparen gevonden. Voer eerst de migratie uit.</p>
+    {% else %}
+
+    <div class="trans-pair-grid">
+        {% for pair in pairs %}
+        <div class="trans-pair-card">
+            <div class="trans-pair-header">
+                <span class="trans-badge">{{ pair.code_a }}</span>
+                <span class="trans-pair-arrow">↔</span>
+                <span class="trans-badge">{{ pair.code_b }}</span>
+                <span class="trans-pair-family">familie: {{ pair.family }}</span>
+            </div>
+
+            <div class="trans-pair-names">
+                <span>{{ pair.name_a }}</span>
+                <span class="trans-pair-name-sep">vs.</span>
+                <span>{{ pair.name_b }}</span>
+            </div>
+
+            <div class="trans-pair-actions">
+                <a href="{{ path('app_trans_linking_verse', {
+                    codeA: pair.code_a,
+                    codeB: pair.code_b,
+                    usfm: 'GEN', chapter: 1, verse: 1
+                }) }}" class="btn btn-primary">Beginnen bij Genesis 1:1</a>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="trans-home-hint">
+        <p>Run <code>php bin/console app:link:translations:auto</code> om automatisch
+        woorden te koppelen op basis van gedeelde bronwoorden, volgorde en positie.</p>
+        <p>Gebruik daarna deze interface om handmatig te controleren en corrigeren.</p>
+    </div>
+
+    {% endif %}
+
+</div>
+{% endblock %}

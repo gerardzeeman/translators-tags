@@ -71,8 +71,9 @@
                 {% set lang = passage.testament == 'OT' ? 'HE' : 'GR' %}
                 {% set linked_tw_ids = word.links|map(l => l.tw_id)|join(',') %}
                 {% set best_method = word.links|length > 0 ? word.links|first.method : (word.is_manually_empty ? 'manual-empty' : 'none') %}
+                {% set is_propagated = word.propagated is defined and word.propagated %}
 
-                <div class="src-word method-border-{{ best_method }}"
+                <div class="src-word method-border-{{ best_method }}{% if is_propagated %} src-word-propagated{% endif %}"
                      data-manually-empty="{{ word.is_manually_empty ? '1' : '0' }}"
                      data-source-id="{{ word.id }}"
                      data-lang="{{ lang }}"
@@ -92,13 +93,18 @@
                     {% endif %}
 
                     <div class="src-links">
+                        {% if is_propagated %}
+                        <span class="propagated-hint" title="Afgeleid via SV-koppeling — klik om te bevestigen">↝ voorstel</span>
+                        {% endif %}
                         {% for link in word.links %}
+                        {% if link.link_id is not null %}
                         <span class="link-chip method-{{ link.method }}"
                               data-link-id="{{ link.link_id }}"
                               data-tw-id="{{ link.tw_id }}"
                               title="{{ link.method }}: {{ ((link.score ?? 0) * 100)|round }}%">
                             ×
                         </span>
+                        {% endif %}
                         {% endfor %}
                         {% if word.is_manually_empty %}
                         <span class="link-chip method-manual-empty" title="Handmatig: geen koppeling">∅</span>
@@ -120,13 +126,12 @@
                 {% set linked = word.links|length > 0 %}
                 {% set best_method = linked ? word.links|first.method : 'none' %}
 
-                <span class="nl-word method-underline-{{ best_method }}"
+                <span class="nl-word method-underline-{{ best_method }}{% if word.is_filler %} word-filler{% endif %}"
                       data-tw-id="{{ word.id }}"
                       data-action="click->word-linker#selectDutch"
                       data-word-linker-target="dutchWord">
                     {{- word.word_text -}}
-                </span>
-                {{ ' ' }}
+                </span>{{- word.punct_after ?? '' -}}{{ ' ' }}
                 {% endfor %}
             </div>
 
