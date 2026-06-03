@@ -43,8 +43,11 @@ class LinkingRepository
                 hw.word_text,
                 hw.transliteration,
                 regexp_replace(
-                    regexp_replace(hw.strongs, '[A-Za-z]+$', ''),
-                    '^([HG])0+(\d)', '\1\2'
+                    CASE WHEN hw.strongs ~ '^[HGhg]'
+                         THEN regexp_replace(hw.strongs, '[A-Za-z]+$', '')
+                         ELSE 'H' || regexp_replace(hw.strongs, '[A-Za-z]+$', '')
+                    END,
+                    '^([HG])0+(\d)', '\\1\\2'
                 ) AS strongs,
                 hw.morph_code,
                 COALESCE(
@@ -90,8 +93,11 @@ class LinkingRepository
                 gw.word_text,
                 gw.transliteration,
                 regexp_replace(
-                    regexp_replace(gw.strongs, '[A-Za-z]+$', ''),
-                    '^([HG])0+(\d)', '\1\2'
+                    CASE WHEN gw.strongs ~ '^[HGhg]'
+                         THEN regexp_replace(gw.strongs, '[A-Za-z]+$', '')
+                         ELSE 'G' || regexp_replace(gw.strongs, '[A-Za-z]+$', '')
+                    END,
+                    '^([HG])0+(\d)', '\\1\\2'
                 ) AS strongs,
                 gw.parse_code,
                 COALESCE(
