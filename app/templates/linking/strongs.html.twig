@@ -130,11 +130,35 @@
     <p class="no-results">Geen verzen gevonden voor {{ strongs }}.</p>
     {% else %}
 
+    {# Pagination info + controls (shown above and below the list) #}
+    {% set base_url = path('app_linking_strongs', {translation: translation.code, strongs: strongs}) %}
+    {% macro pager(base_url, page, total_pages, total_verses) %}
+    <div class="strongs-pager">
+        <span class="pager-info">{{ total_verses }} verzen · pagina {{ page }} / {{ total_pages }}</span>
+        <div class="pager-btns">
+            {% if page > 1 %}
+            <a class="nav-btn nav-btn-text" href="{{ base_url }}?page={{ page - 1 }}">‹ Vorige</a>
+            {% endif %}
+            {% for p in max(1, page - 2)..min(total_pages, page + 2) %}
+            <a class="nav-btn{% if p == page %} nav-btn-active{% else %} nav-btn-text{% endif %}"
+               href="{{ base_url }}?page={{ p }}">{{ p }}</a>
+            {% endfor %}
+            {% if page < total_pages %}
+            <a class="nav-btn nav-btn-text" href="{{ base_url }}?page={{ page + 1 }}">Volgende ›</a>
+            {% endif %}
+        </div>
+    </div>
+    {% endmacro %}
+
+    {{ _self.pager(base_url, page, total_pages, total_verses) }}
+
     <div class="strongs-verses">
         {% for v in verses %}
             {% include 'linking/_strongs_verse_block.html.twig' with {v: v, strongs: strongs} %}
         {% endfor %}
     </div>
+
+    {{ _self.pager(base_url, page, total_pages, total_verses) }}
     {% endif %}
 
 </div>

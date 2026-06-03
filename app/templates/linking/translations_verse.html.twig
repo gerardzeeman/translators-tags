@@ -40,9 +40,18 @@
     </div>
 
     {# ── Status bar ──────────────────────────────────────────────────────── #}
-    <div class="trans-linking-status"
-         data-translation-linker-target="status">
-        Klik een woord links, dan een woord rechts om te koppelen. Klik een gekoppeld woord om de koppeling te verwijderen.
+    <div class="trans-linking-status-bar">
+        <span class="trans-linking-status"
+              data-translation-linker-target="status">
+            Klik een of meerdere woorden links, dan rechts, dan "Opslaan".
+        </span>
+        <button type="button"
+                class="btn btn-save-links"
+                data-translation-linker-target="saveBtn"
+                data-action="click->translation-linker#saveLinks"
+                style="display:none">
+            ✓ Koppeling opslaan
+        </button>
     </div>
 
     {# ── Two-column linking area ──────────────────────────────────────────── #}

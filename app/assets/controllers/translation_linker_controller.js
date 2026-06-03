@@ -2,11 +2,12 @@
 import { Controller } from '@hotwired/stimulus'
 
 export default class extends Controller {
-    static targets = ['wordA', 'wordB', 'status', 'linksTable', 'wordIdsA', 'wordIdsB']
+    static targets = ['wordA', 'wordB', 'status', 'saveBtn', 'linksTable', 'wordIdsA', 'wordIdsB']
     static values  = { saveUrl: String, deleteUrl: String, resetUrl: String }
 
-    #selectedA = null   // { el, id }
-    #selectedB = null   // { el, id }
+    // Maps of twId → element for current selection
+    #selectedAs = new Map()
+    #selectedBs = new Map()
 
     // ── Select word from translation A ───────────────────────────────────────
 
@@ -15,24 +16,15 @@ export default class extends Controller {
         const el   = event.currentTarget
         const twId = el.dataset.twId
 
-        // Toggle deselect
-        if (this.#selectedA?.id === twId) {
+        if (this.#selectedAs.has(twId)) {
+            this.#selectedAs.delete(twId)
             el.classList.remove('trans-word-active')
-            this.#selectedA = null
-            this.#updateStatus()
-            return
+        } else {
+            this.#selectedAs.set(twId, el)
+            el.classList.add('trans-word-active')
         }
-
-        // Deselect previous A
-        if (this.#selectedA) {
-            this.#selectedA.el.classList.remove('trans-word-active')
-        }
-
-        this.#selectedA = { el, id: twId }
-        el.classList.add('trans-word-active')
 
         this.#updateStatus()
-        this.#tryAutoSave()
     }
 
     // ── Select word from translation B ───────────────────────────────────────
@@ -42,52 +34,51 @@ export default class extends Controller {
         const el   = event.currentTarget
         const twId = el.dataset.twId
 
-        // Toggle deselect
-        if (this.#selectedB?.id === twId) {
+        if (this.#selectedBs.has(twId)) {
+            this.#selectedBs.delete(twId)
             el.classList.remove('trans-word-active')
-            this.#selectedB = null
-            this.#updateStatus()
-            return
+        } else {
+            this.#selectedBs.set(twId, el)
+            el.classList.add('trans-word-active')
         }
-
-        // Deselect previous B
-        if (this.#selectedB) {
-            this.#selectedB.el.classList.remove('trans-word-active')
-        }
-
-        this.#selectedB = { el, id: twId }
-        el.classList.add('trans-word-active')
 
         this.#updateStatus()
-        this.#tryAutoSave()
     }
 
-    // ── Auto-save when both sides selected ───────────────────────────────────
+    // ── Save all selected A×B pairs ───────────────────────────────────────────
 
-    async #tryAutoSave() {
-        if (!this.#selectedA || !this.#selectedB) return
-
-        const wordAId = parseInt(this.#selectedA.id)
-        const wordBId = parseInt(this.#selectedB.id)
+    async saveLinks(event) {
+        event?.stopPropagation()
+        if (!this.#selectedAs.size || !this.#selectedBs.size) return
 
         this.#setStatus('Opslaan…')
+        if (this.hasSaveBtnTarget) this.saveBtnTarget.disabled = true
+
+        const pairs = []
+        for (const idA of this.#selectedAs.keys()) {
+            for (const idB of this.#selectedBs.keys()) {
+                pairs.push([parseInt(idA), parseInt(idB)])
+            }
+        }
 
         try {
-            const resp = await fetch(this.saveUrlValue, {
-                method:  'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body:    JSON.stringify({ word_a_id: wordAId, word_b_id: wordBId, method: 'manual' }),
-            })
-            const data = await resp.json()
-            if (!data.success) throw new Error(data.error || 'Save failed')
+            for (const [wordAId, wordBId] of pairs) {
+                const resp = await fetch(this.saveUrlValue, {
+                    method:  'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body:    JSON.stringify({ word_a_id: wordAId, word_b_id: wordBId, method: 'manual' }),
+                })
+                const data = await resp.json()
+                if (!data.success) throw new Error(data.error || 'Save failed')
+            }
 
-            this.#setStatus('✓ Koppeling opgeslagen. Pagina wordt herladen…')
+            this.#setStatus(`✓ ${pairs.length} koppeling(en) opgeslagen. Pagina wordt herladen…`)
             this.#clearSelection()
             setTimeout(() => window.location.reload(), 600)
 
         } catch (err) {
             this.#setStatus(`Fout: ${err.message}`)
-            this.#clearSelection()
+            if (this.hasSaveBtnTarget) this.saveBtnTarget.disabled = false
         }
     }
 
@@ -95,7 +86,7 @@ export default class extends Controller {
 
     async deleteLink(event) {
         event.stopPropagation()
-        const btn    = event.currentTarget
+        const btn     = event.currentTarget
         const wordAId = parseInt(btn.dataset.wordA)
         const wordBId = parseInt(btn.dataset.wordB)
 
@@ -120,7 +111,6 @@ export default class extends Controller {
 
     async resetAuto(event) {
         event?.stopPropagation()
-
         if (!confirm('Alle automatische koppelingen voor dit vers verwijderen?')) return
 
         const idsA = this.hasWordIdsATarget
@@ -150,17 +140,30 @@ export default class extends Controller {
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     #clearSelection() {
-        if (this.#selectedA) { this.#selectedA.el.classList.remove('trans-word-active'); this.#selectedA = null }
-        if (this.#selectedB) { this.#selectedB.el.classList.remove('trans-word-active'); this.#selectedB = null }
+        this.#selectedAs.forEach(el => el.classList.remove('trans-word-active'))
+        this.#selectedBs.forEach(el => el.classList.remove('trans-word-active'))
+        this.#selectedAs.clear()
+        this.#selectedBs.clear()
     }
 
     #updateStatus() {
-        if (!this.#selectedA && !this.#selectedB) {
-            this.#setStatus('Klik een woord links, dan een woord rechts om te koppelen.')
-        } else if (this.#selectedA && !this.#selectedB) {
-            this.#setStatus(`"${this.#selectedA.el.textContent.trim()}" geselecteerd. Klik nu een woord rechts.`)
-        } else if (!this.#selectedA && this.#selectedB) {
-            this.#setStatus(`"${this.#selectedB.el.textContent.trim()}" geselecteerd. Klik nu een woord links.`)
+        const nA = this.#selectedAs.size
+        const nB = this.#selectedBs.size
+        const canSave = nA > 0 && nB > 0
+
+        if (this.hasSaveBtnTarget) {
+            this.saveBtnTarget.style.display = canSave ? 'inline-block' : 'none'
+            this.saveBtnTarget.disabled = false
+        }
+
+        if (nA === 0 && nB === 0) {
+            this.#setStatus('Klik een of meerdere woorden links, dan rechts, dan "Opslaan".')
+        } else if (canSave) {
+            this.#setStatus(`${nA} woord(en) links × ${nB} woord(en) rechts geselecteerd — ${nA * nB} koppeling(en) worden opgeslagen.`)
+        } else if (nA > 0) {
+            this.#setStatus(`${nA} woord(en) links geselecteerd. Selecteer nu woord(en) rechts.`)
+        } else {
+            this.#setStatus(`${nB} woord(en) rechts geselecteerd. Selecteer nu woord(en) links.`)
         }
     }
 

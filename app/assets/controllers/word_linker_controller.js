@@ -123,6 +123,72 @@ export default class extends Controller {
         }
     }
 
+    // ── Confirm all proposals ────────────────────────────────────────────────
+
+    #confirmPending = false
+
+    async confirmAllProposals(event) {
+        event?.stopPropagation()
+        if (this.#confirmPending) return
+        this.#confirmPending = true
+
+        const proposals = this.sourceWordTargets.filter(el =>
+            el.classList.contains('src-word-propagated') &&
+            el.dataset.linkedTwIds
+        )
+
+        if (proposals.length === 0) {
+            this.#setStatus('Geen voorstellen gevonden om te bevestigen.')
+            this.#confirmPending = false
+            return
+        }
+
+        if (!confirm(`${proposals.length} voorstellen bevestigen als handmatige koppeling?`)) {
+            this.#confirmPending = false
+            return
+        }
+
+        this.#setStatus(`Bezig met opslaan (0 / ${proposals.length})…`)
+
+        let saved = 0
+        const errors = []
+
+        for (const el of proposals) {
+            const twIds = el.dataset.linkedTwIds
+                .split(',').map(s => s.trim()).filter(Boolean).map(Number)
+            if (!twIds.length) continue
+
+            try {
+                const resp = await fetch(this.saveUrlValue, {
+                    method:  'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        lang:           el.dataset.lang,
+                        source_word_id: parseInt(el.dataset.sourceId),
+                        tw_ids:         twIds,
+                        translation_id: this.translationIdValue,
+                    }),
+                })
+                const data = await resp.json()
+                if (!data.success) throw new Error(data.error || 'Save failed')
+                saved++
+            } catch (err) {
+                errors.push(`woord ${el.dataset.sourceId}: ${err.message}`)
+            }
+
+            this.#setStatus(`Bezig met opslaan (${saved} / ${proposals.length})…`)
+        }
+
+        if (errors.length) {
+            this.#setStatus(`${saved} opgeslagen, ${errors.length} mislukt. Pagina wordt herladen…`)
+            console.warn('confirmAllProposals errors:', errors)
+        } else {
+            this.#setStatus(`✓ ${saved} koppeling(en) bevestigd. Pagina wordt herladen…`)
+        }
+
+        setTimeout(() => window.location.reload(), 800)
+    }
+
     // ── Cancel ────────────────────────────────────────────────────────────────
 
     cancel(event) {

@@ -267,14 +267,30 @@ class LinkingRepository
     }
 
     /**
-     * All verses containing a Strong's number, with source + Dutch words for linking.
+     * Count distinct verses containing a Strong's number (for pagination).
      */
-    public function fetchStrongsVerses(string $strongs, int $translationId): array
+    public function countStrongsVerses(string $strongs): int
+    {
+        $table = str_starts_with($strongs, 'H') ? 'hebrew_words' : 'greek_words';
+
+        return (int) $this->connection->fetchOne(
+            "SELECT COUNT(DISTINCT book_id || '-' || chapter || '-' || verse)
+             FROM {$table}
+             WHERE regexp_replace(strongs, '[A-Za-z]+$', '') = :strongs",
+            ['strongs' => $this->padStrongsId($strongs)]
+        );
+    }
+
+    /**
+     * Verses containing a Strong's number, with source + Dutch words for linking.
+     * Returns one page of results.
+     */
+    public function fetchStrongsVerses(string $strongs, int $translationId, int $page = 1, int $perPage = 30): array
     {
         $testament = str_starts_with($strongs, 'H') ? 'OT' : 'NT';
         $table     = $testament === 'OT' ? 'hebrew_words' : 'greek_words';
+        $offset    = ($page - 1) * $perPage;
 
-        // Get all distinct verses containing this Strong's number
         $sql = <<<SQL
             SELECT DISTINCT
                 sw.book_id,
@@ -286,11 +302,15 @@ class LinkingRepository
             JOIN books b ON b.id = sw.book_id
             WHERE regexp_replace(sw.strongs, '[A-Za-z]+$', '') = :strongs
             ORDER BY sw.book_id, sw.chapter, sw.verse
+            LIMIT :limit OFFSET :offset
         SQL;
 
-        $verses = $this->connection->fetchAllAssociative($sql, ['strongs' => $this->padStrongsId($strongs)]);
+        $verses = $this->connection->fetchAllAssociative($sql, [
+            'strongs' => $this->padStrongsId($strongs),
+            'limit'   => $perPage,
+            'offset'  => $offset,
+        ]);
 
-        // For each verse, fetch the full linking data
         $result = [];
         foreach ($verses as $v) {
             $passage = $testament === 'OT'

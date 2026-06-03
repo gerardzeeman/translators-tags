@@ -17,11 +17,11 @@
 
         <div class="linking-nav">
             {% if nav.prev %}
-            <a href="{{ path('app_linking_passage', nav.prev) }}" class="nav-btn">‹ Vorig</a>
+            <a href="{{ path('app_linking_passage', nav.prev) }}" class="nav-btn nav-btn-text">‹ Vorig</a>
             {% endif %}
             <span class="verse-ref">{{ book.nameNl }} {{ chapter }}:{{ verse }}</span>
             {% if nav.next %}
-            <a href="{{ path('app_linking_passage', nav.next) }}" class="nav-btn">Volgend ›</a>
+            <a href="{{ path('app_linking_passage', nav.next) }}" class="nav-btn nav-btn-text">Volgend ›</a>
             {% endif %}
 
         </div>
@@ -49,8 +49,19 @@
     </div>
 
     {# ── Status bar ───────────────────────────────────────────────────────── #}
-    <div class="linking-status" data-word-linker-target="status">
-        Klik een bronwoord om te selecteren, dan klik één of meerdere Nederlandse woorden.
+    <div class="linking-status-bar">
+        <span class="linking-status" data-word-linker-target="status">
+            Klik een bronwoord om te selecteren, dan klik één of meerdere Nederlandse woorden.
+        </span>
+        {% set proposal_count = passage.source_words|filter(w => w.propagated is defined and w.propagated and w.links|length > 0)|length %}
+        {% if proposal_count > 0 %}
+        <button type="button"
+                class="btn-confirm-proposals"
+                data-action="click->word-linker#confirmAllProposals"
+                title="Bevestig alle {{ proposal_count }} voorstellen als handmatige koppeling">
+            ✓ Bevestig alle voorstellen ({{ proposal_count }})
+        </button>
+        {% endif %}
     </div>
 
     {# ── Main linking area ────────────────────────────────────────────────── #}

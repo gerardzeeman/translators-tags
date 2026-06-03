@@ -93,7 +93,7 @@ class LinkingController extends AbstractController
     }
 
     #[Route('/strongs/{translation}/{strongs}', name: 'app_linking_strongs')]
-    public function strongs(string $translation, string $strongs): Response
+    public function strongs(Request $request, string $translation, string $strongs): Response
     {
         $strongs = strtoupper($strongs);
 
@@ -102,10 +102,15 @@ class LinkingController extends AbstractController
             throw $this->createNotFoundException("Translation '{$translation}' not found.");
         }
 
+        $perPage       = 30;
+        $totalVerses   = $this->linkingRepo->countStrongsVerses($strongs);
+        $totalPages    = max(1, (int) ceil($totalVerses / $perPage));
+        $page          = max(1, min($totalPages, (int) $request->query->get('page', 1)));
+
         $translationId    = $translationEntity->getId();
         $transliterations = $this->linkingRepo->fetchStrongsTransliterations($strongs);
         $progress         = $this->linkingRepo->fetchStrongsProgress($strongs, $translationId);
-        $verses           = $this->linkingRepo->fetchStrongsVerses($strongs, $translationId);
+        $verses           = $this->linkingRepo->fetchStrongsVerses($strongs, $translationId, $page, $perPage);
         $strongsEntry     = $this->linkingRepo->fetchStrongsEntry($strongs);
 
         $translations = $this->translationRepo->findAllOrderedById();
@@ -118,6 +123,9 @@ class LinkingController extends AbstractController
             'strongs_entry'    => $strongsEntry,
             'translation'      => $translationEntity,
             'translations'     => $translations,
+            'page'             => $page,
+            'total_pages'      => $totalPages,
+            'total_verses'     => $totalVerses,
         ]);
     }
 
