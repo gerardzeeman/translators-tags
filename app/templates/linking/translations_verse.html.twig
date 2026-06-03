@@ -57,6 +57,8 @@
     {# ── Two-column linking area ──────────────────────────────────────────── #}
     <div class="trans-linking-columns">
 
+        {# linked_ids is built in the controller (string keys) — see TranslationLinkingController #}
+
         {# Column A (authority / SV) #}
         <div class="trans-linking-col trans-linking-col-a">
             <div class="trans-col-header">
@@ -69,7 +71,7 @@
             {% else %}
             <div class="trans-word-list">
                 {% for word in words_a %}
-                <span class="trans-word{% if word.is_filler %} word-filler{% endif %}"
+                <span class="trans-word{% if word.is_filler %} word-filler{% endif %}{% if linked_ids[word.id] is not defined %} trans-word-unlinked{% endif %}"
                       data-translation-linker-target="wordA"
                       data-tw-id="{{ word.id }}"
                       data-action="click->translation-linker#selectWordA">
@@ -95,7 +97,7 @@
             {% else %}
             <div class="trans-word-list">
                 {% for word in words_b %}
-                <span class="trans-word{% if word.is_filler %} word-filler{% endif %}"
+                <span class="trans-word{% if word.is_filler %} word-filler{% endif %}{% if linked_ids[word.id] is not defined %} trans-word-unlinked{% endif %}"
                       data-translation-linker-target="wordB"
                       data-tw-id="{{ word.id }}"
                       data-action="click->translation-linker#selectWordB">
@@ -138,13 +140,11 @@
                 <td>
                     <span class="method-badge method-badge-{{ link.method }}">{{ link.method|replace({'auto_': '', '_': ' '}) }}</span>
                 </td>
-                <td>
+                <td class="conf-cell">
                     {% if link.confidence is not null %}
-                    <span class="confidence-badge conf-{{ link.confidence >= 80 ? 'high' : (link.confidence >= 50 ? 'mid' : 'low') }}">
                         {{ link.confidence }}%
-                    </span>
                     {% else %}
-                    <span class="confidence-badge conf-manual">✓</span>
+                        –
                     {% endif %}
                 </td>
                 <td>

@@ -1368,6 +1368,12 @@ a:hover { text-decoration: underline; }
     border-color: var(--color-auto-pivot);
     border-style: dashed;
 }
+.trans-word-unlinked {
+    opacity: .45;
+}
+.trans-word-unlinked:hover {
+    opacity: 1;
+}
 
 /* Links panel */
 .trans-links-panel {
@@ -1404,6 +1410,12 @@ a:hover { text-decoration: underline; }
     vertical-align: middle;
 }
 .trans-links-table tr:last-child td { border-bottom: none; }
+.conf-cell {
+    text-align: right;
+    font-size: .82rem;
+    color: var(--color-ink-muted);
+    white-space: nowrap;
+}
 
 /* Method badges */
 .method-badge {

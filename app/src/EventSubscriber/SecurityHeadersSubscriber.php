@@ -30,6 +30,8 @@ class SecurityHeadersSubscriber implements EventSubscriberInterface
     public function __construct(
         #[Autowire(service: 'asset_mapper.importmap.renderer')]
         private readonly ImportMapRenderer $importMapRenderer,
+        #[Autowire('%kernel.environment%')]
+        private readonly string $environment,
     ) {}
 
     public static function getSubscribedEvents(): array
@@ -48,20 +50,36 @@ class SecurityHeadersSubscriber implements EventSubscriberInterface
         $response = $event->getResponse();
         $headers  = $response->headers;
 
-        $hash = $this->getImportmapHash();
-
         // ── Content-Security-Policy ───────────────────────────────────────────
-        $headers->set('Content-Security-Policy',
-            "default-src 'self'; " .
-            "script-src 'self' data: " .
-                ($hash ? "{$hash} " : '') .
-                "; " .
-            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " .
-            "font-src 'self' https://fonts.gstatic.com; " .
-            "img-src 'self' data:; " .
-            "connect-src 'self'; " .
-            "frame-ancestors 'none';"
-        );
+        // In dev the Symfony profiler toolbar injects its own inline scripts
+        // after this subscriber runs, making hash-based CSP impossible without
+        // scanning the full response body.  CSP enforcement only matters in
+        // production, so in dev we allow unsafe-inline for scripts.
+        if ($this->environment === 'prod') {
+            $hash = $this->getImportmapHash();
+            $headers->set('Content-Security-Policy',
+                "default-src 'self'; " .
+                "script-src 'self' data: " .
+                    ($hash ? "{$hash} " : '') .
+                    "; " .
+                "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " .
+                "font-src 'self' https://fonts.gstatic.com; " .
+                "img-src 'self' data:; " .
+                "connect-src 'self'; " .
+                "frame-ancestors 'none';"
+            );
+        } else {
+            // Dev: permissive script-src so the profiler toolbar works.
+            $headers->set('Content-Security-Policy',
+                "default-src 'self'; " .
+                "script-src 'self' data: 'unsafe-inline'; " .
+                "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " .
+                "font-src 'self' https://fonts.gstatic.com; " .
+                "img-src 'self' data:; " .
+                "connect-src 'self'; " .
+                "frame-ancestors 'none';"
+            );
+        }
 
         $headers->set('X-Frame-Options', 'DENY');
         $headers->set('Referrer-Policy', 'same-origin');
@@ -71,12 +89,15 @@ class SecurityHeadersSubscriber implements EventSubscriberInterface
 
     /**
      * Render just the importmap HTML, extract the inline script content, and
-     * return its sha256 hash in CSP format.  Cached statically so it is
-     * computed at most once per PHP-FPM worker lifetime.
+     * return its sha256 hash in CSP format.
+     * In prod the result is cached statically (valid for the worker lifetime;
+     * workers restart on deploy so the hash is always fresh).
+     * In dev the hash is recomputed every request so yarn builds take effect
+     * immediately without restarting PHP.
      */
     private function getImportmapHash(): string
     {
-        if (self::$importmapHash !== null) {
+        if ($this->environment === 'prod' && self::$importmapHash !== null) {
             return self::$importmapHash;
         }
 

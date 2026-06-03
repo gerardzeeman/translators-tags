@@ -163,8 +163,8 @@ class LinkTranslationsAutoCommand extends Command
 
             // Write links
             if (!$dryRun) {
-                foreach ($newLinks as [$wA, $wB, $method]) {
-                    $this->linkingRepo->saveInterTranslationLink($wA, $wB, $method, null);
+                foreach ($newLinks as [$wA, $wB, $method, $confidence]) {
+                    $this->linkingRepo->saveInterTranslationLink($wA, $wB, $method, $confidence);
                 }
             }
 
@@ -201,7 +201,8 @@ class LinkTranslationsAutoCommand extends Command
                AND wl_b.translation_word_id IN ({$listB})"
         );
 
-        return array_map(fn($r) => [(int) $r['tw_a'], (int) $r['tw_b'], 'auto_source_pivot'], $rows);
+        // Source pivot = shared source-language link → very high confidence
+        return array_map(fn($r) => [(int) $r['tw_a'], (int) $r['tw_b'], 'auto_source_pivot', 100], $rows);
     }
 
     /**
@@ -238,7 +239,9 @@ class LinkTranslationsAutoCommand extends Command
             $match = $this->wordSimilarity($wordsA[$i - 1]['word_normalised'], $wordsB[$j - 1]['word_normalised']);
             if ($dp[$i][$j] === $dp[$i - 1][$j - 1] + $match && $match >= 0) {
                 if ($match > 0 && !$wordsA[$i - 1]['is_filler'] && !$wordsB[$j - 1]['is_filler']) {
-                    $links[] = [(int) $wordsA[$i - 1]['id'], (int) $wordsB[$j - 1]['id'], 'auto_sequence'];
+                    // Exact match (score 2) → 90, prefix match (score 1) → 70
+                    $conf    = $match === 2 ? 90 : 70;
+                    $links[] = [(int) $wordsA[$i - 1]['id'], (int) $wordsB[$j - 1]['id'], 'auto_sequence', $conf];
                 }
                 $i--; $j--;
             } elseif ($dp[$i][$j] === $dp[$i - 1][$j] - 1) {
@@ -286,7 +289,9 @@ class LinkTranslationsAutoCommand extends Command
             }
 
             if ($bestJ !== null && $bestDist <= 2) {
-                $links[]      = [(int) $wA['id'], (int) $remainB[$bestJ]['id'], 'auto_positional'];
+                // Distance 0 → 60, distance 1 → 40, distance 2 → 20
+                $conf         = 60 - ($bestDist * 20);
+                $links[]      = [(int) $wA['id'], (int) $remainB[$bestJ]['id'], 'auto_positional', $conf];
                 $used[$bestJ] = true;
             }
         }

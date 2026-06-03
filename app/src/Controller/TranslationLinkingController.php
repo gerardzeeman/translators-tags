@@ -58,6 +58,14 @@ class TranslationLinkingController extends AbstractController
         $chapterCounts = $this->passageRepo->getChapterVerseCounts($book->getId());
         $nav = $this->buildNav($book->getId(), $chapter, $verse, $usfm, $codeA, $codeB, $chapterCounts);
 
+        // Build linked-ID set with string keys so Twig can look up by word ID.
+        // (PHP array_merge renumbers integer keys, making Twig |merge unusable here.)
+        $linkedIds = [];
+        foreach ($data['links'] as $link) {
+            $linkedIds[(string) $link['word_a_id']] = true;
+            $linkedIds[(string) $link['word_b_id']] = true;
+        }
+
         return $this->render('linking/translations_verse.html.twig', [
             'book'        => $book,
             'chapter'     => $chapter,
@@ -70,6 +78,7 @@ class TranslationLinkingController extends AbstractController
             'words_b'     => $data['words_b'],
             'links'       => $data['links'],
             'word_map'    => $data['word_map'],
+            'linked_ids'  => $linkedIds,
             'nav'         => $nav,
             'save_url'    => $this->generateUrl('app_trans_linking_api_save'),
             'delete_url'  => $this->generateUrl('app_trans_linking_api_delete'),
