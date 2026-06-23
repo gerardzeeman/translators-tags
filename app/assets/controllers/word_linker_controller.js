@@ -1,6 +1,10 @@
 // assets/controllers/word_linker_controller.js
 import { Controller } from '@hotwired/stimulus'
 
+function csrfToken() {
+    return document.querySelector('meta[name="csrf-token"]')?.content ?? ''
+}
+
 export default class extends Controller {
     static targets = ['sourceWord', 'dutchWord', 'actionBar', 'selectedLabel', 'status']
     static values  = { saveUrl: String, deleteUrl: String, refreshUrl: String, progressUrl: String, translationId: Number }
@@ -91,7 +95,7 @@ export default class extends Controller {
         try {
             const resp = await fetch(this.saveUrlValue, {
                 method:  'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken() },
                 body: JSON.stringify({
                     lang:           this.#selectedSourceLang,
                     source_word_id: parseInt(this.#selectedSourceId),
@@ -161,7 +165,7 @@ export default class extends Controller {
             try {
                 const resp = await fetch(this.saveUrlValue, {
                     method:  'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken() },
                     body: JSON.stringify({
                         lang:           el.dataset.lang,
                         source_word_id: parseInt(el.dataset.sourceId),

@@ -134,6 +134,10 @@ class LinkingController extends AbstractController
     #[Route('/api/save', name: 'api_linking_save', methods: ['POST'])]
     public function save(Request $request): JsonResponse
     {
+        if (!$this->isCsrfTokenValid('linking_api', $request->headers->get('X-CSRF-Token'))) {
+            return $this->json(['error' => 'Invalid request.'], 403);
+        }
+
         $data = json_decode($request->getContent(), true);
 
         $lang           = $data['lang']            ?? null;
@@ -166,8 +170,12 @@ class LinkingController extends AbstractController
     }
 
     #[Route('/api/delete/{linkId<\d+>}', name: 'api_linking_delete', methods: ['DELETE'])]
-    public function delete(int $linkId): JsonResponse
+    public function delete(Request $request, int $linkId): JsonResponse
     {
+        if (!$this->isCsrfTokenValid('linking_api', $request->headers->get('X-CSRF-Token'))) {
+            return $this->json(['error' => 'Invalid request.'], 403);
+        }
+
         $this->linkingRepo->deleteLink($linkId);
         return $this->json(['success' => true]);
     }
