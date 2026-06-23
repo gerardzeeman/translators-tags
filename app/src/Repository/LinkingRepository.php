@@ -452,6 +452,27 @@ class LinkingRepository
     }
 
     /**
+     * Verify that all given translation_word IDs belong to the specified translation.
+     * Prevents cross-translation link injection (IDOR guard).
+     */
+    public function translationWordsBelongToTranslation(array $twIds, int $translationId): bool
+    {
+        if (empty($twIds)) {
+            return true;
+        }
+        $list  = implode(',', array_map('intval', $twIds));
+        $count = (int) $this->connection->fetchOne(
+            "SELECT COUNT(DISTINCT tw.id)
+             FROM translation_words tw
+             JOIN translation_verses tv ON tv.id = tw.verse_id
+             WHERE tw.id IN ({$list})
+               AND tv.translation_id = :translation_id",
+            ['translation_id' => $translationId]
+        );
+        return $count === count($twIds);
+    }
+
+    /**
      * Check whether a source word ID exists in the appropriate language table.
      * Used to validate input before writing links.
      */

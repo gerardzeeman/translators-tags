@@ -42,6 +42,7 @@
         <h2 style="font-size:1.1rem; margin-bottom:1rem; border-bottom:1px solid var(--color-border-light); padding-bottom:.5rem;">Naam wijzigen</h2>
         <form method="post" action="{{ path('app_profile') }}">
             <input type="hidden" name="action" value="update_name">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token('profile_name') }}">
             <div style="margin-bottom:1rem;">
                 <label for="display_name" style="display:block; font-size:.85rem; color:var(--color-ink-light); margin-bottom:.35rem;">Weergavenaam</label>
                 <input type="text" id="display_name" name="display_name"
@@ -60,6 +61,7 @@
         <h2 style="font-size:1.1rem; margin-bottom:1rem; border-bottom:1px solid var(--color-border-light); padding-bottom:.5rem;">Wachtwoord wijzigen</h2>
         <form method="post" action="{{ path('app_profile') }}">
             <input type="hidden" name="action" value="change_password">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token('profile_password') }}">
             <div style="margin-bottom:1rem;">
                 <label for="current_password" style="display:block; font-size:.85rem; color:var(--color-ink-light); margin-bottom:.35rem;">Huidig wachtwoord</label>
                 <input type="password" id="current_password" name="current_password"

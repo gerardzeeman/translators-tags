@@ -50,6 +50,11 @@ class StrongsTranslateController extends AbstractController
     {
         $strongs = strtoupper($strongs);
 
+        if (!$this->isCsrfTokenValid('strongs_translate', $request->request->get('_csrf_token'))) {
+            $this->addFlash('error', 'Ongeldig formulierverzoek.');
+            return $this->redirectToRoute('app_strongs_translate', ['strongs' => $strongs]);
+        }
+
         $this->linkingRepo->saveStrongsTranslation(
             $strongs,
             $request->request->get('short_def_nl'),

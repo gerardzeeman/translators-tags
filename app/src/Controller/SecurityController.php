@@ -56,8 +56,9 @@ class SecurityController extends AbstractController
             $password = $request->request->get('password', '');
             $confirm  = $request->request->get('confirm_password', '');
 
-            // Basic validation
-            if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            if (!$this->isCsrfTokenValid('register', $request->request->get('_csrf_token'))) {
+                $error = 'Ongeldig formulierverzoek.';
+            } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
                 $error = 'Voer een geldig e-mailadres in.';
             } elseif (strlen($name) < 2) {
                 $error = 'Naam moet minimaal 2 tekens bevatten.';
@@ -109,29 +110,37 @@ class SecurityController extends AbstractController
             $action = $request->request->get('action');
 
             if ($action === 'update_name') {
-                $name = trim($request->request->get('display_name', ''));
-                if (strlen($name) < 2) {
-                    $error = 'Naam moet minimaal 2 tekens bevatten.';
+                if (!$this->isCsrfTokenValid('profile_name', $request->request->get('_csrf_token'))) {
+                    $error = 'Ongeldig formulierverzoek.';
                 } else {
-                    $user->setDisplayName($name);
-                    $em->flush();
-                    $success = 'Naam bijgewerkt.';
+                    $name = trim($request->request->get('display_name', ''));
+                    if (strlen($name) < 2) {
+                        $error = 'Naam moet minimaal 2 tekens bevatten.';
+                    } else {
+                        $user->setDisplayName($name);
+                        $em->flush();
+                        $success = 'Naam bijgewerkt.';
+                    }
                 }
             } elseif ($action === 'change_password') {
-                $current = $request->request->get('current_password', '');
-                $new     = $request->request->get('new_password', '');
-                $confirm = $request->request->get('confirm_password', '');
-
-                if (!$passwordHasher->isPasswordValid($user, $current)) {
-                    $error = 'Huidig wachtwoord is onjuist.';
-                } elseif (strlen($new) < 8) {
-                    $error = 'Nieuw wachtwoord moet minimaal 8 tekens bevatten.';
-                } elseif ($new !== $confirm) {
-                    $error = 'Wachtwoorden komen niet overeen.';
+                if (!$this->isCsrfTokenValid('profile_password', $request->request->get('_csrf_token'))) {
+                    $error = 'Ongeldig formulierverzoek.';
                 } else {
-                    $user->setPassword($passwordHasher->hashPassword($user, $new));
-                    $em->flush();
-                    $success = 'Wachtwoord gewijzigd.';
+                    $current = $request->request->get('current_password', '');
+                    $new     = $request->request->get('new_password', '');
+                    $confirm = $request->request->get('confirm_password', '');
+
+                    if (!$passwordHasher->isPasswordValid($user, $current)) {
+                        $error = 'Huidig wachtwoord is onjuist.';
+                    } elseif (strlen($new) < 8) {
+                        $error = 'Nieuw wachtwoord moet minimaal 8 tekens bevatten.';
+                    } elseif ($new !== $confirm) {
+                        $error = 'Wachtwoorden komen niet overeen.';
+                    } else {
+                        $user->setPassword($passwordHasher->hashPassword($user, $new));
+                        $em->flush();
+                        $success = 'Wachtwoord gewijzigd.';
+                    }
                 }
             }
         }

@@ -59,7 +59,7 @@ class SecurityHeadersSubscriber implements EventSubscriberInterface
             $hash = $this->getImportmapHash();
             $headers->set('Content-Security-Policy',
                 "default-src 'self'; " .
-                "script-src 'self' data: " .
+                "script-src 'self' " .
                     ($hash ? "{$hash} " : '') .
                     "; " .
                 "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " .
@@ -72,7 +72,7 @@ class SecurityHeadersSubscriber implements EventSubscriberInterface
             // Dev: permissive script-src so the profiler toolbar works.
             $headers->set('Content-Security-Policy',
                 "default-src 'self'; " .
-                "script-src 'self' data: 'unsafe-inline'; " .
+                "script-src 'self' 'unsafe-inline'; " .
                 "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " .
                 "font-src 'self' https://fonts.gstatic.com; " .
                 "img-src 'self' data:; " .
@@ -81,6 +81,7 @@ class SecurityHeadersSubscriber implements EventSubscriberInterface
             );
         }
 
+        $headers->set('X-Content-Type-Options', 'nosniff');
         $headers->set('X-Frame-Options', 'DENY');
         $headers->set('Referrer-Policy', 'same-origin');
         $headers->set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');

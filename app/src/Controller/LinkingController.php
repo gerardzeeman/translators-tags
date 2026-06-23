@@ -145,16 +145,19 @@ class LinkingController extends AbstractController
             return $this->json(['error' => 'Invalid parameters.'], 400);
         }
 
-        // Verify source word exists in the appropriate language table (V-03)
+        // Verify source word exists in the appropriate language table
         if (!$this->linkingRepo->sourceWordExists($lang, $sourceWordId)) {
             return $this->json(['error' => 'Invalid parameters.'], 400);
         }
 
-        // /link/* vereist al ROLE_LINKER via access_control; geen extra check nodig per vertaling
-
         // $twIds may be empty — that means "intentionally no Dutch translation"
         if (!is_array($twIds)) {
             $twIds = [];
+        }
+
+        // Verify all target words belong to the requested translation (IDOR guard)
+        if (!empty($twIds) && !$this->linkingRepo->translationWordsBelongToTranslation($twIds, $translationId)) {
+            return $this->json(['error' => 'Invalid parameters.'], 400);
         }
 
         $this->linkingRepo->saveManualLinks($lang, $sourceWordId, $twIds, $translationId);
