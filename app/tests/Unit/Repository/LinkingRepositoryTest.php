@@ -24,36 +24,6 @@ class LinkingRepositoryTest extends TestCase
         $this->repo = new LinkingRepository($this->conn);
     }
 
-    // ── findTranslationCodeByLinkId ───────────────────────────────────────────
-
-    public function testFindTranslationCodeByLinkIdReturnsSvForKnownLink(): void
-    {
-        $this->conn
-            ->expects($this->once())
-            ->method('fetchOne')
-            ->with(
-                $this->stringContains('word_links'),
-                $this->identicalTo(['link_id' => 7])
-            )
-            ->willReturn('SV');
-
-        $this->assertSame('SV', $this->repo->findTranslationCodeByLinkId(7));
-    }
-
-    public function testFindTranslationCodeByLinkIdReturnsHsvForHsvLink(): void
-    {
-        $this->conn->method('fetchOne')->willReturn('HSV');
-
-        $this->assertSame('HSV', $this->repo->findTranslationCodeByLinkId(42));
-    }
-
-    public function testFindTranslationCodeByLinkIdReturnsNullForMissingLink(): void
-    {
-        $this->conn->method('fetchOne')->willReturn(false);
-
-        $this->assertNull($this->repo->findTranslationCodeByLinkId(999));
-    }
-
     // ── saveManualLinks — empty path (no translation) ────────────────────────
 
     public function testSaveManualLinksEmptyDeletesExistingLinksAndInsertsEmptyRecord(): void

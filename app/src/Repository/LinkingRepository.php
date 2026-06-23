@@ -868,22 +868,5 @@ class LinkingRepository
         );
     }
 
-    /**
-     * Return the translation code (e.g. 'SV', 'HSV') for a given word_links row.
-     * Used to authorise delete requests.
-     */
-    public function findTranslationCodeByLinkId(int $linkId): ?string
-    {
-        $code = $this->connection->fetchOne(
-            "SELECT t.code
-             FROM word_links wl
-             JOIN translation_words tw  ON tw.id  = wl.translation_word_id
-             JOIN translation_verses tv ON tv.id  = tw.verse_id
-             JOIN translations t        ON t.id   = tv.translation_id
-             WHERE wl.id = :link_id",
-            ['link_id' => $linkId]
-        );
 
-        return $code ?: null;
-    }
 }
