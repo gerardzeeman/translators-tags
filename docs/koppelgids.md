@@ -149,6 +149,7 @@ Het script werkt in drie stappen per vers:
 Opties:
 - `--dry-run` – laat zien wat het script zou doen zonder iets op te slaan.
 - `--book PRO` – verwerk alleen het boek Spreuken (handig om te testen).
+- `--family SV` – verwerk alleen het vertaalfamiliepaar met de opgegeven familienaam.
 - `--reset` – verwijder bestaande automatische koppelingen en begin opnieuw.
 
 > **Geheugengebruik:** het script verwerkt de volledige Bijbel (~31.000 verzen) en gebruikt streaming om geheugen te besparen. Als je toch een foutmelding krijgt over geheugengebruik:
@@ -181,6 +182,28 @@ HSV-woorden in cursief (bijv. *maar*, *toch*) hebben geen direct Hebreeuws of Gr
 - **Groen (volgorde)** – gekoppeld via tekstgelijkenis en volgorde.
 - **Goud (positioneel)** – positioneel gekoppeld; minst betrouwbaar, controleer altijd.
 - **Groen met ✓ (handmatig)** – door een gebruiker bevestigd.
+
+### Propagatie: gesuggereerde koppelingen voor niet-bronvertalingen
+
+Wanneer je in de koppelinterface een vertaling opent die **niet** de bronvertaling is (bijv. HSV), worden bronwoorden zonder directe koppeling automatisch aangevuld met **gesuggereerde koppelingen**. Dit mechanisme heet propagatie.
+
+**Hoe het werkt:**
+
+1. De controller stelt vast of de gekozen vertaling de bronvertaling (`source_lang_authority`) is of niet.
+2. Is het geen bronvertaling, dan zoekt het systeem via de `inter_translation_links`-tabel welke HSV-woorden via de SV gekoppeld zijn aan een bepaald bronwoord.
+3. Bronwoorden die nog geen directe koppeling hebben, krijgen deze gesuggereerde HSV-woorden als voorgeselecteerde koppeling meegeleverd.
+
+**Wat de gebruiker ziet:**
+
+- De gesuggereerde Nederlandse woorden zijn al gemarkeerd (voorgeselecteerd), zodat je de koppeling met één klik op **Opslaan** kunt bevestigen.
+- Suggesties zijn visueel onderscheiden van echte koppelingen.
+
+**Technische achtergrond:**
+
+- Gesuggereerde koppelingen hebben `link_id = null`; er bestaat nog geen rij in `word_links`.
+- De methode is `'propagated'`.
+- Het veld `word['propagated'] = true` in de templatedata geeft aan dat het om een suggestie gaat.
+- Zodra de gebruiker op **Opslaan** klikt, wordt een echte `word_links`-rij aangemaakt met methode `'manual'`.
 
 ---
 
@@ -231,7 +254,7 @@ Gebruikers met de rol **ROLE_EDIT_STRONG_TRNL** kunnen via **Vertalen Strong's**
 | Rol                    | Toegang                                              |
 |------------------------|------------------------------------------------------|
 | `ROLE_VIEWER`          | Bijbellezer bekijken                                 |
-| `ROLE_HSV`             | HSV-paneel zichtbaar in bijbellezer                  |
+| `ROLE_HSV`             | HSV-paneel zichtbaar in bijbellezer + HSV-bronkoppelingen aanmaken en verwijderen |
 | `ROLE_LINKER`          | Bronkoppelingen en vertalingskoppelingen bewerken    |
 | `ROLE_EDIT_STRONG_TRNL`| Strong's-definities vertalen naar het Nederlands     |
 | `ROLE_ADMIN`           | Alle bovenstaande rollen                             |

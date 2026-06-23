@@ -68,6 +68,7 @@ DB_NAME=bible_compare
 DB_USER=bible
 DB_PASSWORD=changeme
 APP_SECRET=change_me_to_a_real_32_char_secret_value
+REMEMBER_ME_SECRET=change_me_to_a_real_32_char_secret_value
 SERVER_NAME=localhost, localhost:80
 ```
 
@@ -145,7 +146,7 @@ The ingest pipeline downloads the source texts and populates the database. This 
 docker compose --profile ingest run --rm ingest
 ```
 
-The pipeline runs six steps in sequence:
+The pipeline runs seven steps in sequence:
 
 | Step | Description | Approximate time |
 |------|-------------|-----------------|
@@ -155,6 +156,7 @@ The pipeline runs six steps in sequence:
 | 4 | Parse Statenvertaling XML | 2–4 min |
 | 5 | Pivot alignment (ESV → Dutch) | 5–15 min |
 | 6 | Heuristic alignment (fallback) | 3–8 min |
+| 7 | Parse Strong's dictionary | 1–3 min |
 
 You will see progress bars for each step. When it finishes you should see:
 
