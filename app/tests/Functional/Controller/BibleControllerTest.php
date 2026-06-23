@@ -67,7 +67,7 @@ class BibleControllerTest extends WebTestCase
     public function testHsvRoleInheritsViewerAndCanAccessBookRoute(): void
     {
         $client = static::createClient();
-        $user   = $this->createUser(['ROLE_HSV']);
+        $user   = $this->createUser(['ROLE_VIEWER_HSV']);
         $client->loginUser($user);
 
         $client->request('GET', '/book/GEN');

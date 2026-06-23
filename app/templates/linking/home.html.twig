@@ -27,7 +27,7 @@
                         <select id="passage-translation-select"
                                 data-passage-select-target="translation">
                             {% for t in translations %}
-                            {% if t.code == 'SV' or is_granted('ROLE_HSV') %}
+                            {% if t.code == 'SV' or is_granted('ROLE_VIEWER_HSV') %}
                             <option value="{{ t.code }}">{{ t.name }}</option>
                             {% endif %}
                             {% endfor %}
@@ -111,7 +111,7 @@
                     <select id="strongs-translation-select"
                             data-strongs-select-target="translation">
                         {% for t in translations %}
-                        {% if t.code == 'SV' or is_granted('ROLE_HSV') %}
+                        {% if t.code == 'SV' or is_granted('ROLE_VIEWER_HSV') %}
                         <option value="{{ t.code }}">{{ t.name }}</option>
                         {% endif %}
                         {% endfor %}

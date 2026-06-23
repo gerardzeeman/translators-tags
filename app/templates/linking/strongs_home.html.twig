@@ -16,7 +16,7 @@
             <select id="strongs-translation"
                     style="width:100%; padding:.55rem .8rem; border:1px solid var(--color-border); border-radius:4px; font-family:var(--font-serif); font-size:.95rem; background:#fdfaf5; color:var(--color-ink); margin-bottom:.75rem;">
                 {% for t in translations %}
-                {% if t.code == 'SV' or is_granted('ROLE_HSV') %}
+                {% if t.code == 'SV' or is_granted('ROLE_VIEWER_HSV') %}
                 <option value="{{ t.code }}">{{ t.name }}</option>
                 {% endif %}
                 {% endfor %}

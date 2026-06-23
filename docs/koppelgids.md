@@ -254,8 +254,8 @@ Gebruikers met de rol **ROLE_EDIT_STRONG_TRNL** kunnen via **Vertalen Strong's**
 | Rol                    | Toegang                                              |
 |------------------------|------------------------------------------------------|
 | `ROLE_VIEWER`          | Bijbellezer bekijken                                 |
-| `ROLE_HSV`             | HSV-paneel zichtbaar in bijbellezer + HSV-bronkoppelingen aanmaken en verwijderen |
-| `ROLE_LINKER`          | Bronkoppelingen en vertalingskoppelingen bewerken    |
+| `ROLE_VIEWER_HSV`      | HSV-paneel zichtbaar in bijbellezer (leesrol, geen schrijfrechten) |
+| `ROLE_LINKER`          | Bronkoppelingen en vertalingskoppelingen bewerken voor alle vertalingen |
 | `ROLE_EDIT_STRONG_TRNL`| Strong's-definities vertalen naar het Nederlands     |
 | `ROLE_ADMIN`           | Alle bovenstaande rollen                             |
 

@@ -36,8 +36,8 @@
             {% endif %}
 
             {# Translation indicator switcher — pure JS, no page reload.
-               HSV button only shown to users with ROLE_HSV. #}
-            {% if is_granted('ROLE_HSV') %}
+               HSV button only shown to users with ROLE_VIEWER_HSV. #}
+            {% if is_granted('ROLE_VIEWER_HSV') %}
             <div class="translation-indicator-toggle">
                 <span class="toggle-label">Indicatoren:</span>
                 {% for t in translations %}
@@ -156,8 +156,8 @@
 
     </section>
 
-    {# ── HSV translation panel (right, bottom) — ROLE_HSV only ─────────── #}
-    {% if is_granted('ROLE_HSV') %}
+    {# ── HSV translation panel (right, bottom) — ROLE_VIEWER_HSV only ─────────── #}
+    {% if is_granted('ROLE_VIEWER_HSV') %}
     <section class="panel panel-hsv" aria-label="Herziene Statenvertaling">
 
         <h2 class="panel-heading">
@@ -189,7 +189,7 @@
         </div>
 
     </section>
-    {% endif %}{# ROLE_HSV #}
+    {% endif %}{# ROLE_VIEWER_HSV #}
 
 </div>{# /compare-col-right #}
 </div>{# /verse-compare-grid #}

@@ -150,13 +150,7 @@ class LinkingController extends AbstractController
             return $this->json(['error' => 'Invalid parameters.'], 400);
         }
 
-        // Non-SV translations require ROLE_HSV
-        $translationEntity = $this->translationRepo->find($translationId);
-        if ($translationEntity && $translationEntity->getCode() !== 'SV') {
-            if (!$this->isGranted('ROLE_HSV')) {
-                return $this->json(['error' => 'Access denied.'], 403);
-            }
-        }
+        // /link/* vereist al ROLE_LINKER via access_control; geen extra check nodig per vertaling
 
         // $twIds may be empty — that means "intentionally no Dutch translation"
         if (!is_array($twIds)) {
@@ -171,14 +165,6 @@ class LinkingController extends AbstractController
     #[Route('/api/delete/{linkId<\d+>}', name: 'api_linking_delete', methods: ['DELETE'])]
     public function delete(int $linkId): JsonResponse
     {
-        // Non-SV translation links require ROLE_HSV
-        $translationCode = $this->linkingRepo->findTranslationCodeByLinkId($linkId);
-        if ($translationCode && $translationCode !== 'SV') {
-            if (!$this->isGranted('ROLE_HSV')) {
-                return $this->json(['error' => 'Access denied.'], 403);
-            }
-        }
-
         $this->linkingRepo->deleteLink($linkId);
         return $this->json(['success' => true]);
     }

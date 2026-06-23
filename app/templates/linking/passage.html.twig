@@ -26,10 +26,10 @@
 
         </div>
 
-        {# Translation switcher — HSV only shown to users with ROLE_HSV #}
+        {# Translation switcher — HSV only shown to users with ROLE_VIEWER_HSV #}
         <div class="translation-switcher">
             {% for t in translations %}
-            {% if t.code == 'SV' or is_granted('ROLE_HSV') %}
+            {% if t.code == 'SV' or is_granted('ROLE_VIEWER_HSV') %}
             <a href="{{ path('app_linking_passage', {translation: t.code, usfm: book.usfmCode, chapter: chapter, verse: verse}) }}"
                class="trans-btn {% if t.id == translation.id %}trans-btn-active{% endif %}">
                 {{ t.code }}
@@ -89,6 +89,7 @@
                      data-source-id="{{ word.id }}"
                      data-lang="{{ lang }}"
                      data-strongs="{{ word.strongs }}"
+                     data-strongs-url="{{ word.strongs ? path('app_strongs', {number: word.strongs}) : '' }}"
                      data-linked-tw-ids="{{ linked_tw_ids }}"
                      data-action="click->word-linker#selectSource"
                      data-word-linker-target="sourceWord">
@@ -151,6 +152,14 @@
                 <em>{{ passage.dutch_words|first.verse_text }}</em>
             </p>
             {% endif %}
+        </section>
+
+        {# Strong's detail panel — loaded when a source word is selected #}
+        <section class="link-panel link-panel-strongs">
+            <h2 class="panel-label">Strong's</h2>
+            <turbo-frame id="strongs-panel">
+                <p class="strongs-placeholder">Selecteer een bronwoord om details te zien.</p>
+            </turbo-frame>
         </section>
 
     </div>

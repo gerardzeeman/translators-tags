@@ -58,7 +58,7 @@ class LinkingControllerTest extends WebTestCase
     public function testHsvRoleInheritsLinkerAndCanAccessLinkRoute(): void
     {
         $client = static::createClient();
-        $client->loginUser($this->createUser(['ROLE_HSV']));
+        $client->loginUser($this->createUser(['ROLE_VIEWER_HSV']));
 
         $client->request('GET', '/link');
 
@@ -100,31 +100,12 @@ class LinkingControllerTest extends WebTestCase
         $this->assertTrue($body['success']);
     }
 
-    // ── /link/api/save — HSV translation role check ───────────────────────────
+    // ── /link/api/save — HSV translation accessible to any ROLE_LINKER ──────────
 
-    public function testSaveApiWithHsvTranslationWithoutHsvRoleReturns403(): void
+    public function testSaveApiWithHsvTranslationAndLinkerRoleReturns200(): void
     {
         $client = static::createClient();
         $client->loginUser($this->createUser(['ROLE_LINKER']));
-
-        [$transRepo, $linkRepo] = $this->mockRepositories(hsvTranslationId: 2);
-        $this->injectMocks($transRepo, $linkRepo);
-
-        $client->request(
-            'POST',
-            '/link/api/save',
-            [], [],
-            ['CONTENT_TYPE' => 'application/json'],
-            json_encode(['lang' => 'HE', 'source_word_id' => 5, 'tw_ids' => [10], 'translation_id' => 2])
-        );
-
-        $this->assertResponseStatusCodeSame(403);
-    }
-
-    public function testSaveApiWithHsvTranslationWithHsvRoleReturns200(): void
-    {
-        $client = static::createClient();
-        $client->loginUser($this->createUser(['ROLE_HSV']));
 
         [$transRepo, $linkRepo] = $this->mockRepositories(hsvTranslationId: 2);
         $linkRepo->expects($this->once())->method('saveManualLinks');
@@ -260,30 +241,14 @@ class LinkingControllerTest extends WebTestCase
         $this->assertResponseRedirects('/login');
     }
 
-    // ── /link/api/delete — HSV link role check ────────────────────────────────
+    // ── /link/api/delete — any ROLE_LINKER can delete any link ──────────────────
 
-    public function testDeleteApiWithHsvLinkWithoutHsvRoleReturns403(): void
+    public function testDeleteApiWithHsvLinkAndLinkerRoleSucceeds(): void
     {
         $client = static::createClient();
         $client->loginUser($this->createUser(['ROLE_LINKER']));
 
         [$transRepo, $linkRepo] = $this->mockRepositories();
-        $linkRepo->method('findTranslationCodeByLinkId')->with(13)->willReturn('HSV');
-
-        $this->injectMocks($transRepo, $linkRepo);
-
-        $client->request('DELETE', '/link/api/delete/13');
-
-        $this->assertResponseStatusCodeSame(403);
-    }
-
-    public function testDeleteApiWithHsvLinkWithHsvRoleSucceeds(): void
-    {
-        $client = static::createClient();
-        $client->loginUser($this->createUser(['ROLE_HSV']));
-
-        [$transRepo, $linkRepo] = $this->mockRepositories();
-        $linkRepo->method('findTranslationCodeByLinkId')->with(13)->willReturn('HSV');
         $linkRepo->expects($this->once())->method('deleteLink')->with(13);
 
         $this->injectMocks($transRepo, $linkRepo);
@@ -295,55 +260,17 @@ class LinkingControllerTest extends WebTestCase
         $this->assertTrue($body['success']);
     }
 
-    public function testDeleteApiWithSvLinkWithLinkerRoleSucceeds(): void
-    {
-        $client = static::createClient();
-        $client->loginUser($this->createUser(['ROLE_LINKER']));
-
-        [$transRepo, $linkRepo] = $this->mockRepositories();
-        $linkRepo->method('findTranslationCodeByLinkId')->with(7)->willReturn('SV');
-        $linkRepo->expects($this->once())->method('deleteLink')->with(7);
-
-        $this->injectMocks($transRepo, $linkRepo);
-
-        $client->request('DELETE', '/link/api/delete/7');
-
-        $this->assertResponseIsSuccessful();
-        $body = json_decode($client->getResponse()->getContent(), true);
-        $this->assertTrue($body['success']);
-    }
-
-    public function testDeleteApiWithAdminRoleCanDeleteHsvLink(): void
+    public function testDeleteApiWithAdminRoleSucceeds(): void
     {
         $client = static::createClient();
         $client->loginUser($this->createUser(['ROLE_ADMIN']));
 
         [$transRepo, $linkRepo] = $this->mockRepositories();
-        $linkRepo->method('findTranslationCodeByLinkId')->with(20)->willReturn('HSV');
         $linkRepo->expects($this->once())->method('deleteLink')->with(20);
 
         $this->injectMocks($transRepo, $linkRepo);
 
         $client->request('DELETE', '/link/api/delete/20');
-
-        $this->assertResponseIsSuccessful();
-    }
-
-    // ── When link is not found (null code), delete proceeds without role check ─
-
-    public function testDeleteApiWithUnknownLinkIdProceedsWithoutRoleCheck(): void
-    {
-        $client = static::createClient();
-        $client->loginUser($this->createUser(['ROLE_LINKER']));
-
-        [$transRepo, $linkRepo] = $this->mockRepositories();
-        // findTranslationCodeByLinkId returns null — no HSV gate triggered
-        $linkRepo->method('findTranslationCodeByLinkId')->willReturn(null);
-        $linkRepo->expects($this->once())->method('deleteLink');
-
-        $this->injectMocks($transRepo, $linkRepo);
-
-        $client->request('DELETE', '/link/api/delete/999');
 
         $this->assertResponseIsSuccessful();
     }
