@@ -4,6 +4,7 @@ namespace App\Repository;
 
 use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
+use Symfony\Contracts\Cache\CacheInterface;
 
 /**
  * LinkingRepository
@@ -11,7 +12,10 @@ use Doctrine\DBAL\Connection;
  */
 class LinkingRepository
 {
-    public function __construct(private readonly Connection $connection) {}
+    public function __construct(
+        private readonly Connection     $connection,
+        private readonly CacheInterface $cache,
+    ) {}
 
     // ── Screen 1: passage linking ─────────────────────────────────────────────
 
@@ -255,22 +259,27 @@ class LinkingRepository
      */
     public function fetchStrongsTransliterations(string $strongs): array
     {
-        $testament = str_starts_with($strongs, 'H') ? 'OT' : 'NT';
-        $table     = $testament === 'OT' ? 'hebrew_words' : 'greek_words';
+        $key = 'strongs_translit_' . strtolower($strongs);
+        return $this->cache->get($key, function (\Symfony\Contracts\Cache\ItemInterface $item) use ($strongs): array {
+            $item->expiresAfter(3600);
+            $testament = str_starts_with($strongs, 'H') ? 'OT' : 'NT';
+            $table     = $testament === 'OT' ? 'hebrew_words' : 'greek_words';
 
-        $sql = <<<SQL
-            SELECT
-                transliteration,
-                COUNT(*) AS occurrence_count
-            FROM {$table}
-            WHERE regexp_replace(strongs, '[A-Za-z]+$', '') = :strongs
-              AND transliteration IS NOT NULL
-              AND transliteration <> ''
-            GROUP BY transliteration
-            ORDER BY occurrence_count DESC, transliteration
-        SQL;
+            $sql = <<<SQL
+                SELECT
+                    transliteration,
+                    COUNT(*) AS occurrence_count
+                FROM {$table}
+                WHERE regexp_replace(strongs, '[A-Za-z]+$', '') = :strongs
+                  AND transliteration IS NOT NULL
+                  AND transliteration <> ''
+                GROUP BY transliteration
+                ORDER BY occurrence_count DESC, transliteration
+                LIMIT 50
+            SQL;
 
-        return $this->connection->fetchAllAssociative($sql, ['strongs' => $this->padStrongsId($strongs)]);
+            return $this->connection->fetchAllAssociative($sql, ['strongs' => $this->padStrongsId($strongs)]);
+        });
     }
 
     /**
@@ -281,9 +290,11 @@ class LinkingRepository
         $table = str_starts_with($strongs, 'H') ? 'hebrew_words' : 'greek_words';
 
         return (int) $this->connection->fetchOne(
-            "SELECT COUNT(DISTINCT book_id || '-' || chapter || '-' || verse)
-             FROM {$table}
-             WHERE regexp_replace(strongs, '[A-Za-z]+$', '') = :strongs",
+            "SELECT COUNT(*) FROM (
+                SELECT DISTINCT book_id, chapter, verse
+                FROM {$table}
+                WHERE regexp_replace(strongs, '[A-Za-z]+$', '') = :strongs
+             ) sub",
             ['strongs' => $this->padStrongsId($strongs)]
         );
     }
@@ -543,29 +554,33 @@ class LinkingRepository
      */
     public function fetchStrongsProgress(string $strongs, int $translationId): array
     {
-        $testament = str_starts_with($strongs, 'H') ? 'OT' : 'NT';
-        $table     = $testament === 'OT' ? 'hebrew_words' : 'greek_words';
-        $id_col    = $testament === 'OT' ? 'hebrew_word_id' : 'greek_word_id';
+        $key = 'strongs_progress_' . strtolower($strongs) . '_' . $translationId;
+        return $this->cache->get($key, function (\Symfony\Contracts\Cache\ItemInterface $item) use ($strongs, $translationId): array {
+            $item->expiresAfter(300);
+            $testament = str_starts_with($strongs, 'H') ? 'OT' : 'NT';
+            $table     = $testament === 'OT' ? 'hebrew_words' : 'greek_words';
+            $id_col    = $testament === 'OT' ? 'hebrew_word_id' : 'greek_word_id';
 
-        $sql = <<<SQL
-            SELECT
-                COUNT(DISTINCT sw.id)                                          AS total,
-                COUNT(DISTINCT wl.{$id_col})                                   AS linked,
-                COUNT(DISTINCT CASE WHEN lc.method = 'manual'
-                    THEN wl.{$id_col} END)                                     AS manual
-            FROM {$table} sw
-            LEFT JOIN word_links wl         ON wl.{$id_col} = sw.id
-            LEFT JOIN translation_words tw  ON tw.id = wl.translation_word_id
-            LEFT JOIN translation_verses tv ON tv.id = tw.verse_id
-                                           AND tv.translation_id = :translation_id
-            LEFT JOIN link_confidence lc    ON lc.link_id = wl.id
-            WHERE regexp_replace(sw.strongs, '[A-Za-z]+$', '') = :strongs
-        SQL;
+            $sql = <<<SQL
+                SELECT
+                    COUNT(DISTINCT sw.id)                                          AS total,
+                    COUNT(DISTINCT wl.{$id_col})                                   AS linked,
+                    COUNT(DISTINCT CASE WHEN lc.method = 'manual'
+                        THEN wl.{$id_col} END)                                     AS manual
+                FROM {$table} sw
+                LEFT JOIN word_links wl         ON wl.{$id_col} = sw.id
+                LEFT JOIN translation_words tw  ON tw.id = wl.translation_word_id
+                LEFT JOIN translation_verses tv ON tv.id = tw.verse_id
+                                               AND tv.translation_id = :translation_id
+                LEFT JOIN link_confidence lc    ON lc.link_id = wl.id
+                WHERE regexp_replace(sw.strongs, '[A-Za-z]+$', '') = :strongs
+            SQL;
 
-        return $this->connection->fetchAssociative($sql, [
-            'strongs'        => $this->padStrongsId($strongs),
-            'translation_id' => $translationId,
-        ]);
+            return $this->connection->fetchAssociative($sql, [
+                'strongs'        => $this->padStrongsId($strongs),
+                'translation_id' => $translationId,
+            ]);
+        });
     }
 
     // ── Link mutation helpers (used by LinkingController) ─────────────────────
@@ -615,26 +630,31 @@ class LinkingRepository
                 ['src_id' => $sourceWordId, 'translation_id' => $translationId]
             );
 
-            // Insert new links with manual confidence.
-            // ON CONFLICT … DO UPDATE (no-op update) ensures RETURNING always gives us the id,
-            // whether this is a fresh row or an already-existing one.
-            foreach ($twIds as $twId) {
-                $linkId = $this->connection->fetchOne(
-                    "INSERT INTO word_links (source_language, {$idCol}, translation_word_id)
-                     VALUES (:lang, :src_id, :tw_id)
-                     ON CONFLICT ({$idCol}, translation_word_id) WHERE {$idCol} IS NOT NULL
-                     DO UPDATE SET source_language = EXCLUDED.source_language
-                     RETURNING id",
-                    ['lang' => $lang, 'src_id' => $sourceWordId, 'tw_id' => (int) $twId]
-                );
+            // Batch-insert all word_links, then batch-insert link_confidence.
+            // Using RETURNING to get IDs for the confidence insert.
+            // ON CONFLICT … DO UPDATE (no-op) ensures RETURNING always fires.
+            $this->connection->transactional(function () use ($idCol, $lang, $sourceWordId, $twIds): void {
+                $linkIds = [];
+                foreach ($twIds as $twId) {
+                    $linkIds[] = $this->connection->fetchOne(
+                        "INSERT INTO word_links (source_language, {$idCol}, translation_word_id)
+                         VALUES (:lang, :src_id, :tw_id)
+                         ON CONFLICT ({$idCol}, translation_word_id) WHERE {$idCol} IS NOT NULL
+                         DO UPDATE SET source_language = EXCLUDED.source_language
+                         RETURNING id",
+                        ['lang' => $lang, 'src_id' => $sourceWordId, 'tw_id' => (int) $twId]
+                    );
+                }
 
-                $this->connection->executeStatement(
-                    "INSERT INTO link_confidence (link_id, method, score, created_at)
-                     VALUES (:link_id, 'manual', 1.000, NOW())
-                     ON CONFLICT (link_id, method) DO UPDATE SET score = 1.000, created_at = NOW()",
-                    ['link_id' => $linkId]
-                );
-            }
+                if ($linkIds) {
+                    $placeholders = implode(',', array_map(fn($id) => "({$id}, 'manual', 1.000, NOW())", $linkIds));
+                    $this->connection->executeStatement(
+                        "INSERT INTO link_confidence (link_id, method, score, created_at)
+                         VALUES {$placeholders}
+                         ON CONFLICT (link_id, method) DO UPDATE SET score = 1.000, created_at = NOW()"
+                    );
+                }
+            });
         }
     }
 
@@ -919,24 +939,17 @@ class LinkingRepository
         $row = $this->connection->fetchAssociative(
             "SELECT
                 COUNT(DISTINCT tv_a.id) AS total_verses,
-                COUNT(DISTINCT CASE
-                    WHEN EXISTS (
-                        SELECT 1 FROM inter_translation_links itl
-                        JOIN translation_words tw_a ON tw_a.id IN (itl.word_a_id, itl.word_b_id)
-                        JOIN translation_verses tv_aa ON tv_aa.id = tw_a.verse_id
-                            AND tv_aa.id = tv_a.id
-                        LIMIT 1
-                    ) THEN tv_a.id END
-                ) AS linked_verses
+                COUNT(DISTINCT CASE WHEN itl.id IS NOT NULL THEN tv_a.id END) AS linked_verses
              FROM translation_verses tv_a
-             WHERE tv_a.translation_id = :id_a
-               AND EXISTS (
-                   SELECT 1 FROM translation_verses tv_b
-                   WHERE tv_b.translation_id = :id_b
-                     AND tv_b.book_id  = tv_a.book_id
-                     AND tv_b.chapter  = tv_a.chapter
-                     AND tv_b.verse    = tv_a.verse
-               )",
+             JOIN translation_verses tv_b
+                ON tv_b.translation_id = :id_b
+               AND tv_b.book_id = tv_a.book_id
+               AND tv_b.chapter = tv_a.chapter
+               AND tv_b.verse   = tv_a.verse
+             LEFT JOIN translation_words tw_a ON tw_a.verse_id = tv_a.id
+             LEFT JOIN inter_translation_links itl
+                ON (itl.word_a_id = tw_a.id OR itl.word_b_id = tw_a.id)
+             WHERE tv_a.translation_id = :id_a",
             ['id_a' => $translationAId, 'id_b' => $translationBId]
         );
 

@@ -147,8 +147,8 @@ class AnnotationController extends AbstractController
         }
 
         $links = $lang === 'HE'
-            ? $this->linkRepo->findBy(['hebrewWord' => $id])
-            : $this->linkRepo->findBy(['greekWord'  => $id]);
+            ? $this->linkRepo->findByHebrewWordWithConfidences($id)
+            : $this->linkRepo->findByGreekWordWithConfidences($id);
 
         $result = array_map(function (WordLink $link) {
             $tw = $link->getTranslationWord();

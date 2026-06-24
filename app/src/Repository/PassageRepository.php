@@ -234,7 +234,6 @@ class PassageRepository
             return $rows;
         }
         $verseText = $rows[0]['verse_text'] ?? '';
-        $verseLen  = mb_strlen($verseText);
         $scanPos   = 0;
 
         foreach ($rows as &$row) {
@@ -247,19 +246,11 @@ class PassageRepository
                 continue;
             }
 
-            $after = $found + $wordLen;
-            $punct = '';
-            while ($after < $verseLen) {
-                $ch = mb_substr($verseText, $after, 1);
-                if ($ch === ' ' || preg_match('/\w/u', $ch)) {
-                    break;
-                }
-                $punct .= $ch;
-                $after++;
-            }
-
-            $row['punct_after'] = $punct;
-            $scanPos = $found + $wordLen;
+            $after  = $found + $wordLen;
+            $suffix = mb_substr($verseText, $after);
+            // Collect non-word, non-space characters immediately following the word
+            $row['punct_after'] = preg_match('/^([^\w\s]+)/u', $suffix, $m) ? $m[1] : '';
+            $scanPos = $after;
         }
         unset($row);
         return $rows;
@@ -637,19 +628,23 @@ class PassageRepository
         return $result;
     }
 
-    /** Returns verse counts per chapter for a book/testament combination. */
+    /** Returns verse counts per chapter for a book/testament combination. Cached indefinitely (book structure never changes). */
     public function getChapterVerseCounts(int $bookId): array
     {
-        $testament = $bookId <= 39 ? 'OT' : 'NT';
-        $table     = $testament === 'OT' ? 'hebrew_words' : 'greek_words';
+        return $this->cache->get("chapter_verse_counts_{$bookId}", function (\Symfony\Contracts\Cache\ItemInterface $item) use ($bookId): array {
+            $item->expiresAfter(86400 * 365);
+            $testament = $bookId <= 39 ? 'OT' : 'NT';
+            $table     = $testament === 'OT' ? 'hebrew_words' : 'greek_words';
 
-        $sql = "SELECT chapter, MAX(verse) AS verse_count
-                FROM {$table}
-                WHERE book_id = :book_id
-                GROUP BY chapter
-                ORDER BY chapter";
-
-        return $this->connection->fetchAllAssociative($sql, ['book_id' => $bookId]);
+            return $this->connection->fetchAllAssociative(
+                "SELECT chapter, MAX(verse) AS verse_count
+                 FROM {$table}
+                 WHERE book_id = :book_id
+                 GROUP BY chapter
+                 ORDER BY chapter",
+                ['book_id' => $bookId]
+            );
+        });
     }
 
     /** Coverage statistics: how many source words have at least one link. Cached 1 hour. */

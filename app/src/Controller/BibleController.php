@@ -176,8 +176,9 @@ class BibleController extends AbstractController
             $passage['dutch_verse_' . strtolower($code)] = $allPassages[$code]['dutch_verse'];
         }
 
-        // Navigation: prev/next verse (carry the current translation code for breadcrumb)
-        $nav = $this->buildNavigation($book->getId(), $chapter, $verse, $usfm, $translation);
+        // Navigation: reuse already-cached verse counts (getChapterVerseCounts is cached)
+        $verseCounts = $this->passageRepository->getChapterVerseCounts($book->getId());
+        $nav = $this->buildNavigation($book->getId(), $chapter, $verse, $usfm, $translation, $verseCounts);
 
         $template = $request->headers->get('Turbo-Frame')
             ? 'bible/verse_frame.html.twig'
@@ -208,9 +209,9 @@ class BibleController extends AbstractController
 
     // ── helpers ──────────────────────────────────────────────────────────────
 
-    private function buildNavigation(int $bookId, int $chapter, int $verse, string $usfm, string $translation): array
+    private function buildNavigation(int $bookId, int $chapter, int $verse, string $usfm, string $translation, ?array $counts = null): array
     {
-        $counts = $this->passageRepository->getChapterVerseCounts($bookId);
+        $counts ??= $this->passageRepository->getChapterVerseCounts($bookId);
         $verseCount = collect_verse_count($counts, $chapter);
 
         $prev = $next = null;
