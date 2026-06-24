@@ -2,6 +2,7 @@
 
 namespace App\Repository;
 
+use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Symfony\Contracts\Cache\CacheInterface;
 
@@ -181,48 +182,30 @@ class PassageRepository
                 tw.char_start,
                 tw.char_end,
                 tw.is_filler::int AS is_filler,
-                -- Best link info for colour-coding.
-                -- First tries direct word_links (manual HSV links, or SV links).
-                -- Falls back to inter_translation_links propagation so HSV words
-                -- still get a colour when linked via ITL rather than word_links.
-                COALESCE(
-                    (SELECT lc2.method
-                     FROM word_links wl2
-                     JOIN link_confidence lc2 ON lc2.link_id = wl2.id
-                     WHERE wl2.translation_word_id = tw.id
-                     ORDER BY lc2.score DESC
-                     LIMIT 1),
-                    (SELECT itl.method
-                     FROM inter_translation_links itl
-                     WHERE (itl.word_a_id = tw.id OR itl.word_b_id = tw.id)
-                       AND itl.method != 'manual_empty'
-                     ORDER BY CASE itl.method
-                         WHEN 'manual'            THEN 0
-                         WHEN 'auto_source_pivot' THEN 1
-                         WHEN 'auto_sequence'     THEN 2
-                         ELSE 3 END
-                     LIMIT 1)
-                ) AS best_method,
-                COALESCE(
-                    (SELECT lc2.score
-                     FROM word_links wl2
-                     JOIN link_confidence lc2 ON lc2.link_id = wl2.id
-                     WHERE wl2.translation_word_id = tw.id
-                     ORDER BY lc2.score DESC
-                     LIMIT 1),
-                    (SELECT itl.confidence::float / 100.0
-                     FROM inter_translation_links itl
-                     WHERE (itl.word_a_id = tw.id OR itl.word_b_id = tw.id)
-                       AND itl.method != 'manual_empty'
-                     ORDER BY CASE itl.method
-                         WHEN 'manual'            THEN 0
-                         WHEN 'auto_source_pivot' THEN 1
-                         WHEN 'auto_sequence'     THEN 2
-                         ELSE 3 END
-                     LIMIT 1)
-                ) AS best_score
+                COALESCE(wl_best.method, itl_best.method)            AS best_method,
+                COALESCE(wl_best.score,  itl_best.score)             AS best_score
             FROM translation_verses tv
             JOIN translation_words tw ON tw.verse_id = tv.id
+            LEFT JOIN LATERAL (
+                SELECT lc2.method, lc2.score
+                FROM word_links wl2
+                JOIN link_confidence lc2 ON lc2.link_id = wl2.id
+                WHERE wl2.translation_word_id = tw.id
+                ORDER BY lc2.score DESC
+                LIMIT 1
+            ) wl_best ON true
+            LEFT JOIN LATERAL (
+                SELECT itl.method, itl.confidence::float / 100.0 AS score
+                FROM inter_translation_links itl
+                WHERE (itl.word_a_id = tw.id OR itl.word_b_id = tw.id)
+                  AND itl.method != 'manual_empty'
+                ORDER BY CASE itl.method
+                    WHEN 'manual'            THEN 0
+                    WHEN 'auto_source_pivot' THEN 1
+                    WHEN 'auto_sequence'     THEN 2
+                    ELSE 3 END
+                LIMIT 1
+            ) itl_best ON true
             WHERE tv.translation_id = :translation_id
               AND tv.book_id = :book_id
               AND tv.chapter = :chapter
@@ -280,6 +263,305 @@ class PassageRepository
         }
         unset($row);
         return $rows;
+    }
+
+    /**
+     * Batch version of fetchPassage: fetches all translations in 2 queries instead of 2N.
+     * Returns [translationId => ['testament', 'source_words', 'dutch_verse']].
+     *
+     * @param int[] $translationIds
+     */
+    public function fetchPassageBatch(int $bookId, int $chapter, int $verse, array $translationIds): array
+    {
+        if (empty($translationIds)) {
+            return [];
+        }
+
+        $testament = $bookId <= 39 ? 'OT' : 'NT';
+
+        $sourceWordsByTrans = $testament === 'OT'
+            ? $this->fetchHebrewWordsBatch($bookId, $chapter, $verse, $translationIds)
+            : $this->fetchGreekWordsBatch($bookId, $chapter, $verse, $translationIds);
+
+        $dutchVersesByTrans = $this->fetchDutchVerseBatch($bookId, $chapter, $verse, $translationIds);
+
+        $result = [];
+        foreach ($translationIds as $tid) {
+            $result[$tid] = [
+                'testament'    => $testament,
+                'source_words' => $sourceWordsByTrans[$tid] ?? [],
+                'dutch_verse'  => $dutchVersesByTrans[$tid]  ?? [],
+            ];
+        }
+        return $result;
+    }
+
+    private function fetchHebrewWordsBatch(int $bookId, int $chapter, int $verse, array $translationIds): array
+    {
+        $baseSql = <<<SQL
+            SELECT id, word_position, word_text, transliteration, lemma, strongs,
+                   morph_code, is_ketiv, has_qere
+            FROM hebrew_words
+            WHERE book_id = :book_id AND chapter = :chapter AND verse = :verse
+            ORDER BY word_position
+        SQL;
+
+        $baseRows = $this->connection->fetchAllAssociative($baseSql, [
+            'book_id' => $bookId, 'chapter' => $chapter, 'verse' => $verse,
+        ]);
+
+        if (empty($baseRows)) {
+            return array_fill_keys($translationIds, []);
+        }
+
+        $linkSql = <<<SQL
+            SELECT DISTINCT ON (tv.translation_id, wl.hebrew_word_id, tw.id)
+                wl.hebrew_word_id AS source_word_id,
+                tv.translation_id,
+                tw.id AS tw_id, tw.word_text, tw.word_position,
+                lc.method, lc.score
+            FROM word_links wl
+            JOIN translation_words tw ON tw.id = wl.translation_word_id
+            JOIN translation_verses tv ON tv.id = tw.verse_id
+            JOIN link_confidence lc ON lc.link_id = wl.id
+            WHERE tv.translation_id IN (:translation_ids)
+              AND tv.book_id = :book_id
+              AND tv.chapter = :chapter
+              AND tv.verse   = :verse
+            ORDER BY tv.translation_id, wl.hebrew_word_id, tw.id, lc.score DESC
+        SQL;
+
+        $linkRows = $this->connection->fetchAllAssociative($linkSql, [
+            'translation_ids' => $translationIds,
+            'book_id'         => $bookId,
+            'chapter'         => $chapter,
+            'verse'           => $verse,
+        ], ['translation_ids' => ArrayParameterType::INTEGER]);
+
+        $linksByTransAndWord = [];
+        foreach ($linkRows as $row) {
+            $linksByTransAndWord[$row['translation_id']][$row['source_word_id']][] = [
+                'tw_id'     => $row['tw_id'],
+                'word_text' => $row['word_text'],
+                'word_pos'  => (int) $row['word_position'],
+                'method'    => $row['method'],
+                'score'     => $row['score'] !== null ? (float) $row['score'] : null,
+            ];
+        }
+
+        $result = [];
+        foreach ($translationIds as $tid) {
+            $words = [];
+            foreach ($baseRows as $row) {
+                $links = $linksByTransAndWord[$tid][$row['id']] ?? [];
+                usort($links, fn($a, $b) => $a['word_pos'] <=> $b['word_pos']);
+                $words[] = array_merge($row, ['dutch_links' => $links]);
+            }
+            $result[$tid] = $words;
+        }
+        return $result;
+    }
+
+    private function fetchGreekWordsBatch(int $bookId, int $chapter, int $verse, array $translationIds): array
+    {
+        $baseSql = <<<SQL
+            SELECT id, word_position, word_text, transliteration, lemma, strongs, parse_code
+            FROM greek_words
+            WHERE book_id = :book_id AND chapter = :chapter AND verse = :verse
+            ORDER BY word_position
+        SQL;
+
+        $baseRows = $this->connection->fetchAllAssociative($baseSql, [
+            'book_id' => $bookId, 'chapter' => $chapter, 'verse' => $verse,
+        ]);
+
+        if (empty($baseRows)) {
+            return array_fill_keys($translationIds, []);
+        }
+
+        $linkSql = <<<SQL
+            SELECT DISTINCT ON (tv.translation_id, wl.greek_word_id, tw.id)
+                wl.greek_word_id AS source_word_id,
+                tv.translation_id,
+                tw.id AS tw_id, tw.word_text, tw.word_position,
+                lc.method, lc.score
+            FROM word_links wl
+            JOIN translation_words tw ON tw.id = wl.translation_word_id
+            JOIN translation_verses tv ON tv.id = tw.verse_id
+            JOIN link_confidence lc ON lc.link_id = wl.id
+            WHERE tv.translation_id IN (:translation_ids)
+              AND tv.book_id = :book_id
+              AND tv.chapter = :chapter
+              AND tv.verse   = :verse
+            ORDER BY tv.translation_id, wl.greek_word_id, tw.id, lc.score DESC
+        SQL;
+
+        $linkRows = $this->connection->fetchAllAssociative($linkSql, [
+            'translation_ids' => $translationIds,
+            'book_id'         => $bookId,
+            'chapter'         => $chapter,
+            'verse'           => $verse,
+        ], ['translation_ids' => ArrayParameterType::INTEGER]);
+
+        $linksByTransAndWord = [];
+        foreach ($linkRows as $row) {
+            $linksByTransAndWord[$row['translation_id']][$row['source_word_id']][] = [
+                'tw_id'     => $row['tw_id'],
+                'word_text' => $row['word_text'],
+                'word_pos'  => (int) $row['word_position'],
+                'method'    => $row['method'],
+                'score'     => $row['score'] !== null ? (float) $row['score'] : null,
+            ];
+        }
+
+        $result = [];
+        foreach ($translationIds as $tid) {
+            $words = [];
+            foreach ($baseRows as $row) {
+                $links = $linksByTransAndWord[$tid][$row['id']] ?? [];
+                usort($links, fn($a, $b) => $a['word_pos'] <=> $b['word_pos']);
+                $words[] = array_merge($row, ['dutch_links' => $links]);
+            }
+            $result[$tid] = $words;
+        }
+        return $result;
+    }
+
+    private function fetchDutchVerseBatch(int $bookId, int $chapter, int $verse, array $translationIds): array
+    {
+        $sql = <<<SQL
+            SELECT
+                tv.translation_id,
+                tv.id  AS verse_id,
+                tv.verse_text,
+                tw.id  AS word_id,
+                tw.word_position,
+                tw.word_text,
+                tw.char_start,
+                tw.char_end,
+                tw.is_filler::int AS is_filler,
+                COALESCE(wl_best.method, itl_best.method) AS best_method,
+                COALESCE(wl_best.score,  itl_best.score)  AS best_score
+            FROM translation_verses tv
+            JOIN translation_words tw ON tw.verse_id = tv.id
+            LEFT JOIN LATERAL (
+                SELECT lc2.method, lc2.score
+                FROM word_links wl2
+                JOIN link_confidence lc2 ON lc2.link_id = wl2.id
+                WHERE wl2.translation_word_id = tw.id
+                ORDER BY lc2.score DESC LIMIT 1
+            ) wl_best ON true
+            LEFT JOIN LATERAL (
+                SELECT itl.method, itl.confidence::float / 100.0 AS score
+                FROM inter_translation_links itl
+                WHERE (itl.word_a_id = tw.id OR itl.word_b_id = tw.id)
+                  AND itl.method != 'manual_empty'
+                ORDER BY CASE itl.method
+                    WHEN 'manual'            THEN 0
+                    WHEN 'auto_source_pivot' THEN 1
+                    WHEN 'auto_sequence'     THEN 2
+                    ELSE 3 END
+                LIMIT 1
+            ) itl_best ON true
+            WHERE tv.translation_id IN (:translation_ids)
+              AND tv.book_id = :book_id
+              AND tv.chapter = :chapter
+              AND tv.verse   = :verse
+            ORDER BY tv.translation_id, tw.word_position
+        SQL;
+
+        $rows = $this->connection->fetchAllAssociative($sql, [
+            'translation_ids' => $translationIds,
+            'book_id'         => $bookId,
+            'chapter'         => $chapter,
+            'verse'           => $verse,
+        ], ['translation_ids' => ArrayParameterType::INTEGER]);
+
+        $grouped = [];
+        foreach ($rows as $row) {
+            $tid = $row['translation_id'];
+            unset($row['translation_id']);
+            $grouped[$tid][] = $row;
+        }
+
+        $result = [];
+        foreach ($grouped as $tid => $verseRows) {
+            $result[$tid] = self::addPunctuation($verseRows);
+        }
+        return $result;
+    }
+
+    /**
+     * Batch version of fetchPropagatedLinksForVerse for multiple target translations.
+     * Returns [targetTranslationId => [sourceWordId => [links]]].
+     *
+     * @param int[] $targetTranslationIds
+     */
+    public function fetchPropagatedLinksForVerseBatch(
+        int    $bookId,
+        int    $chapter,
+        int    $verse,
+        string $testament,
+        int    $authorityTranslationId,
+        array  $targetTranslationIds,
+    ): array {
+        if (empty($targetTranslationIds)) {
+            return [];
+        }
+
+        $sourceIdCol = $testament === 'OT' ? 'hebrew_word_id' : 'greek_word_id';
+
+        $sql = <<<SQL
+            WITH authority_links AS (
+                SELECT wl.{$sourceIdCol} AS source_word_id, tw_auth.id AS auth_tw_id
+                FROM word_links wl
+                JOIN translation_words tw_auth ON tw_auth.id = wl.translation_word_id
+                JOIN translation_verses tv_auth ON tv_auth.id = tw_auth.verse_id
+                WHERE tv_auth.translation_id = :authority_id
+                  AND tv_auth.book_id = :book_id
+                  AND tv_auth.chapter = :chapter
+                  AND tv_auth.verse   = :verse
+            )
+            SELECT
+                al.source_word_id,
+                tv_t.translation_id,
+                tw_t.id AS tw_id, tw_t.word_text, tw_t.word_position,
+                itl.method AS itl_method, itl.confidence
+            FROM authority_links al
+            JOIN inter_translation_links itl
+                ON (itl.word_a_id = al.auth_tw_id OR itl.word_b_id = al.auth_tw_id)
+               AND itl.method != 'manual_empty'
+            JOIN translation_words tw_t
+                ON tw_t.id = CASE
+                    WHEN itl.word_a_id = al.auth_tw_id THEN itl.word_b_id
+                    ELSE itl.word_a_id
+                END
+            JOIN translation_verses tv_t ON tv_t.id = tw_t.verse_id
+                AND tv_t.translation_id IN (:target_ids)
+            ORDER BY tv_t.translation_id, al.source_word_id, tw_t.word_position
+        SQL;
+
+        $rows = $this->connection->fetchAllAssociative($sql, [
+            'authority_id' => $authorityTranslationId,
+            'target_ids'   => $targetTranslationIds,
+            'book_id'      => $bookId,
+            'chapter'      => $chapter,
+            'verse'        => $verse,
+        ], ['target_ids' => ArrayParameterType::INTEGER]);
+
+        $result = [];
+        foreach ($rows as $row) {
+            $tid   = $row['translation_id'];
+            $srcId = $row['source_word_id'];
+            $result[$tid][$srcId][] = [
+                'tw_id'     => $row['tw_id'],
+                'word_text' => $row['word_text'],
+                'word_pos'  => (int) $row['word_position'],
+                'method'    => $row['itl_method'],
+                'score'     => $row['confidence'] !== null ? (float) $row['confidence'] / 100.0 : null,
+            ];
+        }
+        return $result;
     }
 
     /**

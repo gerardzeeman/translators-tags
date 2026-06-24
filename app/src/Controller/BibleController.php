@@ -98,34 +98,44 @@ class BibleController extends AbstractController
 
         $allTranslations = $this->translationRepository->findAllOrderedById();
 
-        // Fetch passage data for every translation
+        // Build translation ID ↔ code maps and find SV
+        $svTranslation      = null;
+        $translationIdToCode = [];
+        foreach ($allTranslations as $t) {
+            $translationIdToCode[$t->getId()] = $t->getCode();
+            if ($t->getCode() === 'SV') {
+                $svTranslation = $t;
+            }
+        }
+        $allTranslationIds = array_keys($translationIdToCode);
+
+        // Fetch all passages in 2 queries instead of 2N
+        $passagesByTid = $this->passageRepository->fetchPassageBatch(
+            $book->getId(), $chapter, $verse, $allTranslationIds
+        );
         $allPassages = [];
-        foreach ($allTranslations as $trans) {
-            $allPassages[$trans->getCode()] = $this->passageRepository->fetchPassage(
-                $book->getId(), $chapter, $verse, $trans->getId()
-            );
+        foreach ($passagesByTid as $tid => $data) {
+            $allPassages[$translationIdToCode[$tid]] = $data;
         }
 
         // SV is the canonical source for testament + Hebrew/Greek word list
         $basePassage = $allPassages['SV'] ?? reset($allPassages);
 
-        // For non-SV translations in the same family, propagate SV source links via ITL
-        $svTranslation = null;
-        foreach ($allTranslations as $t) {
-            if ($t->getCode() === 'SV') { $svTranslation = $t; break; }
-        }
+        // Propagate SV source links to all non-SV translations in 1 query instead of N-1
         $propagatedLinks = [];
         if ($svTranslation) {
-            foreach ($allTranslations as $trans) {
-                if ($trans->getCode() === 'SV') {
-                    continue;
-                }
-                $propagatedLinks[$trans->getCode()] = $this->passageRepository->fetchPropagatedLinksForVerse(
-                    $book->getId(), $chapter, $verse,
-                    $basePassage['testament'],
-                    $svTranslation->getId(),
-                    $trans->getId(),
-                );
+            $targetIds = array_values(array_filter(
+                $allTranslationIds,
+                fn($id) => $translationIdToCode[$id] !== 'SV'
+            ));
+            $propagatedByTid = $this->passageRepository->fetchPropagatedLinksForVerseBatch(
+                $book->getId(), $chapter, $verse,
+                $basePassage['testament'],
+                $svTranslation->getId(),
+                $targetIds,
+            );
+            foreach ($propagatedByTid as $tid => $data) {
+                $propagatedLinks[$translationIdToCode[$tid]] = $data;
             }
         }
 
