@@ -71,6 +71,8 @@ services:
     restart: unless-stopped
     ports:
       - "8081:8080"
+    networks:
+      - bible_net
 
 volumes:
   postgres_data:
