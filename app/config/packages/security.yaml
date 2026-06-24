@@ -44,12 +44,14 @@ security:
         ROLE_ADMIN:             [ROLE_LINKER, ROLE_VIEWER_HSV, ROLE_EDIT_STRONG_TRNL]
 
     access_control:
-        - { path: ^/login,             roles: PUBLIC_ACCESS }
-        - { path: ^/register,          roles: PUBLIC_ACCESS }
-        - { path: ^/strongs/translate, roles: ROLE_EDIT_STRONG_TRNL }
-        - { path: ^/link,              roles: ROLE_LINKER }
-        - { path: ^/book,              roles: ROLE_VIEWER }
-        - { path: ^/,                  roles: ROLE_USER }
+        - { path: ^/login,               roles: PUBLIC_ACCESS }
+        - { path: ^/register,            roles: PUBLIC_ACCESS }
+        - { path: ^/strongs/translate,   roles: ROLE_EDIT_STRONG_TRNL }
+        - { path: ^/api/annotation/word, roles: ROLE_VIEWER }
+        - { path: ^/api/annotation,      roles: ROLE_LINKER }
+        - { path: ^/link,                roles: ROLE_LINKER }
+        - { path: ^/book,                roles: ROLE_VIEWER }
+        - { path: ^/,                    roles: ROLE_USER }
 
 when@test:
     security:

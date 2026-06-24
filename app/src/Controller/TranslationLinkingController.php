@@ -2,6 +2,7 @@
 
 namespace App\Controller;
 
+use App\Entity\User;
 use App\Repository\BookRepository;
 use App\Repository\LinkingRepository;
 use App\Repository\PassageRepository;
@@ -118,7 +119,9 @@ class TranslationLinkingController extends AbstractController
             $method = 'manual';
         }
 
-        $this->linkingRepo->saveInterTranslationLink($wordAId, $wordBId, $method, null);
+        /** @var User $user */
+        $user = $this->getUser();
+        $this->linkingRepo->saveInterTranslationLink($wordAId, $wordBId, $method, null, $user->getId());
 
         return $this->json(['success' => true]);
     }

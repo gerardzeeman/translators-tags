@@ -6,6 +6,7 @@ use App\Entity\HebrewWord;
 use App\Entity\GreekWord;
 use App\Entity\LinkConfidence;
 use App\Entity\TranslationWord;
+use App\Entity\User;
 use App\Entity\WordLink;
 use App\Repository\HebrewWordRepository;
 use App\Repository\GreekWordRepository;
@@ -24,11 +25,11 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 class AnnotationController extends AbstractController
 {
     public function __construct(
-        private readonly EntityManagerInterface  $em,
-        private readonly HebrewWordRepository    $hebrewRepo,
-        private readonly GreekWordRepository     $greekRepo,
+        private readonly EntityManagerInterface    $em,
+        private readonly HebrewWordRepository      $hebrewRepo,
+        private readonly GreekWordRepository       $greekRepo,
         private readonly TranslationWordRepository $twRepo,
-        private readonly WordLinkRepository      $linkRepo,
+        private readonly WordLinkRepository        $linkRepo,
     ) {}
 
     /**
@@ -39,22 +40,29 @@ class AnnotationController extends AbstractController
     #[Route('/link', name: 'api_annotation_link', methods: ['POST'])]
     public function createLink(Request $request): JsonResponse
     {
-        if (!$this->isCsrfTokenValid('linking_api', $request->headers->get('X-CSRF-Token'))) {
+        $csrfToken = $request->headers->get('X-CSRF-Token');
+        if (!$csrfToken || !$this->isCsrfTokenValid('linking_api', $csrfToken)) {
             return $this->json(['error' => 'Invalid request.'], 403);
         }
 
         $data = json_decode($request->getContent(), true);
+        if (!is_array($data)) {
+            return $this->json(['error' => 'Invalid JSON body.'], 400);
+        }
 
-        $lang   = $data['source_lang']          ?? null;
-        $srcId  = (int) ($data['source_word_id']         ?? 0);
-        $twId   = (int) ($data['translation_word_id']    ?? 0);
-        $notes  = $data['notes']                 ?? null;
+        $lang  = $data['source_lang']       ?? null;
+        $srcId = (int) ($data['source_word_id']      ?? 0);
+        $twId  = (int) ($data['translation_word_id'] ?? 0);
+        $notes = $data['notes'] ?? null;
 
         if (!in_array($lang, ['HE', 'GR'], true) || !$srcId || !$twId) {
             return $this->json(['error' => 'Missing or invalid parameters.'], 400);
         }
 
-        // Load entities
+        if ($notes !== null) {
+            $notes = mb_substr(strip_tags((string) $notes), 0, 2000);
+        }
+
         $sourceWord = $lang === 'HE'
             ? $this->hebrewRepo->find($srcId)
             : $this->greekRepo->find($srcId);
@@ -65,18 +73,19 @@ class AnnotationController extends AbstractController
             return $this->json(['error' => 'Source or translation word not found.'], 404);
         }
 
-        // Check if an existing link already connects these two words
+        /** @var User $user */
+        $user = $this->getUser();
+
         $existing = $this->findExistingLink($lang, $srcId, $twId);
 
         if ($existing) {
-            // Upsert a manual confidence record on the existing link
-            $this->upsertManualConfidence($existing, $notes);
+            $this->upsertManualConfidence($existing, $notes, $user);
             $linkId = $existing->getId();
         } else {
-            // Create a new link
             $link = new WordLink();
             $link->setSourceLanguage($lang);
             $link->setTranslationWord($translationWord);
+            $link->setCreatedByUser($user);
 
             if ($lang === 'HE') {
                 $link->setHebrewWord($sourceWord);
@@ -85,34 +94,38 @@ class AnnotationController extends AbstractController
             }
 
             $this->em->persist($link);
-            $this->em->flush(); // get the ID
+            $this->em->flush();
 
-            $this->upsertManualConfidence($link, $notes);
+            $this->upsertManualConfidence($link, $notes, $user);
             $linkId = $link->getId();
         }
 
         $this->em->flush();
 
-        return $this->json([
-            'success' => true,
-            'link_id' => $linkId,
-        ]);
+        return $this->json(['success' => true, 'link_id' => $linkId]);
     }
 
     /**
      * Delete a word link (manual correction: unlink).
      * DELETE /api/annotation/link/{id}
+     * ROLE_ADMIN may delete any link; others may only delete their own.
      */
     #[Route('/link/{id}', name: 'api_annotation_unlink', methods: ['DELETE'])]
     public function deleteLink(Request $request, int $id): JsonResponse
     {
-        if (!$this->isCsrfTokenValid('linking_api', $request->headers->get('X-CSRF-Token'))) {
+        $csrfToken = $request->headers->get('X-CSRF-Token');
+        if (!$csrfToken || !$this->isCsrfTokenValid('linking_api', $csrfToken)) {
             return $this->json(['error' => 'Invalid request.'], 403);
         }
 
         $link = $this->linkRepo->find($id);
         if (!$link) {
             return $this->json(['error' => 'Link not found.'], 404);
+        }
+
+        // Ownership check: ROLE_ADMIN can delete any link; others only their own.
+        if (!$this->isGranted('ROLE_ADMIN') && $link->getCreatedByUser() !== $this->getUser()) {
+            return $this->json(['error' => 'Access denied.'], 403);
         }
 
         $this->em->remove($link);
@@ -126,6 +139,7 @@ class AnnotationController extends AbstractController
      * GET /api/annotation/word/{lang}/{id}
      */
     #[Route('/word/{lang}/{id}', name: 'api_annotation_word_links', methods: ['GET'])]
+    #[IsGranted('ROLE_VIEWER')]
     public function wordLinks(string $lang, int $id): JsonResponse
     {
         if (!in_array($lang, ['HE', 'GR'], true)) {
@@ -139,14 +153,14 @@ class AnnotationController extends AbstractController
         $result = array_map(function (WordLink $link) {
             $tw = $link->getTranslationWord();
             return [
-                'link_id'           => $link->getId(),
-                'translation_word'  => [
+                'link_id'          => $link->getId(),
+                'translation_word' => [
                     'id'        => $tw->getId(),
                     'word_text' => $tw->getWordText(),
                     'position'  => $tw->getWordPosition(),
                 ],
-                'best_score' => $link->getBestScore(),
-                'is_manual'  => $link->isManual(),
+                'best_score'  => $link->getBestScore(),
+                'is_manual'   => $link->isManual(),
                 'confidences' => array_map(fn($c) => [
                     'method'     => $c->getMethod(),
                     'score'      => $c->getScore(),
@@ -172,21 +186,21 @@ class AnnotationController extends AbstractController
         return $this->linkRepo->findOneBy($criteria);
     }
 
-    private function upsertManualConfidence(WordLink $link, ?string $notes): void
+    private function upsertManualConfidence(WordLink $link, ?string $notes, User $user): void
     {
-        // Check if manual confidence already exists
         foreach ($link->getConfidences() as $conf) {
             if ($conf->getMethod() === 'manual') {
                 $conf->setScore(1.0);
                 $conf->setNotes($notes);
+                $conf->setCreatedByUser($user);
                 return;
             }
         }
 
-        // Create new manual confidence
         $conf = new LinkConfidence($link, 'manual');
         $conf->setScore(1.0);
         $conf->setNotes($notes);
+        $conf->setCreatedByUser($user);
         $this->em->persist($conf);
     }
 }

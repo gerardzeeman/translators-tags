@@ -843,18 +843,18 @@ class LinkingRepository
     /**
      * Save an inter-translation link (word_a_id < word_b_id enforced).
      */
-    public function saveInterTranslationLink(int $wordAId, int $wordBId, string $method = 'manual', ?int $confidence = null): void
+    public function saveInterTranslationLink(int $wordAId, int $wordBId, string $method = 'manual', ?int $confidence = null, ?int $createdByUserId = null): void
     {
-        // Enforce ordering constraint
         [$a, $b] = $wordAId < $wordBId ? [$wordAId, $wordBId] : [$wordBId, $wordAId];
 
         $this->connection->executeStatement(
-            "INSERT INTO inter_translation_links (word_a_id, word_b_id, method, confidence)
-             VALUES (:a, :b, :method, :confidence)
+            "INSERT INTO inter_translation_links (word_a_id, word_b_id, method, confidence, created_by_user_id)
+             VALUES (:a, :b, :method, :confidence, :userId)
              ON CONFLICT (word_a_id, word_b_id) DO UPDATE
                 SET method = EXCLUDED.method,
-                    confidence = CASE WHEN EXCLUDED.confidence IS NULL THEN NULL ELSE EXCLUDED.confidence END",
-            ['a' => $a, 'b' => $b, 'method' => $method, 'confidence' => $confidence]
+                    confidence = CASE WHEN EXCLUDED.confidence IS NULL THEN NULL ELSE EXCLUDED.confidence END,
+                    created_by_user_id = COALESCE(inter_translation_links.created_by_user_id, EXCLUDED.created_by_user_id)",
+            ['a' => $a, 'b' => $b, 'method' => $method, 'confidence' => $confidence, 'userId' => $createdByUserId]
         );
     }
 

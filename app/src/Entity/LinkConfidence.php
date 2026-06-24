@@ -28,6 +28,10 @@ class LinkConfidence
     #[ORM\Column(type: 'text', nullable: true)]
     private ?string $createdBy = null;
 
+    #[ORM\ManyToOne(targetEntity: User::class)]
+    #[ORM\JoinColumn(name: 'created_by_user_id', referencedColumnName: 'id', nullable: true, onDelete: 'SET NULL')]
+    private ?User $createdByUser = null;
+
     #[ORM\Column(type: 'text', nullable: true)]
     private ?string $notes = null;
 
@@ -47,6 +51,8 @@ class LinkConfidence
 
     public function setScore(?float $score): self { $this->score = $score; return $this; }
     public function setCreatedBy(?string $by): self { $this->createdBy = $by; return $this; }
+    public function getCreatedByUser(): ?User { return $this->createdByUser; }
+    public function setCreatedByUser(?User $user): self { $this->createdByUser = $user; return $this; }
     public function setNotes(?string $notes): self { $this->notes = $notes; return $this; }
 
     /** Human-readable method label for display. */

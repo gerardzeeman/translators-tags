@@ -34,6 +34,10 @@ class WordLink
     #[ORM\OneToMany(mappedBy: 'link', targetEntity: LinkConfidence::class, cascade: ['persist', 'remove'])]
     private Collection $confidences;
 
+    #[ORM\ManyToOne(targetEntity: User::class)]
+    #[ORM\JoinColumn(name: 'created_by_user_id', referencedColumnName: 'id', nullable: true, onDelete: 'SET NULL')]
+    private ?User $createdByUser = null;
+
     public function __construct()
     {
         $this->confidences = new ArrayCollection();
@@ -50,6 +54,8 @@ class WordLink
     public function setHebrewWord(?HebrewWord $word): self { $this->hebrewWord = $word; return $this; }
     public function setGreekWord(?GreekWord $word): self { $this->greekWord = $word; return $this; }
     public function setTranslationWord(TranslationWord $word): self { $this->translationWord = $word; return $this; }
+    public function getCreatedByUser(): ?User { return $this->createdByUser; }
+    public function setCreatedByUser(?User $user): self { $this->createdByUser = $user; return $this; }
 
     public function getSourceWord(): HebrewWord|GreekWord|null
     {
