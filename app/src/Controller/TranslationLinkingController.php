@@ -91,6 +91,10 @@ class TranslationLinkingController extends AbstractController
     #[Route('/api/save', name: 'app_trans_linking_api_save', methods: ['POST'])]
     public function apiSave(Request $request): JsonResponse
     {
+        if (!$this->isCsrfTokenValid('linking_api', $request->headers->get('X-CSRF-Token'))) {
+            return $this->json(['error' => 'Invalid request.'], 403);
+        }
+
         $data    = json_decode($request->getContent(), true);
         $wordAId = (int) ($data['word_a_id'] ?? 0);
         $wordBId = (int) ($data['word_b_id'] ?? 0);
@@ -115,6 +119,10 @@ class TranslationLinkingController extends AbstractController
     #[Route('/api/delete', name: 'app_trans_linking_api_delete', methods: ['POST'])]
     public function apiDelete(Request $request): JsonResponse
     {
+        if (!$this->isCsrfTokenValid('linking_api', $request->headers->get('X-CSRF-Token'))) {
+            return $this->json(['error' => 'Invalid request.'], 403);
+        }
+
         $data    = json_decode($request->getContent(), true);
         $wordAId = (int) ($data['word_a_id'] ?? 0);
         $wordBId = (int) ($data['word_b_id'] ?? 0);
@@ -133,6 +141,10 @@ class TranslationLinkingController extends AbstractController
     #[Route('/api/reset', name: 'app_trans_linking_api_reset', methods: ['POST'])]
     public function apiReset(Request $request): JsonResponse
     {
+        if (!$this->isCsrfTokenValid('linking_api', $request->headers->get('X-CSRF-Token'))) {
+            return $this->json(['error' => 'Invalid request.'], 403);
+        }
+
         $data = json_decode($request->getContent(), true);
         $idsA = array_map('intval', (array) ($data['ids_a'] ?? []));
         $idsB = array_map('intval', (array) ($data['ids_b'] ?? []));

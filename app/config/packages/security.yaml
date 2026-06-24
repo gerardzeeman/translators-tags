@@ -34,6 +34,7 @@ security:
                 secret: '%env(REMEMBER_ME_SECRET)%'
                 lifetime: 604800   # 7 days
                 path: /
+                samesite: strict
 
     role_hierarchy:
         ROLE_VIEWER:            [ROLE_USER]

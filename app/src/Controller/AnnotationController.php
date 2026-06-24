@@ -17,8 +17,10 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 #[Route('/api/annotation')]
+#[IsGranted('ROLE_LINKER')]
 class AnnotationController extends AbstractController
 {
     public function __construct(
@@ -37,6 +39,10 @@ class AnnotationController extends AbstractController
     #[Route('/link', name: 'api_annotation_link', methods: ['POST'])]
     public function createLink(Request $request): JsonResponse
     {
+        if (!$this->isCsrfTokenValid('linking_api', $request->headers->get('X-CSRF-Token'))) {
+            return $this->json(['error' => 'Invalid request.'], 403);
+        }
+
         $data = json_decode($request->getContent(), true);
 
         $lang   = $data['source_lang']          ?? null;
@@ -98,8 +104,12 @@ class AnnotationController extends AbstractController
      * DELETE /api/annotation/link/{id}
      */
     #[Route('/link/{id}', name: 'api_annotation_unlink', methods: ['DELETE'])]
-    public function deleteLink(int $id): JsonResponse
+    public function deleteLink(Request $request, int $id): JsonResponse
     {
+        if (!$this->isCsrfTokenValid('linking_api', $request->headers->get('X-CSRF-Token'))) {
+            return $this->json(['error' => 'Invalid request.'], 403);
+        }
+
         $link = $this->linkRepo->find($id);
         if (!$link) {
             return $this->json(['error' => 'Link not found.'], 404);

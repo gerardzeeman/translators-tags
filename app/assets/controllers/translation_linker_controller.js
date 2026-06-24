@@ -1,6 +1,10 @@
 // assets/controllers/translation_linker_controller.js
 import { Controller } from '@hotwired/stimulus'
 
+function csrfToken() {
+    return document.querySelector('meta[name="csrf-token"]')?.content ?? ''
+}
+
 export default class extends Controller {
     static targets = ['wordA', 'wordB', 'status', 'saveBtn', 'linksTable', 'wordIdsA', 'wordIdsB']
     static values  = { saveUrl: String, deleteUrl: String, resetUrl: String }
@@ -65,7 +69,7 @@ export default class extends Controller {
             for (const [wordAId, wordBId] of pairs) {
                 const resp = await fetch(this.saveUrlValue, {
                     method:  'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken() },
                     body:    JSON.stringify({ word_a_id: wordAId, word_b_id: wordBId, method: 'manual' }),
                 })
                 const data = await resp.json()
@@ -93,7 +97,7 @@ export default class extends Controller {
         try {
             const resp = await fetch(this.deleteUrlValue, {
                 method:  'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken() },
                 body:    JSON.stringify({ word_a_id: wordAId, word_b_id: wordBId }),
             })
             const data = await resp.json()
@@ -123,7 +127,7 @@ export default class extends Controller {
         try {
             const resp = await fetch(this.resetUrlValue, {
                 method:  'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken() },
                 body:    JSON.stringify({ ids_a: idsA, ids_b: idsB }),
             })
             const data = await resp.json()
