@@ -3,6 +3,7 @@
 namespace App\Repository;
 
 use Doctrine\DBAL\Connection;
+use Symfony\Contracts\Cache\CacheInterface;
 
 /**
  * PassageRepository
@@ -11,7 +12,10 @@ use Doctrine\DBAL\Connection;
  */
 class PassageRepository
 {
-    public function __construct(private readonly Connection $connection) {}
+    public function __construct(
+        private readonly Connection     $connection,
+        private readonly CacheInterface $cache,
+    ) {}
 
     /**
      * Fetch all source words for a passage with their Dutch link data.
@@ -366,8 +370,16 @@ class PassageRepository
         return $this->connection->fetchAllAssociative($sql, ['book_id' => $bookId]);
     }
 
-    /** Coverage statistics: how many source words have at least one link. */
+    /** Coverage statistics: how many source words have at least one link. Cached 1 hour. */
     public function getCoverageStats(): array
+    {
+        return $this->cache->get('coverage_stats', function (\Symfony\Contracts\Cache\ItemInterface $item): array {
+            $item->expiresAfter(3600);
+            return $this->fetchCoverageStats();
+        });
+    }
+
+    private function fetchCoverageStats(): array
     {
         $sql = <<<SQL
             SELECT
