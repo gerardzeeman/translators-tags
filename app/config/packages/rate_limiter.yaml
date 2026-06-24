@@ -1,0 +1,6 @@
+framework:
+    rate_limiter:
+        register_ip:
+            policy: fixed_window
+            limit: 5
+            interval: '15 minutes'

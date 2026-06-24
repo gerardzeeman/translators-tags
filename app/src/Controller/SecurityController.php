@@ -9,6 +9,7 @@ use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
+use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Authentication\AuthenticationUtils;
 
@@ -41,6 +42,7 @@ class SecurityController extends AbstractController
         UserPasswordHasherInterface $passwordHasher,
         EntityManagerInterface $em,
         UserRepository $userRepository,
+        RateLimiterFactory $registerIpLimiter,
     ): Response {
         if ($this->getUser()) {
             return $this->redirectToRoute('app_home');
@@ -51,12 +53,19 @@ class SecurityController extends AbstractController
         $lastName    = '';
 
         if ($request->isMethod('POST')) {
+            $limiter = $registerIpLimiter->create($request->getClientIp());
+            if (!$limiter->consume(1)->isAccepted()) {
+                $error = 'Te veel registratiepogingen. Probeer het over 15 minuten opnieuw.';
+            }
+
             $email    = trim($request->request->get('email', ''));
             $name     = trim($request->request->get('display_name', ''));
             $password = $request->request->get('password', '');
             $confirm  = $request->request->get('confirm_password', '');
 
-            if (!$this->isCsrfTokenValid('register', $request->request->get('_csrf_token'))) {
+            if ($error) {
+                // rate limited — fall through to render with error
+            } elseif (!$this->isCsrfTokenValid('register', $request->request->get('_csrf_token'))) {
                 $error = 'Ongeldig formulierverzoek.';
             } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
                 $error = 'Voer een geldig e-mailadres in.';
@@ -67,7 +76,7 @@ class SecurityController extends AbstractController
             } elseif ($password !== $confirm) {
                 $error = 'Wachtwoorden komen niet overeen.';
             } elseif ($userRepository->findByEmail($email)) {
-                $error = 'Er bestaat al een account met dit e-mailadres.';
+                $error = 'Registratie mislukt. Controleer uw gegevens en probeer het opnieuw.';
             }
 
             if (!$error) {
