@@ -2,6 +2,7 @@
 
 namespace App\Repository;
 
+use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 
 /**
@@ -829,15 +830,13 @@ class LinkingRepository
     {
         if (!$idsA || !$idsB) return [];
 
-        // Build safe integer lists (no user input, internal IDs)
-        $listA = implode(',', array_map('intval', $idsA));
-        $listB = implode(',', array_map('intval', $idsB));
-
         return $this->connection->fetchAllAssociative(
             "SELECT id, word_a_id, word_b_id, method, confidence
              FROM inter_translation_links
-             WHERE (word_a_id IN ({$listA}) AND word_b_id IN ({$listB}))
-                OR (word_a_id IN ({$listB}) AND word_b_id IN ({$listA}))"
+             WHERE (word_a_id IN (:listA) AND word_b_id IN (:listB))
+                OR (word_a_id IN (:listB) AND word_b_id IN (:listA))",
+            ['listA' => $idsA, 'listB' => $idsB],
+            ['listA' => ArrayParameterType::INTEGER, 'listB' => ArrayParameterType::INTEGER]
         );
     }
 
@@ -878,14 +877,14 @@ class LinkingRepository
     public function resetVerseAutoLinks(array $idsA, array $idsB): int
     {
         if (!$idsA || !$idsB) return 0;
-        $listA = implode(',', array_map('intval', $idsA));
-        $listB = implode(',', array_map('intval', $idsB));
 
         return (int) $this->connection->executeStatement(
             "DELETE FROM inter_translation_links
              WHERE method NOT IN ('manual', 'manual_empty')
-               AND ((word_a_id IN ({$listA}) AND word_b_id IN ({$listB}))
-                 OR (word_a_id IN ({$listB}) AND word_b_id IN ({$listA})))"
+               AND ((word_a_id IN (:listA) AND word_b_id IN (:listB))
+                 OR (word_a_id IN (:listB) AND word_b_id IN (:listA)))",
+            ['listA' => $idsA, 'listB' => $idsB],
+            ['listA' => ArrayParameterType::INTEGER, 'listB' => ArrayParameterType::INTEGER]
         );
     }
 
