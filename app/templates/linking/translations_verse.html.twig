@@ -1,5 +1,6 @@
 {% extends 'base.html.twig' %}
 {% block title %}{{ trans_a.code }} ↔ {{ trans_b.code }} – {{ book.nameNl }} {{ chapter }}:{{ verse }}{% endblock %}
+{% block head %}<meta name="csrf-token" content="{{ csrf_token('linking_api') }}">{% endblock %}
 
 {% block body %}
 <div class="trans-linking-screen"

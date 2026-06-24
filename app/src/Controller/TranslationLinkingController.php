@@ -38,7 +38,7 @@ class TranslationLinkingController extends AbstractController
 
     // ── Verse linking UI ──────────────────────────────────────────────────────
 
-    #[Route('/{codeA}/{codeB}/{usfm}/{chapter<\d+>}/{verse<\d+>}', name: 'app_trans_linking_verse')]
+    #[Route('/{codeA<[A-Za-z0-9\-]{1,16}>}/{codeB<[A-Za-z0-9\-]{1,16}>}/{usfm<[A-Za-z0-9]{2,8}>}/{chapter<\d+>}/{verse<\d+>}', name: 'app_trans_linking_verse')]
     public function verse(
         string $codeA, string $codeB,
         string $usfm, int $chapter, int $verse

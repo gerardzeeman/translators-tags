@@ -1,5 +1,6 @@
 {% extends 'base.html.twig' %}
 {% block title %}{{ book.nameNl }} {{ chapter }}:{{ verse }} – Koppelen{% endblock %}
+{% block head %}<meta name="csrf-token" content="{{ csrf_token('linking_api') }}">{% endblock %}
 
 {% block body %}
 <div class="page-linking" data-controller="word-linker"
