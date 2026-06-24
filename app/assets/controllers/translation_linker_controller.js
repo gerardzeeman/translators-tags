@@ -7,7 +7,7 @@ function csrfToken() {
 
 export default class extends Controller {
     static targets = ['wordA', 'wordB', 'status', 'saveBtn', 'linksTable', 'wordIdsA', 'wordIdsB']
-    static values  = { saveUrl: String, deleteUrl: String, resetUrl: String }
+    static values  = { saveUrl: String, deleteUrl: String, resetUrl: String, transAId: Number, transBId: Number }
 
     // Maps of twId → element for current selection
     #selectedAs = new Map()
@@ -70,7 +70,7 @@ export default class extends Controller {
                 const resp = await fetch(this.saveUrlValue, {
                     method:  'POST',
                     headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken() },
-                    body:    JSON.stringify({ word_a_id: wordAId, word_b_id: wordBId, method: 'manual' }),
+                    body:    JSON.stringify({ word_a_id: wordAId, word_b_id: wordBId, method: 'manual', trans_a_id: this.transAIdValue, trans_b_id: this.transBIdValue }),
                 })
                 const data = await resp.json()
                 if (!data.success) throw new Error(data.error || 'Save failed')
@@ -98,7 +98,7 @@ export default class extends Controller {
             const resp = await fetch(this.deleteUrlValue, {
                 method:  'POST',
                 headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken() },
-                body:    JSON.stringify({ word_a_id: wordAId, word_b_id: wordBId }),
+                body:    JSON.stringify({ word_a_id: wordAId, word_b_id: wordBId, trans_a_id: this.transAIdValue, trans_b_id: this.transBIdValue }),
             })
             const data = await resp.json()
             if (!data.success) throw new Error(data.error || 'Delete failed')
@@ -128,7 +128,7 @@ export default class extends Controller {
             const resp = await fetch(this.resetUrlValue, {
                 method:  'POST',
                 headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken() },
-                body:    JSON.stringify({ ids_a: idsA, ids_b: idsB }),
+                body:    JSON.stringify({ ids_a: idsA, ids_b: idsB, trans_a_id: this.transAIdValue, trans_b_id: this.transBIdValue }),
             })
             const data = await resp.json()
             if (!data.success) throw new Error(data.error || 'Reset failed')

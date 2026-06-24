@@ -98,9 +98,18 @@ class TranslationLinkingController extends AbstractController
         $data    = json_decode($request->getContent(), true);
         $wordAId = (int) ($data['word_a_id'] ?? 0);
         $wordBId = (int) ($data['word_b_id'] ?? 0);
+        $transAId = (int) ($data['trans_a_id'] ?? 0);
+        $transBId = (int) ($data['trans_b_id'] ?? 0);
         $method  = $data['method'] ?? 'manual';
 
         if ($wordAId <= 0 || $wordBId <= 0 || $wordAId === $wordBId) {
+            return $this->json(['success' => false, 'error' => 'Invalid word IDs'], 422);
+        }
+
+        if (!$transAId || !$transBId
+            || !$this->linkingRepo->translationWordsBelongToTranslation([$wordAId], $transAId)
+            || !$this->linkingRepo->translationWordsBelongToTranslation([$wordBId], $transBId)
+        ) {
             return $this->json(['success' => false, 'error' => 'Invalid word IDs'], 422);
         }
 
@@ -123,11 +132,20 @@ class TranslationLinkingController extends AbstractController
             return $this->json(['error' => 'Invalid request.'], 403);
         }
 
-        $data    = json_decode($request->getContent(), true);
-        $wordAId = (int) ($data['word_a_id'] ?? 0);
-        $wordBId = (int) ($data['word_b_id'] ?? 0);
+        $data     = json_decode($request->getContent(), true);
+        $wordAId  = (int) ($data['word_a_id']  ?? 0);
+        $wordBId  = (int) ($data['word_b_id']  ?? 0);
+        $transAId = (int) ($data['trans_a_id'] ?? 0);
+        $transBId = (int) ($data['trans_b_id'] ?? 0);
 
         if ($wordAId <= 0 || $wordBId <= 0) {
+            return $this->json(['success' => false, 'error' => 'Invalid IDs'], 422);
+        }
+
+        if (!$transAId || !$transBId
+            || !$this->linkingRepo->translationWordsBelongToTranslation([$wordAId], $transAId)
+            || !$this->linkingRepo->translationWordsBelongToTranslation([$wordBId], $transBId)
+        ) {
             return $this->json(['success' => false, 'error' => 'Invalid IDs'], 422);
         }
 
@@ -145,9 +163,22 @@ class TranslationLinkingController extends AbstractController
             return $this->json(['error' => 'Invalid request.'], 403);
         }
 
-        $data = json_decode($request->getContent(), true);
-        $idsA = array_map('intval', (array) ($data['ids_a'] ?? []));
-        $idsB = array_map('intval', (array) ($data['ids_b'] ?? []));
+        $data     = json_decode($request->getContent(), true);
+        $idsA     = array_values(array_filter(array_map('intval', (array) ($data['ids_a'] ?? [])), fn($id) => $id > 0));
+        $idsB     = array_values(array_filter(array_map('intval', (array) ($data['ids_b'] ?? [])), fn($id) => $id > 0));
+        $transAId = (int) ($data['trans_a_id'] ?? 0);
+        $transBId = (int) ($data['trans_b_id'] ?? 0);
+
+        if (!$idsA || !$idsB) {
+            return $this->json(['success' => false, 'error' => 'Invalid IDs'], 422);
+        }
+
+        if (!$transAId || !$transBId
+            || !$this->linkingRepo->translationWordsBelongToTranslation($idsA, $transAId)
+            || !$this->linkingRepo->translationWordsBelongToTranslation($idsB, $transBId)
+        ) {
+            return $this->json(['success' => false, 'error' => 'Invalid IDs'], 422);
+        }
 
         $deleted = $this->linkingRepo->resetVerseAutoLinks($idsA, $idsB);
 
