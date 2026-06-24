@@ -297,14 +297,13 @@ class LinkingRepository
         $testament = str_starts_with($strongs, 'H') ? 'OT' : 'NT';
         $table     = $testament === 'OT' ? 'hebrew_words' : 'greek_words';
         $offset    = ($page - 1) * $perPage;
+        $padded    = $this->padStrongsId($strongs);
 
-        $sql = <<<SQL
+        // Query 1: verse list with book metadata (1 query)
+        $verseSql = <<<SQL
             SELECT DISTINCT
-                sw.book_id,
-                sw.chapter,
-                sw.verse,
-                b.name_nl  AS book_name,
-                b.usfm_code
+                sw.book_id, sw.chapter, sw.verse,
+                b.name_nl AS book_name, b.usfm_code
             FROM {$table} sw
             JOIN books b ON b.id = sw.book_id
             WHERE regexp_replace(sw.strongs, '[A-Za-z]+$', '') = :strongs
@@ -312,33 +311,231 @@ class LinkingRepository
             LIMIT :limit OFFSET :offset
         SQL;
 
-        $verses = $this->connection->fetchAllAssociative($sql, [
-            'strongs' => $this->padStrongsId($strongs),
+        $verses = $this->connection->fetchAllAssociative($verseSql, [
+            'strongs' => $padded,
             'limit'   => $perPage,
             'offset'  => $offset,
         ]);
 
-        $result = [];
-        foreach ($verses as $v) {
-            $passage = $testament === 'OT'
-                ? $this->fetchHebrewForLinking($v['book_id'], $v['chapter'], $v['verse'], $translationId)
-                : $this->fetchGreekForLinking($v['book_id'], $v['chapter'], $v['verse'], $translationId);
+        if (empty($verses)) {
+            return [];
+        }
 
-            $dutch = $this->fetchDutchForLinking($v['book_id'], $v['chapter'], $v['verse'], $translationId);
+        // Query 2: all source words for the page in one CTE-based query
+        $sourceByVerse = $testament === 'OT'
+            ? $this->fetchHebrewBatch($table, $padded, $translationId, $perPage, $offset)
+            : $this->fetchGreekBatch($table, $padded, $translationId, $perPage, $offset);
 
-            $result[] = [
+        // Query 3: all Dutch words for the page in one CTE-based query
+        $dutchByVerse = $this->fetchDutchBatch($table, $padded, $translationId, $perPage, $offset);
+
+        return array_map(function ($v) use ($testament, $sourceByVerse, $dutchByVerse) {
+            $key = "{$v['book_id']}-{$v['chapter']}-{$v['verse']}";
+            return [
                 'book_id'      => $v['book_id'],
                 'chapter'      => $v['chapter'],
                 'verse'        => $v['verse'],
                 'book_name'    => $v['book_name'],
                 'usfm_code'    => $v['usfm_code'],
                 'testament'    => $testament,
-                'source_words' => $passage,
-                'dutch_words'  => $dutch,
+                'source_words' => $sourceByVerse[$key] ?? [],
+                'dutch_words'  => $dutchByVerse[$key]  ?? [],
             ];
+        }, $verses);
+    }
+
+    private function fetchHebrewBatch(string $table, string $padded, int $translationId, int $perPage, int $offset): array
+    {
+        $sql = <<<SQL
+            WITH verse_page AS (
+                SELECT DISTINCT book_id, chapter, verse
+                FROM {$table}
+                WHERE regexp_replace(strongs, '[A-Za-z]+$', '') = :strongs
+                ORDER BY book_id, chapter, verse
+                LIMIT :limit OFFSET :offset
+            )
+            SELECT
+                hw.id, hw.word_position, hw.word_text, hw.transliteration,
+                hw.book_id, hw.chapter, hw.verse,
+                regexp_replace(
+                    CASE WHEN hw.strongs ~ '^[HGhg]'
+                         THEN regexp_replace(hw.strongs, '[A-Za-z]+$', '')
+                         ELSE 'H' || regexp_replace(hw.strongs, '[A-Za-z]+$', '')
+                    END,
+                    '^([HG])0+(\d)', '\\1\\2'
+                ) AS strongs,
+                hw.morph_code,
+                COALESCE(
+                    json_agg(
+                        json_build_object(
+                            'link_id', wl.id,
+                            'tw_id',   tw.id,
+                            'method',  lc_best.method,
+                            'score',   lc_best.score
+                        ) ORDER BY tw.word_position
+                    ) FILTER (WHERE wl.id IS NOT NULL AND tv.id IS NOT NULL),
+                    '[]'
+                ) AS links,
+                CASE WHEN mel.id IS NOT NULL THEN 1 ELSE 0 END AS is_manually_empty
+            FROM verse_page vp
+            JOIN hebrew_words hw ON hw.book_id = vp.book_id AND hw.chapter = vp.chapter AND hw.verse = vp.verse
+            LEFT JOIN word_links wl         ON wl.hebrew_word_id = hw.id
+            LEFT JOIN translation_words tw  ON tw.id = wl.translation_word_id
+            LEFT JOIN translation_verses tv ON tv.id = tw.verse_id AND tv.translation_id = :translation_id
+            LEFT JOIN LATERAL (
+                SELECT method, score FROM link_confidence
+                WHERE link_id = wl.id
+                ORDER BY score DESC LIMIT 1
+            ) lc_best ON true
+            LEFT JOIN manual_empty_links mel ON mel.hebrew_word_id = hw.id AND mel.translation_id = :translation_id
+            GROUP BY hw.id, hw.book_id, hw.chapter, hw.verse, mel.id
+            ORDER BY hw.book_id, hw.chapter, hw.verse, hw.word_position
+        SQL;
+
+        $rows = $this->connection->fetchAllAssociative($sql, [
+            'strongs'        => $padded,
+            'limit'          => $perPage,
+            'offset'         => $offset,
+            'translation_id' => $translationId,
+        ]);
+
+        return $this->groupSourceRowsByVerse($rows);
+    }
+
+    private function fetchGreekBatch(string $table, string $padded, int $translationId, int $perPage, int $offset): array
+    {
+        $sql = <<<SQL
+            WITH verse_page AS (
+                SELECT DISTINCT book_id, chapter, verse
+                FROM {$table}
+                WHERE regexp_replace(strongs, '[A-Za-z]+$', '') = :strongs
+                ORDER BY book_id, chapter, verse
+                LIMIT :limit OFFSET :offset
+            )
+            SELECT
+                gw.id, gw.word_position, gw.word_text, gw.transliteration,
+                gw.book_id, gw.chapter, gw.verse,
+                regexp_replace(
+                    CASE WHEN gw.strongs ~ '^[HGhg]'
+                         THEN regexp_replace(gw.strongs, '[A-Za-z]+$', '')
+                         ELSE 'G' || regexp_replace(gw.strongs, '[A-Za-z]+$', '')
+                    END,
+                    '^([HG])0+(\d)', '\\1\\2'
+                ) AS strongs,
+                gw.parse_code,
+                COALESCE(
+                    json_agg(
+                        json_build_object(
+                            'link_id', wl.id,
+                            'tw_id',   tw.id,
+                            'method',  lc_best.method,
+                            'score',   lc_best.score
+                        ) ORDER BY tw.word_position
+                    ) FILTER (WHERE wl.id IS NOT NULL AND tv.id IS NOT NULL),
+                    '[]'
+                ) AS links,
+                CASE WHEN mel.id IS NOT NULL THEN 1 ELSE 0 END AS is_manually_empty
+            FROM verse_page vp
+            JOIN greek_words gw ON gw.book_id = vp.book_id AND gw.chapter = vp.chapter AND gw.verse = vp.verse
+            LEFT JOIN word_links wl         ON wl.greek_word_id = gw.id
+            LEFT JOIN translation_words tw  ON tw.id = wl.translation_word_id
+            LEFT JOIN translation_verses tv ON tv.id = tw.verse_id AND tv.translation_id = :translation_id
+            LEFT JOIN LATERAL (
+                SELECT method, score FROM link_confidence
+                WHERE link_id = wl.id
+                ORDER BY score DESC LIMIT 1
+            ) lc_best ON true
+            LEFT JOIN manual_empty_links mel ON mel.greek_word_id = gw.id AND mel.translation_id = :translation_id
+            GROUP BY gw.id, gw.book_id, gw.chapter, gw.verse, mel.id
+            ORDER BY gw.book_id, gw.chapter, gw.verse, gw.word_position
+        SQL;
+
+        $rows = $this->connection->fetchAllAssociative($sql, [
+            'strongs'        => $padded,
+            'limit'          => $perPage,
+            'offset'         => $offset,
+            'translation_id' => $translationId,
+        ]);
+
+        return $this->groupSourceRowsByVerse($rows);
+    }
+
+    private function fetchDutchBatch(string $table, string $padded, int $translationId, int $perPage, int $offset): array
+    {
+        $sql = <<<SQL
+            WITH verse_page AS (
+                SELECT DISTINCT book_id, chapter, verse
+                FROM {$table}
+                WHERE regexp_replace(strongs, '[A-Za-z]+$', '') = :strongs
+                ORDER BY book_id, chapter, verse
+                LIMIT :limit OFFSET :offset
+            )
+            SELECT
+                tw.id, tw.word_position, tw.word_text, tw.char_start, tw.char_end,
+                tw.is_filler::int AS is_filler,
+                tv.verse_text, tv.book_id, tv.chapter, tv.verse,
+                COALESCE(
+                    json_agg(
+                        json_build_object(
+                            'link_id',     wl.id,
+                            'source_lang', wl.source_language,
+                            'he_word_id',  wl.hebrew_word_id,
+                            'gk_word_id',  wl.greek_word_id,
+                            'method',      lc_best.method,
+                            'score',       lc_best.score
+                        )
+                    ) FILTER (WHERE wl.id IS NOT NULL),
+                    '[]'
+                ) AS links
+            FROM verse_page vp
+            JOIN translation_verses tv ON tv.book_id = vp.book_id AND tv.chapter = vp.chapter AND tv.verse = vp.verse
+                AND tv.translation_id = :translation_id
+            JOIN translation_words tw ON tw.verse_id = tv.id
+            LEFT JOIN word_links wl ON wl.translation_word_id = tw.id
+            LEFT JOIN LATERAL (
+                SELECT method, score FROM link_confidence
+                WHERE link_id = wl.id
+                ORDER BY score DESC LIMIT 1
+            ) lc_best ON true
+            GROUP BY tw.id, tv.verse_text, tv.book_id, tv.chapter, tv.verse
+            ORDER BY tv.book_id, tv.chapter, tv.verse, tw.word_position
+        SQL;
+
+        $rows = $this->connection->fetchAllAssociative($sql, [
+            'strongs'        => $padded,
+            'limit'          => $perPage,
+            'offset'         => $offset,
+            'translation_id' => $translationId,
+        ]);
+
+        $rows = array_map(fn($row) => array_merge($row, [
+            'links' => json_decode($row['links'], true),
+        ]), $rows);
+
+        // Group by verse, apply punctuation per group, then re-key
+        $grouped = [];
+        foreach ($rows as $row) {
+            $key = "{$row['book_id']}-{$row['chapter']}-{$row['verse']}";
+            $grouped[$key][] = $row;
         }
 
+        $result = [];
+        foreach ($grouped as $key => $verseRows) {
+            $result[$key] = self::addPunctuation($verseRows);
+        }
         return $result;
+    }
+
+    private function groupSourceRowsByVerse(array $rows): array
+    {
+        $grouped = [];
+        foreach ($rows as $row) {
+            $key = "{$row['book_id']}-{$row['chapter']}-{$row['verse']}";
+            $grouped[$key][] = array_merge($row, [
+                'links' => json_decode($row['links'], true),
+            ]);
+        }
+        return $grouped;
     }
 
     /**
