@@ -37,6 +37,13 @@
     </ul>
     {% endif %}
 
+    {% if strongs_entry.occurrence_count %}
+    <p class="strongs-occurrence">
+        {{ strongs_entry.occurrence_count }}×
+        in {{ strongs_entry.lang == 'HE' ? 'OT' : 'NT' }}
+    </p>
+    {% endif %}
+
     <div class="strongs-meta">
         {% if etymology_display %}
         <div class="strongs-meta-row">

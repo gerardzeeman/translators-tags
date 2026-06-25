@@ -25,19 +25,30 @@
     </nav>
 
     {# Kolomkoppen #}
-    <div class="chapter-grid-header">
+    <div class="chapter-grid-header {% if is_granted('ROLE_VIEWER_HSV') %}has-hsv{% endif %}">
         <div class="col-header col-header-source">
             {% if testament == 'OT' %}
                 <span class="col-label">Hebreeuws · BHS</span>
             {% else %}
                 <span class="col-label">Grieks · NA28</span>
             {% endif %}
+            {% if is_granted('ROLE_LINKER') %}
+            <div class="translation-indicator-toggle">
+                <span class="toggle-label">Indicatoren:</span>
+                {% for t in translations %}
+                <button class="trans-btn trans-btn-active"
+                        data-action="click->verse-compare#switchTranslation"
+                        data-translation="{{ t.code }}"
+                        type="button">{{ t.code }}</button>
+                {% endfor %}
+            </div>
+            {% endif %}
         </div>
         <div class="col-header col-header-sv">
             <span class="col-label">Statenvertaling SV</span>
         </div>
         {% if is_granted('ROLE_VIEWER_HSV') %}
-        <div class="col-header col-header-hsv" id="col-hsv">
+        <div class="col-header col-header-hsv">
             <span class="col-label">Herz. Statenv. HSV</span>
         </div>
         {% endif %}
@@ -45,13 +56,15 @@
 
     {# Vers-grid #}
     <div class="chapter-verse-grid {% if is_granted('ROLE_VIEWER_HSV') %}has-hsv{% endif %}"
-         data-controller="verse-compare">
+         data-controller="verse-compare"
+         data-active-translation="SV">
 
         {% for verse_num, verse in verses %}
-        <div class="verse-row" id="v{{ verse_num }}">
+        <div class="verse-row">
 
-            {# Bronkolom (Grieks / Hebreeuws) #}
-            <div class="verse-cell verse-cell-source {% if testament == 'OT' %}verse-cell-he{% endif %}">
+            {# Bronkolom (Grieks / Hebreeuws) — id hier voor ankernavigatie #}
+            <div class="verse-cell verse-cell-source {% if testament == 'OT' %}verse-cell-he{% endif %}"
+                 id="v{{ verse_num }}">
                 <span class="verse-number">{{ verse_num }}</span>
 
                 <div class="source-words {% if testament == 'OT' %}dir-rtl{% endif %}">

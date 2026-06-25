@@ -687,6 +687,290 @@ a:hover { text-decoration: underline; }
 .no-verse { color: var(--color-ink-muted); font-style: italic; }
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   Hoofdstuk-vergelijking view
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.page-chapter-view {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 1.5rem 1.5rem 4rem;
+    position: relative;
+}
+
+/* ── Hoofdstuk-navigatie ──────────────────────────────────────────────────── */
+.chapter-nav {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    font-size: 13px;
+    color: var(--col-label);
+    margin-bottom: 1.25rem;
+    font-family: var(--font-ui);
+    letter-spacing: .04em;
+}
+.chapter-nav-book {
+    color: var(--accent);
+    text-decoration: none;
+}
+.chapter-nav-book:hover { text-decoration: underline; }
+.chapter-nav-sep { color: var(--verse-num); }
+.chapter-nav-current { color: var(--text); font-weight: 400; }
+.chapter-nav-arrows { margin-left: auto; display: flex; gap: .4rem; }
+
+/* ── Kolomkoppenrij ──────────────────────────────────────────────────────── */
+.chapter-grid-header {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border: 1px solid var(--divider);
+    border-bottom: none;
+    border-radius: var(--radius) var(--radius) 0 0;
+    overflow: hidden;
+}
+.chapter-grid-header.has-hsv {
+    grid-template-columns: 1fr 1fr 1fr;
+}
+
+.col-header {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    padding: 9px 20px;
+    border-right: 1px solid var(--divider);
+}
+.col-header:last-child { border-right: none; }
+.col-header-source { background: var(--card-warm); }
+.col-header-sv,
+.col-header-hsv    { background: var(--bg); }
+
+.col-label {
+    font-size: 9px;
+    font-weight: 400;
+    letter-spacing: .26em;
+    text-transform: uppercase;
+    color: var(--col-label);
+    font-family: var(--font-ui);
+    white-space: nowrap;
+}
+
+/* ── Vers-grid ───────────────────────────────────────────────────────────── */
+.chapter-verse-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border: 1px solid var(--divider);
+    border-radius: 0 0 var(--radius) var(--radius);
+    overflow: hidden;
+}
+.chapter-verse-grid.has-hsv {
+    grid-template-columns: 1fr 1fr 1fr;
+}
+
+/* display:contents laat de cellen direct in het ouder-grid participeren.
+   Het id op de cel zelf zorgt voor correcte ankernavigatie (#v3 etc.). */
+.verse-row {
+    display: contents;
+}
+
+/* ── Vers-cellen ─────────────────────────────────────────────────────────── */
+.verse-cell {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--divider);
+    border-right: 1px solid var(--divider);
+    scroll-margin-top: calc(var(--nav-height) + 8px);
+    min-width: 0; /* voorkom overflow in grid */
+}
+
+/* Laatste kolom per rij: geen rechterrand.
+   Met display:contents tellen we cellen in volgorde: 2e of 3e is de laatste. */
+.chapter-verse-grid:not(.has-hsv) .verse-cell-sv,
+.chapter-verse-grid.has-hsv .verse-cell-hsv {
+    border-right: none;
+}
+
+/* Laatste rij: geen onderrand op de cellen */
+.verse-row:last-child .verse-cell {
+    border-bottom: none;
+}
+
+.verse-cell-source { background: var(--card-warm); }
+.verse-cell-source:hover { background: var(--hover-warm); }
+.verse-cell-sv,
+.verse-cell-hsv   { background: var(--bg); }
+
+/* Hebreeuwse bronkolom: RTL */
+.verse-cell-he {
+    direction: rtl;
+    unicode-bidi: isolate;
+}
+.verse-cell-he .source-words { direction: rtl; }
+.verse-cell-he .word-text {
+    font-family: var(--font-hebrew);
+    font-size: 17px;
+    line-height: 1.9;
+}
+
+/* ── Versnummer ──────────────────────────────────────────────────────────── */
+.verse-number {
+    display: block;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: .08em;
+    color: var(--verse-num);
+    font-family: var(--font-ui);
+    margin-bottom: 6px;
+    line-height: 1;
+}
+
+/* ── Bronwoorden in de hoofdstuk-view ────────────────────────────────────── */
+.verse-cell-source .source-words {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .6rem .8rem;
+}
+.verse-cell-source .source-word {
+    border-color: var(--divider);
+    background: transparent;
+}
+.verse-cell-source .source-word:hover {
+    border-color: var(--accent);
+    background: var(--hover-warm);
+}
+
+/* Grieks: GFS Didot, regelafstand 1.82 */
+.verse-cell-source:not(.verse-cell-he) .word-text {
+    font-family: var(--font-greek);
+    font-size: 15px;
+    line-height: 1.82;
+}
+
+/* ── Nederlandse verstekst in de hoofdstuk-view ──────────────────────────── */
+.verse-cell-sv .dutch-verse,
+.verse-cell-hsv .dutch-verse {
+    font-family: var(--font-ui);
+    font-size: 15px;
+    line-height: 1.82;
+}
+
+/* ── Strong's zijpaneel (desktop) / bottom sheet (mobiel) ───────────────── */
+.strongs-sidebar {
+    position: fixed;
+    top: var(--nav-height);
+    right: 0;
+    width: 264px;
+    height: calc(100vh - var(--nav-height));
+    background: var(--bg);
+    border-left: 1px solid var(--divider);
+    box-shadow: -4px 0 16px rgba(0, 0, 0, .08);
+    display: flex;
+    flex-direction: column;
+    z-index: 150;
+    overflow: hidden;
+}
+.strongs-sidebar[hidden] { display: none; }
+
+.strongs-sidebar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--divider);
+    background: var(--card-warm);
+    flex-shrink: 0;
+}
+.strongs-sidebar-title {
+    font-size: 9px;
+    font-weight: 400;
+    letter-spacing: .26em;
+    text-transform: uppercase;
+    color: var(--col-label);
+    font-family: var(--font-ui);
+}
+.strongs-sidebar-close {
+    background: none;
+    border: none;
+    font-size: 18px;
+    color: var(--verse-num);
+    cursor: pointer;
+    line-height: 1;
+    padding: 0 2px;
+    transition: color .15s;
+}
+.strongs-sidebar-close:hover { color: var(--text); }
+
+.strongs-sidebar turbo-frame {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: block;
+}
+
+/* Wanneer zijpaneel open is: grid smaller maken */
+.page-chapter-view.strongs-open .chapter-grid-header,
+.page-chapter-view.strongs-open .chapter-verse-grid {
+    margin-right: 264px;
+}
+
+/* ── Mobiel ──────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+    .page-chapter-view { padding: 1rem 0 4rem; }
+
+    .chapter-nav { padding: 0 1rem; }
+
+    /* Op mobiel stapelen we kolommen: bron boven, vertaling eronder */
+    .chapter-grid-header { display: none; } /* kolomlabels niet op mobiel */
+
+    .chapter-verse-grid,
+    .chapter-verse-grid.has-hsv {
+        grid-template-columns: 1fr;
+        border-radius: 0;
+        border-left: none;
+        border-right: none;
+    }
+
+    .verse-row { display: block; }
+
+    .verse-cell {
+        padding: 14px 16px;
+        border-right: none;
+    }
+
+    /* Broncel bovenlabel op mobiel */
+    .verse-cell-source::before {
+        content: attr(data-lang-label);
+        display: block;
+        font-size: 9px;
+        letter-spacing: .26em;
+        text-transform: uppercase;
+        color: var(--col-label);
+        margin-bottom: 6px;
+        font-family: var(--font-ui);
+    }
+
+    /* Strong's: bottom sheet op mobiel */
+    .strongs-sidebar {
+        top: auto;
+        bottom: 0;
+        right: 0;
+        left: 0;
+        width: 100%;
+        height: 52vh;
+        border-left: none;
+        border-top: 2px solid var(--accent);
+        border-radius: var(--radius) var(--radius) 0 0;
+        transform: translateY(100%);
+        transition: transform .3s ease;
+        box-shadow: 0 -4px 24px rgba(0, 0, 0, .18);
+    }
+    .strongs-sidebar:not([hidden]) {
+        transform: translateY(0);
+    }
+
+    .page-chapter-view.strongs-open .chapter-grid-header,
+    .page-chapter-view.strongs-open .chapter-verse-grid {
+        margin-right: 0;
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
    Koppel-UI
    ═══════════════════════════════════════════════════════════════════════════ */
 
