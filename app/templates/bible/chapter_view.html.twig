@@ -2,7 +2,8 @@
 {% block title %}{{ book.nameNl }} {{ chapter }} – Bijbel Vergelijking{% endblock %}
 
 {% block body %}
-<div class="page-chapter-view">
+<div class="page-chapter-view"
+     data-controller="strongs-panel">
 
     {# Hoofdstuk-navigatie #}
     <nav class="chapter-nav" aria-label="Hoofdstuk navigatie">
@@ -179,7 +180,8 @@
     </div>{# /chapter-verse-grid #}
 
     {# Strong's zijpaneel (desktop) / bottom sheet (mobiel) — vulling via Turbo #}
-    <aside class="strongs-sidebar" id="strongs-panel-wrapper" hidden>
+    <aside class="strongs-sidebar"
+           data-strongs-panel-target="sidebar">
         <div class="strongs-sidebar-header">
             <span class="strongs-sidebar-title">Lexicon</span>
             <button class="strongs-sidebar-close" type="button"

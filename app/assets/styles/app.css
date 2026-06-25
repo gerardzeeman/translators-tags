@@ -860,12 +860,12 @@ a:hover { text-decoration: underline; }
     background: var(--bg);
     border-left: 1px solid var(--divider);
     box-shadow: -4px 0 16px rgba(0, 0, 0, .08);
-    display: flex;
+    display: none;
     flex-direction: column;
     z-index: 150;
     overflow: hidden;
 }
-.strongs-sidebar[hidden] { display: none; }
+.strongs-sidebar.is-open { display: flex; }
 
 .strongs-sidebar-header {
     display: flex;
@@ -945,8 +945,9 @@ a:hover { text-decoration: underline; }
         font-family: var(--font-ui);
     }
 
-    /* Strong's: bottom sheet op mobiel */
+    /* Strong's: bottom sheet op mobiel — altijd in de render tree, animatie via transform */
     .strongs-sidebar {
+        display: flex;
         top: auto;
         bottom: 0;
         right: 0;
@@ -959,9 +960,11 @@ a:hover { text-decoration: underline; }
         transform: translateY(100%);
         transition: transform .3s ease;
         box-shadow: 0 -4px 24px rgba(0, 0, 0, .18);
+        pointer-events: none;
     }
-    .strongs-sidebar:not([hidden]) {
+    .strongs-sidebar.is-open {
         transform: translateY(0);
+        pointer-events: auto;
     }
 
     .page-chapter-view.strongs-open .chapter-grid-header,
