@@ -1,9 +1,77 @@
 {% extends 'base.html.twig' %}
 {% block title %}{{ book.nameNl }} {{ chapter }} – Bijbel Vergelijking{% endblock %}
 
+{# Boek/hoofdstuk-knop in de navbar #}
+{% block nav_center %}
+<div class="nav-sep"></div>
+<div data-controller="nav-panel">
+    <button class="nav-book-btn"
+            type="button"
+            data-action="click->nav-panel#open"
+            data-nav-panel-target="trigger"
+            data-usfm="{{ book.usfmCode }}"
+            data-chapter="{{ chapter }}">
+        {{ book.nameNl }} {{ chapter }} ▾
+    </button>
+
+    {# Navigatiepaneel — desktop: 340px slide-in; mobiel: fullscreen overlay #}
+    <div class="nav-panel" data-nav-panel-target="panel" aria-hidden="true">
+        <div class="nav-panel-inner">
+
+            {# Linkerkolom: scrollbare boekenlijst #}
+            <div class="nav-panel-books" data-nav-panel-target="bookList">
+                <div class="nav-panel-section">Oude Testament</div>
+                {% for b in ot_books %}
+                <button class="nav-panel-book-btn{% if b.usfmCode == book.usfmCode %} is-active{% endif %}"
+                        type="button"
+                        data-action="click->nav-panel#selectBook"
+                        data-usfm="{{ b.usfmCode }}"
+                        data-chapters="{{ b.chapterCount }}"
+                        data-name="{{ b.nameNl }}">
+                    <span class="nav-panel-book-name">{{ b.nameNl }}</span>
+                    <span class="nav-panel-book-count">{{ b.chapterCount }}</span>
+                </button>
+                {% endfor %}
+                <div class="nav-panel-section">Nieuwe Testament</div>
+                {% for b in nt_books %}
+                <button class="nav-panel-book-btn{% if b.usfmCode == book.usfmCode %} is-active{% endif %}"
+                        type="button"
+                        data-action="click->nav-panel#selectBook"
+                        data-usfm="{{ b.usfmCode }}"
+                        data-chapters="{{ b.chapterCount }}"
+                        data-name="{{ b.nameNl }}">
+                    <span class="nav-panel-book-name">{{ b.nameNl }}</span>
+                    <span class="nav-panel-book-count">{{ b.chapterCount }}</span>
+                </button>
+                {% endfor %}
+            </div>
+
+            {# Rechterkolom: hoofdstukraster (dynamisch gevuld door controller) #}
+            <div class="nav-panel-chapters" data-nav-panel-target="chapterGrid">
+                {# Toon direct de huidige staat zodat pagina zonder JS ook werkt #}
+                <div class="nav-panel-chapter-book">{{ book.nameNl }}</div>
+                <div class="nav-panel-chapter-grid">
+                    {% for i in 1..book.chapterCount %}
+                    <a href="{{ path('app_chapter_view', {usfm: book.usfmCode, chapter: i}) }}"
+                       class="nav-chapter-btn{% if i == chapter %} is-active{% endif %}">
+                        {{ i }}
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    {# Overlay — klik erop sluit het paneel #}
+    <div class="nav-overlay" data-nav-panel-target="overlay"
+         data-action="click->nav-panel#close"></div>
+</div>
+{% endblock %}
+
 {% block body %}
 <div class="page-chapter-view"
-     data-controller="strongs-panel">
+     data-controller="strongs-panel verse-compare">
 
     {# Hoofdstuk-navigatie #}
     <nav class="chapter-nav" aria-label="Hoofdstuk navigatie">
@@ -55,9 +123,39 @@
         {% endif %}
     </div>
 
+    {# Mobiele hoofdstukstrip — horizontaal scrollbaar, altijd zichtbaar op smal scherm #}
+    <nav class="mobile-chapter-strip" aria-label="Hoofdstukken">
+        {% for i in 1..book.chapterCount %}
+        <a href="{{ path('app_chapter_view', {usfm: book.usfmCode, chapter: i}) }}"
+           class="mobile-chapter-btn{% if i == chapter %} is-active{% endif %}"
+           {% if i == chapter %}aria-current="page"{% endif %}>{{ i }}</a>
+        {% endfor %}
+    </nav>
+
+    {# Scroll actief hoofdstuk in beeld bij laden #}
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        var active = document.querySelector('.mobile-chapter-btn.is-active');
+        if (active) active.scrollIntoView({ inline: 'center', block: 'nearest' });
+    });
+    </script>
+
+    {# Mobiele SV/HSV-toggle — alleen voor ROLE_VIEWER_HSV, alleen zichtbaar op smal scherm #}
+    {% if is_granted('ROLE_VIEWER_HSV') %}
+    <div class="mobile-trans-pill">
+        <button class="pill-btn trans-btn-active"
+                type="button"
+                data-action="click->verse-compare#switchTranslation"
+                data-translation="SV">SV</button>
+        <button class="pill-btn"
+                type="button"
+                data-action="click->verse-compare#switchTranslation"
+                data-translation="HSV">HSV</button>
+    </div>
+    {% endif %}
+
     {# Vers-grid #}
     <div class="chapter-verse-grid {% if is_granted('ROLE_VIEWER_HSV') %}has-hsv{% endif %}"
-         data-controller="verse-compare"
          data-active-translation="SV">
 
         {% for verse_num, verse in verses %}

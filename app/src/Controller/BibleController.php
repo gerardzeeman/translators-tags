@@ -167,6 +167,8 @@ class BibleController extends AbstractController
             'testament'    => $testament,
             'nav'          => $nav,
             'translations' => $allTranslations,
+            'ot_books'     => $this->bookRepository->findAllOldTestament(),
+            'nt_books'     => $this->bookRepository->findAllNewTestament(),
         ]);
     }
 
