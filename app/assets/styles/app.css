@@ -1156,11 +1156,12 @@ a:hover { text-decoration: underline; }
         border-color: var(--accent);
     }
 
-    /* Verberg HSV-kolom standaard op mobiel; toon alleen als actief */
-    .chapter-verse-grid[data-active-translation="SV"]  .verse-cell-hsv { display: none; }
-    .chapter-verse-grid[data-active-translation="HSV"] .verse-cell-sv  { display: none; }
+    /* Verberg HSV-kolom standaard op mobiel; toon alleen als actief.
+       .has-hsv-role garandeert dat deze regels alleen vuren voor ROLE_VIEWER_HSV-gebruikers. */
+    .chapter-verse-grid.has-hsv-role[data-active-translation="SV"]  .verse-cell-hsv { display: none; }
+    .chapter-verse-grid.has-hsv-role[data-active-translation="HSV"] .verse-cell-sv  { display: none; }
     /* Bronkolom altijd zichtbaar op mobiel */
-    .chapter-verse-grid[data-active-translation="HSV"] .verse-cell-source { display: block; }
+    .chapter-verse-grid.has-hsv-role[data-active-translation="HSV"] .verse-cell-source { display: block; }
 }
 
 /* ── Mobiel ──────────────────────────────────────────────────────────────── */

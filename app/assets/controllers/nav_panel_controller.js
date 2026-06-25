@@ -80,24 +80,31 @@ export default class extends Controller {
     #onKeyDown = null
 
     #renderChapterGrid(usfm, name, chapterCount) {
-        const grid = this.chapterGridTarget
-
-        // Lees huidig actief hoofdstuk uit de trigger-knop tekst (bijv. "Johannes 1 ▾")
-        // Gebruik data-attribuut als dat beschikbaar is
+        const grid           = this.chapterGridTarget
         const currentChapter = parseInt(this.triggerTarget.dataset.chapter ?? '0', 10)
         const isCurrentBook  = (usfm === this.triggerTarget.dataset.usfm)
 
-        const btnItems = Array.from({ length: chapterCount }, (_, i) => {
+        grid.replaceChildren()
+
+        const heading = document.createElement('div')
+        heading.className = 'nav-panel-chapter-book'
+        heading.textContent = name   // textContent is XSS-veilig
+        grid.appendChild(heading)
+
+        const chapterGrid = document.createElement('div')
+        chapterGrid.className = 'nav-panel-chapter-grid'
+
+        Array.from({ length: chapterCount }, (_, i) => {
             const n       = i + 1
             const isActive = isCurrentBook && n === currentChapter
-            return `<a href="/book/${usfm}/${n}"
-                       class="nav-chapter-btn${isActive ? ' is-active' : ''}"
-                       data-action="click->nav-panel#close">${n}</a>`
-        }).join('')
+            const a = document.createElement('a')
+            a.href      = `/book/${usfm}/${n}`   // usfm is alphanumeriek, n is integer
+            a.className = `nav-chapter-btn${isActive ? ' is-active' : ''}`
+            a.dataset.action = 'click->nav-panel#close'
+            a.textContent    = String(n)
+            chapterGrid.appendChild(a)
+        })
 
-        grid.innerHTML = `
-            <div class="nav-panel-chapter-book">${name}</div>
-            <div class="nav-panel-chapter-grid">${btnItems}</div>
-        `
+        grid.appendChild(chapterGrid)
     }
 }

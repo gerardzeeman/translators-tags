@@ -266,7 +266,7 @@ class BibleController extends AbstractController
         ];
         foreach ($allTranslations as $trans) {
             $code = $trans->getCode();
-            $passage['dutch_verse_' . strtolower($code)] = $allPassages[$code]['dutch_verse'];
+            $passage['dutch_verse_' . strtolower($code)] = $allPassages[$code]['dutch_verse'] ?? [];
         }
 
         // Navigation: reuse already-cached verse counts (getChapterVerseCounts is cached)

@@ -43,9 +43,9 @@ export default class extends Controller {
 
     // ── Turbo frame reload handler ────────────────────────────────────────────
 
-    #onFrameLoad = () => {
-        // After a frame navigation (next/prev verse), re-apply the active
-        // translation state so button highlights and indicator CSS are correct.
+    #onFrameLoad = (event) => {
+        // Alleen reageren op de verse-navigatieframe, niet op strongs-panel of andere frames.
+        if (event.target.id !== 'verse-frame') return
         this.#applyTranslationState(this.#activeTrans)
         this.#clickLocked = false
     }

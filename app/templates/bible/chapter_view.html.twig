@@ -124,21 +124,13 @@
     </div>
 
     {# Mobiele hoofdstukstrip — horizontaal scrollbaar, altijd zichtbaar op smal scherm #}
-    <nav class="mobile-chapter-strip" aria-label="Hoofdstukken">
+    <nav class="mobile-chapter-strip" aria-label="Hoofdstukken" data-controller="chapter-strip">
         {% for i in 1..book.chapterCount %}
         <a href="{{ path('app_chapter_view', {usfm: book.usfmCode, chapter: i}) }}"
            class="mobile-chapter-btn{% if i == chapter %} is-active{% endif %}"
            {% if i == chapter %}aria-current="page"{% endif %}>{{ i }}</a>
         {% endfor %}
     </nav>
-
-    {# Scroll actief hoofdstuk in beeld bij laden #}
-    <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        var active = document.querySelector('.mobile-chapter-btn.is-active');
-        if (active) active.scrollIntoView({ inline: 'center', block: 'nearest' });
-    });
-    </script>
 
     {# Mobiele SV/HSV-toggle — alleen voor ROLE_VIEWER_HSV, alleen zichtbaar op smal scherm #}
     {% if is_granted('ROLE_VIEWER_HSV') %}
@@ -155,7 +147,7 @@
     {% endif %}
 
     {# Vers-grid #}
-    <div class="chapter-verse-grid {% if is_granted('ROLE_VIEWER_HSV') %}has-hsv{% endif %}"
+    <div class="chapter-verse-grid {% if is_granted('ROLE_VIEWER_HSV') %}has-hsv has-hsv-role{% endif %}"
          data-active-translation="SV">
 
         {% for verse_num, verse in verses %}

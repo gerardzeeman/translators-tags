@@ -15,6 +15,7 @@ import StrongsSelectController from './controllers/strongs_select_controller.js'
 import NavPanelController      from './controllers/nav_panel_controller.js'
 import StrongsPanelController  from './controllers/strongs_panel_controller.js'
 import ThemeController         from './controllers/theme_controller.js'
+import ChapterStripController  from './controllers/chapter_strip_controller.js'
 
 app.register('verse-compare',   VerseCompareController)
 app.register('source-word',     SourceWordController)
@@ -25,3 +26,4 @@ app.register('strongs-select',  StrongsSelectController)
 app.register('nav-panel',       NavPanelController)
 app.register('strongs-panel',   StrongsPanelController)
 app.register('theme',           ThemeController)
+app.register('chapter-strip',   ChapterStripController)

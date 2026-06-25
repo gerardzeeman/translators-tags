@@ -8,9 +8,9 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Frank+Ruhl+Libre:wght@400;700&family=GFS+Didot&display=swap" rel="stylesheet">
-    {% block stylesheets %}
-        {{ encore_entry_link_tags('app') }}
-    {% endblock %}
+    {# Thema vóór stylesheet toepassen om FOUC te voorkomen #}
+    <script>var t=localStorage.getItem('theme');if(t)document.documentElement.dataset.theme=t;</script>
+    {% block stylesheets %}{% endblock %}
 </head>
 <body>
 
@@ -127,7 +127,6 @@
 
 {% block javascripts %}
     {% block importmap %}{{ importmap('app', {'data-turbo-permanent': 'data-turbo-permanent'}) }}{% endblock %}
-    {{ encore_entry_script_tags('app') }}
 {% endblock %}
 
 </body>
