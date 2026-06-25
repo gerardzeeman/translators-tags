@@ -12,7 +12,7 @@
     </p>
     <div class="chapter-grid">
         {% for row in chapter_counts %}
-        <a href="{{ path('app_chapter', {usfm: book.usfmCode, chapter: row.chapter}) }}"
+        <a href="{{ path('app_chapter_view', {usfm: book.usfmCode, chapter: row.chapter}) }}"
            class="chapter-card">
             <span class="chap-num">{{ row.chapter }}</span>
             <span class="chap-verses">{{ row.verse_count }} verzen</span>

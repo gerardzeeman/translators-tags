@@ -59,23 +59,114 @@ class BibleController extends AbstractController
     }
 
     /**
-     * Chapter view — list all verses.
+     * Chapter view — shows all verse-pairs for the chapter side by side.
+     * This is the primary reading endpoint; replaces the old verse-list page.
      */
-    #[Route('/book/{usfm}/{chapter<\d+>}', name: 'app_chapter')]
-    public function chapter(string $usfm, int $chapter): Response
+    #[Route('/book/{usfm}/{chapter<\d+>}', name: 'app_chapter_view')]
+    public function chapterView(string $usfm, int $chapter): Response
     {
         $book = $this->bookRepository->findByUsfmCode($usfm);
         if (!$book) {
             throw $this->createNotFoundException("Book '{$usfm}' not found.");
         }
 
-        $chapterData = $this->passageRepository->getChapterVerseCounts($book->getId());
-        $verseCount  = collect_verse_count($chapterData, $chapter);
+        $allTranslations = $this->translationRepository->findAllOrderedById();
 
-        return $this->render('bible/chapter.html.twig', [
-            'book'        => $book,
-            'chapter'     => $chapter,
-            'verse_count' => $verseCount,
+        $svTranslation       = null;
+        $translationIdToCode = [];
+        foreach ($allTranslations as $t) {
+            $translationIdToCode[$t->getId()] = $t->getCode();
+            if ($t->getCode() === 'SV') {
+                $svTranslation = $t;
+            }
+        }
+        $allTranslationIds = array_keys($translationIdToCode);
+
+        // All verse-pairs in the chapter in a small number of queries
+        $passagesByVerseTid = $this->passageRepository->fetchChapterPassages(
+            $book->getId(), $chapter, $allTranslationIds
+        );
+
+        // Determine testament from the first verse returned
+        $testament = 'NT';
+        foreach ($passagesByVerseTid as $vData) {
+            foreach ($vData as $tData) {
+                $testament = $tData['testament'];
+                break 2;
+            }
+        }
+
+        // Propagated links for the entire chapter in one query
+        $propagatedByVerse = [];
+        if ($svTranslation) {
+            $targetIds = array_values(array_filter(
+                $allTranslationIds,
+                fn($id) => $translationIdToCode[$id] !== 'SV'
+            ));
+            $propagatedByVerse = $this->passageRepository->fetchPropagatedLinksForChapterBatch(
+                $book->getId(), $chapter, $testament,
+                $svTranslation->getId(), $targetIds,
+            );
+        }
+
+        // Build per-verse data, enriched with morphology and per-translation links
+        $verses = [];
+        foreach ($passagesByVerseTid as $verseNum => $dataByTid) {
+            $svId    = $svTranslation?->getId();
+            $svData  = $dataByTid[$svId] ?? reset($dataByTid);
+            $sourceWords = $svData['source_words'];
+
+            foreach ($sourceWords as $i => &$word) {
+                if ($testament === 'NT' && !empty($word['parse_code'])) {
+                    $word['morph_description'] = $this->morphologyParser->describeGreek($word['parse_code']);
+                } elseif ($testament === 'OT' && !empty($word['morph_code'])) {
+                    $word['morph_description'] = $this->morphologyParser->describeHebrew($word['morph_code']);
+                } else {
+                    $word['morph_description'] = '';
+                }
+
+                foreach ($allTranslations as $trans) {
+                    $code = $trans->getCode();
+                    if ($code === 'SV') {
+                        $word['links_sv'] = $svData['source_words'][$i]['dutch_links'] ?? [];
+                    } else {
+                        $direct    = $dataByTid[$trans->getId()]['source_words'][$i]['dutch_links'] ?? [];
+                        $propagated = $propagatedByVerse[$verseNum][$trans->getId()][$word['id']] ?? [];
+                        $word['links_' . strtolower($code)] = !empty($direct) ? $direct : $propagated;
+                    }
+                }
+                unset($word['dutch_links']);
+            }
+            unset($word);
+
+            $verseData = [
+                'testament'    => $testament,
+                'source_words' => $sourceWords,
+            ];
+            foreach ($allTranslations as $trans) {
+                $code = $trans->getCode();
+                $verseData['dutch_verse_' . strtolower($code)] = $dataByTid[$trans->getId()]['dutch_verse'] ?? [];
+            }
+
+            $verses[$verseNum] = $verseData;
+        }
+
+        // Chapter navigation
+        $chapterCounts = $this->passageRepository->getChapterVerseCounts($book->getId());
+        $chapterCount  = count($chapterCounts);
+        $nav = [
+            'prev_chapter' => $chapter > 1 ? $chapter - 1 : null,
+            'next_chapter' => $chapter < $chapterCount ? $chapter + 1 : null,
+            'chapters'     => $chapterCounts,
+        ];
+
+        return $this->render('bible/chapter_view.html.twig', [
+            'book'         => $book,
+            'chapter'      => $chapter,
+            'verses'       => $verses,
+            'testament'    => $testament,
+            'nav'          => $nav,
+            'translations' => $allTranslations,
         ]);
     }
 
