@@ -882,14 +882,14 @@ a:hover { text-decoration: underline; }
 /* ── Kolomkoppenrij ──────────────────────────────────────────────────────── */
 .chapter-grid-header {
     display: grid;
-    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+    grid-template-columns: 1fr 1fr;
     border: 1px solid var(--divider);
     border-bottom: none;
     border-radius: var(--radius) var(--radius) 0 0;
     overflow: hidden;
 }
 .chapter-grid-header.has-hsv {
-    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) minmax(0, 3fr);
+    grid-template-columns: 1fr 1fr 1fr;
 }
 
 .col-header {
@@ -917,13 +917,13 @@ a:hover { text-decoration: underline; }
 /* ── Vers-grid ───────────────────────────────────────────────────────────── */
 .chapter-verse-grid {
     display: grid;
-    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+    grid-template-columns: 1fr 1fr;
     border: 1px solid var(--divider);
     border-radius: 0 0 var(--radius) var(--radius);
     overflow: hidden;
 }
 .chapter-verse-grid.has-hsv {
-    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) minmax(0, 3fr);
+    grid-template-columns: 1fr 1fr 1fr;
 }
 
 /* display:contents laat de cellen direct in het ouder-grid participeren.
