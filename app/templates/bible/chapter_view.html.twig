@@ -1,0 +1,286 @@
+{% extends 'base.html.twig' %}
+{% block title %}{{ book.nameNl }} {{ chapter }} – Bijbel Vergelijking{% endblock %}
+
+{# Boek/hoofdstuk-knop in de navbar #}
+{% block nav_center %}
+<div class="nav-sep"></div>
+<div data-controller="nav-panel">
+    <button class="nav-book-btn"
+            type="button"
+            data-action="click->nav-panel#open"
+            data-nav-panel-target="trigger"
+            data-usfm="{{ book.usfmCode }}"
+            data-chapter="{{ chapter }}">
+        {{ book.nameNl }} {{ chapter }} ▾
+    </button>
+
+    {# Navigatiepaneel — desktop: 340px slide-in; mobiel: fullscreen overlay #}
+    <div class="nav-panel" data-nav-panel-target="panel" aria-hidden="true">
+        <div class="nav-panel-inner">
+
+            {# Linkerkolom: scrollbare boekenlijst #}
+            <div class="nav-panel-books" data-nav-panel-target="bookList">
+                <div class="nav-panel-section">Oude Testament</div>
+                {% for b in ot_books %}
+                <button class="nav-panel-book-btn{% if b.usfmCode == book.usfmCode %} is-active{% endif %}"
+                        type="button"
+                        data-action="click->nav-panel#selectBook"
+                        data-usfm="{{ b.usfmCode }}"
+                        data-chapters="{{ b.chapterCount }}"
+                        data-name="{{ b.nameNl }}">
+                    <span class="nav-panel-book-name">{{ b.nameNl }}</span>
+                    <span class="nav-panel-book-count">{{ b.chapterCount }}</span>
+                </button>
+                {% endfor %}
+                <div class="nav-panel-section">Nieuwe Testament</div>
+                {% for b in nt_books %}
+                <button class="nav-panel-book-btn{% if b.usfmCode == book.usfmCode %} is-active{% endif %}"
+                        type="button"
+                        data-action="click->nav-panel#selectBook"
+                        data-usfm="{{ b.usfmCode }}"
+                        data-chapters="{{ b.chapterCount }}"
+                        data-name="{{ b.nameNl }}">
+                    <span class="nav-panel-book-name">{{ b.nameNl }}</span>
+                    <span class="nav-panel-book-count">{{ b.chapterCount }}</span>
+                </button>
+                {% endfor %}
+            </div>
+
+            {# Rechterkolom: hoofdstukraster (dynamisch gevuld door controller) #}
+            <div class="nav-panel-chapters" data-nav-panel-target="chapterGrid">
+                {# Toon direct de huidige staat zodat pagina zonder JS ook werkt #}
+                <div class="nav-panel-chapter-book">{{ book.nameNl }}</div>
+                <div class="nav-panel-chapter-grid">
+                    {% for i in 1..book.chapterCount %}
+                    <a href="{{ path('app_chapter_view', {usfm: book.usfmCode, chapter: i}) }}"
+                       class="nav-chapter-btn{% if i == chapter %} is-active{% endif %}">
+                        {{ i }}
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    {# Overlay — klik erop sluit het paneel #}
+    <div class="nav-overlay" data-nav-panel-target="overlay"
+         data-action="click->nav-panel#close"></div>
+</div>
+{% endblock %}
+
+{% block body %}
+<div class="page-chapter-view"
+     data-controller="strongs-panel verse-compare">
+
+    {# Hoofdstuk-navigatie #}
+    <nav class="chapter-nav" aria-label="Hoofdstuk navigatie">
+        <a href="{{ path('app_book', {usfm: book.usfmCode}) }}" class="chapter-nav-book">
+            {{ book.nameNl }}
+        </a>
+        <span class="chapter-nav-sep">›</span>
+        <span class="chapter-nav-current">Hoofdstuk {{ chapter }}</span>
+
+        <div class="chapter-nav-arrows">
+            {% if nav.prev_chapter %}
+            <a href="{{ path('app_chapter_view', {usfm: book.usfmCode, chapter: nav.prev_chapter}) }}"
+               class="nav-btn" title="Vorig hoofdstuk">‹</a>
+            {% endif %}
+            {% if nav.next_chapter %}
+            <a href="{{ path('app_chapter_view', {usfm: book.usfmCode, chapter: nav.next_chapter}) }}"
+               class="nav-btn" title="Volgend hoofdstuk">›</a>
+            {% endif %}
+        </div>
+    </nav>
+
+    {# Kolomkoppen #}
+    <div class="chapter-grid-header {% if is_granted('ROLE_VIEWER_HSV') %}has-hsv{% endif %}">
+        <div class="col-header col-header-source">
+            {% if testament == 'OT' %}
+                <span class="col-label">Hebreeuws · BHS</span>
+            {% else %}
+                <span class="col-label">Grieks · NA28</span>
+            {% endif %}
+            {% if is_granted('ROLE_LINKER') %}
+            <div class="translation-indicator-toggle">
+                <span class="toggle-label">Indicatoren:</span>
+                {% for t in translations %}
+                <button class="trans-btn trans-btn-active"
+                        data-action="click->verse-compare#switchTranslation"
+                        data-translation="{{ t.code }}"
+                        type="button">{{ t.code }}</button>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+        <div class="col-header col-header-sv">
+            <span class="col-label">Statenvertaling SV</span>
+        </div>
+        {% if is_granted('ROLE_VIEWER_HSV') %}
+        <div class="col-header col-header-hsv">
+            <span class="col-label">Herz. Statenv. HSV</span>
+        </div>
+        {% endif %}
+    </div>
+
+    {# Mobiele hoofdstukstrip — horizontaal scrollbaar, altijd zichtbaar op smal scherm #}
+    <nav class="mobile-chapter-strip" aria-label="Hoofdstukken" data-controller="chapter-strip">
+        {% for i in 1..book.chapterCount %}
+        <a href="{{ path('app_chapter_view', {usfm: book.usfmCode, chapter: i}) }}"
+           class="mobile-chapter-btn{% if i == chapter %} is-active{% endif %}"
+           {% if i == chapter %}aria-current="page"{% endif %}>{{ i }}</a>
+        {% endfor %}
+    </nav>
+
+    {# Mobiele SV/HSV-toggle — alleen voor ROLE_VIEWER_HSV, alleen zichtbaar op smal scherm #}
+    {% if is_granted('ROLE_VIEWER_HSV') %}
+    <div class="mobile-trans-pill">
+        <button class="pill-btn trans-btn-active"
+                type="button"
+                data-action="click->verse-compare#switchTranslation"
+                data-translation="SV">SV</button>
+        <button class="pill-btn"
+                type="button"
+                data-action="click->verse-compare#switchTranslation"
+                data-translation="HSV">HSV</button>
+    </div>
+    {% endif %}
+
+    {# Vers-grid #}
+    <div class="chapter-verse-grid {% if is_granted('ROLE_VIEWER_HSV') %}has-hsv has-hsv-role{% endif %}"
+         data-active-translation="SV">
+
+        {% for verse_num, verse in verses %}
+        <div class="verse-row">
+
+            {# Bronkolom (Grieks / Hebreeuws) — id hier voor ankernavigatie #}
+            <div class="verse-cell verse-cell-source {% if testament == 'OT' %}verse-cell-he{% endif %}"
+                 id="v{{ verse_num }}">
+                <span class="verse-number">{{ verse_num }}</span>
+
+                <div class="source-words {% if testament == 'OT' %}dir-rtl{% endif %}">
+                    {% for word in verse.source_words %}
+                    <div class="source-word"
+                         data-source-id="{{ word.id }}"
+                         data-lang="{{ testament == 'OT' ? 'HE' : 'GR' }}"
+                         data-strongs="{{ word.strongs }}"
+                         data-linked-sv-ids="{{ word.links_sv|map(l => l.tw_id)|join(',') }}"
+                         data-linked-hsv-ids="{{ word.links_hsv is defined ? word.links_hsv|map(l => l.tw_id)|join(',') : '' }}"
+                         data-controller="source-word">
+
+                        <span class="word-text">{{ word.word_text }}</span>
+
+                        {% if word.transliteration %}
+                        <span class="word-translit">{{ word.transliteration }}</span>
+                        {% endif %}
+
+                        {% if word.strongs %}
+                        <a href="{{ path('app_strongs', {number: word.strongs}) }}"
+                           class="word-strongs"
+                           data-turbo-frame="strongs-panel"
+                           tabindex="-1">{{ word.strongs }}</a>
+                        {% endif %}
+
+                        {% if word.morph_description %}
+                        <span class="word-morph" title="{{ word.morph_description }}">
+                            {{ testament == 'OT' ? word.morph_code : word.parse_code }}
+                        </span>
+                        {% endif %}
+
+                        {# Koppel-indicatoren — alleen voor ROLE_LINKER #}
+                        {% if is_granted('ROLE_LINKER') %}
+                        <div class="link-indicators sv-indicators">
+                            {% if word.links_sv|length > 0 %}
+                                {% for link in word.links_sv %}
+                                {% set score = link.score|default(0) %}
+                                <span class="link-dot method-{{ link.method }}"
+                                      title="{{ link.word_text }} ({{ link.method }}: {{ (score * 100)|round }}%)">
+                                    {{ link.word_text }}
+                                </span>
+                                {% endfor %}
+                            {% else %}
+                                <span class="no-link-badge" title="Geen koppeling SV">—</span>
+                            {% endif %}
+                        </div>
+                        {% if is_granted('ROLE_VIEWER_HSV') and word.links_hsv is defined %}
+                        <div class="link-indicators hsv-indicators">
+                            {% if word.links_hsv|length > 0 %}
+                                {% for link in word.links_hsv %}
+                                {% set score = link.score|default(0) %}
+                                {% set isPropagated = link.method in ['auto_source_pivot','auto_sequence','auto_positional'] %}
+                                <span class="link-dot method-{{ link.method }}{% if isPropagated %} link-dot-propagated{% endif %}"
+                                      title="{{ link.word_text }} ({{ link.method }}: {{ score is not null ? (score * 100)|round ~ '%' : '✓' }})">
+                                    {{ link.word_text }}
+                                </span>
+                                {% endfor %}
+                            {% else %}
+                                <span class="no-link-badge" title="Geen koppeling HSV">—</span>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                        {% endif %}{# ROLE_LINKER #}
+
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            {# SV-kolom #}
+            <div class="verse-cell verse-cell-sv">
+                <span class="verse-number">{{ verse_num }}</span>
+                <div class="dutch-verse">
+                    {% for word in verse.dutch_verse_sv %}
+                    <span class="dutch-word"
+                          data-tw-id="{{ word.word_id }}"
+                          data-method="{{ word.best_method ?? 'none' }}"
+                          data-score="{{ word.best_score ?? 0 }}"
+                          {% if is_granted('ROLE_LINKER') %}data-controller="dutch-word"{% endif %}>
+                        {{- word.word_text -}}
+                    </span>{{- word.punct_after ?? '' -}}{%- if not loop.last %} {% endif -%}
+                    {% else %}
+                    <em class="no-verse">Niet gevonden in de Statenvertaling.</em>
+                    {% endfor %}
+                </div>
+            </div>
+
+            {# HSV-kolom — alleen voor ROLE_VIEWER_HSV #}
+            {% if is_granted('ROLE_VIEWER_HSV') %}
+            <div class="verse-cell verse-cell-hsv">
+                <span class="verse-number">{{ verse_num }}</span>
+                <div class="dutch-verse">
+                    {% for word in verse.dutch_verse_hsv %}
+                    <span class="dutch-word{% if word.is_filler %} word-filler{% endif %}"
+                          data-tw-id="{{ word.word_id }}"
+                          data-method="{{ word.best_method ?? 'none' }}"
+                          data-score="{{ word.best_score ?? 0 }}"
+                          data-filler="{{ word.is_filler ? '1' : '0' }}"
+                          {% if is_granted('ROLE_LINKER') %}data-controller="dutch-word"{% endif %}>
+                        {{- word.word_text -}}
+                    </span>{{- word.punct_after ?? '' -}}{%- if not loop.last %} {% endif -%}
+                    {% else %}
+                    <em class="no-verse">Niet gevonden in de Herziene Statenvertaling.</em>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}{# ROLE_VIEWER_HSV #}
+
+        </div>{# /verse-row #}
+        {% endfor %}
+
+    </div>{# /chapter-verse-grid #}
+
+    {# Strong's zijpaneel (desktop) / bottom sheet (mobiel) — vulling via Turbo #}
+    <aside class="strongs-sidebar"
+           data-strongs-panel-target="sidebar">
+        <div class="strongs-sidebar-header">
+            <span class="strongs-sidebar-title">Lexicon</span>
+            <button class="strongs-sidebar-close" type="button"
+                    data-action="click->strongs-panel#close" aria-label="Sluiten">×</button>
+        </div>
+        <turbo-frame id="strongs-panel">
+            <p class="strongs-placeholder">Klik op een Strong's nummer om details te zien.</p>
+        </turbo-frame>
+    </aside>
+
+</div>{# /page-chapter-view #}
+{% endblock %}

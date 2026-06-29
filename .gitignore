@@ -23,3 +23,8 @@ Thumbs.db
 desktop.ini
 app/.env
 app/.env.dev
+
+# Lokale bestanden
+graphify-out/
+*.zip
+redesign_tmp/

@@ -715,13 +715,26 @@ class LinkingRepository
      */
     public function fetchStrongsEntry(string $strongs): ?array
     {
+        $normalId = $this->normalizeStrongsId($strongs);
+        $paddedId = $this->padStrongsId($normalId);
+
         $row = $this->connection->fetchAssociative(
-            "SELECT strongs_id, lang, lemma, transliteration, pronunciation,
-                    pos, morph, definition, etymology, kjv_renderings, short_def,
-                    definition_nl, etymology_nl, short_def_nl
-             FROM strongs_entries
-             WHERE strongs_id = :id",
-            ['id' => $this->normalizeStrongsId($strongs)]
+            "SELECT se.strongs_id, se.lang, se.lemma, se.transliteration, se.pronunciation,
+                    se.pos, se.morph, se.definition, se.etymology, se.kjv_renderings,
+                    se.short_def, se.definition_nl, se.etymology_nl, se.short_def_nl,
+                    CASE se.lang
+                        WHEN 'HE' THEN (
+                            SELECT COUNT(*) FROM hebrew_words
+                            WHERE regexp_replace(strongs, '[A-Za-z]+$', '') = :padded
+                        )
+                        ELSE (
+                            SELECT COUNT(*) FROM greek_words
+                            WHERE regexp_replace(strongs, '[A-Za-z]+$', '') = :padded
+                        )
+                    END AS occurrence_count
+             FROM strongs_entries se
+             WHERE se.strongs_id = :id",
+            ['id' => $normalId, 'padded' => $paddedId]
         );
 
         return $row ?: null;

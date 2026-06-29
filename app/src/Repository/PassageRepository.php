@@ -628,6 +628,328 @@ class PassageRepository
         return $result;
     }
 
+    /**
+     * Fetch all verse-pairs for an entire chapter across all given translations.
+     * Returns [verseNumber => [translationId => ['testament', 'source_words', 'dutch_verse']]].
+     *
+     * @param int[] $translationIds
+     */
+    public function fetchChapterPassages(int $bookId, int $chapter, array $translationIds): array
+    {
+        if (empty($translationIds)) {
+            return [];
+        }
+
+        $testament = $bookId <= 39 ? 'OT' : 'NT';
+
+        $sourceByVerseAndTrans = $testament === 'OT'
+            ? $this->fetchHebrewWordsForChapter($bookId, $chapter, $translationIds)
+            : $this->fetchGreekWordsForChapter($bookId, $chapter, $translationIds);
+
+        $dutchByVerseAndTrans = $this->fetchDutchVersesForChapter($bookId, $chapter, $translationIds);
+
+        $verseNumbers = array_unique(array_merge(
+            array_keys($sourceByVerseAndTrans),
+            array_keys($dutchByVerseAndTrans),
+        ));
+        sort($verseNumbers);
+
+        $result = [];
+        foreach ($verseNumbers as $verse) {
+            foreach ($translationIds as $tid) {
+                $result[$verse][$tid] = [
+                    'testament'    => $testament,
+                    'source_words' => $sourceByVerseAndTrans[$verse][$tid] ?? [],
+                    'dutch_verse'  => $dutchByVerseAndTrans[$verse][$tid]  ?? [],
+                ];
+            }
+        }
+        return $result;
+    }
+
+    private function fetchGreekWordsForChapter(int $bookId, int $chapter, array $translationIds): array
+    {
+        $baseRows = $this->connection->fetchAllAssociative(
+            'SELECT id, verse, word_position, word_text, transliteration, lemma, strongs, parse_code
+             FROM greek_words
+             WHERE book_id = :book_id AND chapter = :chapter
+             ORDER BY verse, word_position',
+            ['book_id' => $bookId, 'chapter' => $chapter],
+        );
+
+        if (empty($baseRows)) {
+            return [];
+        }
+
+        $linkSql = <<<SQL
+            SELECT DISTINCT ON (tv.translation_id, tv.verse, wl.greek_word_id, tw.id)
+                tv.verse,
+                wl.greek_word_id  AS source_word_id,
+                tv.translation_id,
+                tw.id AS tw_id, tw.word_text, tw.word_position,
+                lc.method, lc.score
+            FROM word_links wl
+            JOIN translation_words tw  ON tw.id = wl.translation_word_id
+            JOIN translation_verses tv ON tv.id = tw.verse_id
+            JOIN link_confidence lc    ON lc.link_id = wl.id
+            WHERE tv.translation_id IN (:translation_ids)
+              AND tv.book_id = :book_id
+              AND tv.chapter = :chapter
+            ORDER BY tv.translation_id, tv.verse, wl.greek_word_id, tw.id, lc.score DESC
+        SQL;
+
+        $linkRows = $this->connection->fetchAllAssociative($linkSql, [
+            'translation_ids' => $translationIds,
+            'book_id'         => $bookId,
+            'chapter'         => $chapter,
+        ], ['translation_ids' => ArrayParameterType::INTEGER]);
+
+        $linksByVerseTrans = [];
+        foreach ($linkRows as $row) {
+            $v   = (int) $row['verse'];
+            $tid = $row['translation_id'];
+            $sid = $row['source_word_id'];
+            $linksByVerseTrans[$v][$tid][$sid][] = [
+                'tw_id'     => $row['tw_id'],
+                'word_text' => $row['word_text'],
+                'word_pos'  => (int) $row['word_position'],
+                'method'    => $row['method'],
+                'score'     => $row['score'] !== null ? (float) $row['score'] : null,
+            ];
+        }
+
+        $baseByVerse = [];
+        foreach ($baseRows as $row) {
+            $baseByVerse[(int) $row['verse']][] = $row;
+        }
+
+        $result = [];
+        foreach ($baseByVerse as $verse => $rows) {
+            foreach ($translationIds as $tid) {
+                $words = [];
+                foreach ($rows as $row) {
+                    $links = $linksByVerseTrans[$verse][$tid][$row['id']] ?? [];
+                    usort($links, fn($a, $b) => $a['word_pos'] <=> $b['word_pos']);
+                    $words[] = array_merge($row, ['dutch_links' => $links]);
+                }
+                $result[$verse][$tid] = $words;
+            }
+        }
+        return $result;
+    }
+
+    private function fetchHebrewWordsForChapter(int $bookId, int $chapter, array $translationIds): array
+    {
+        $baseRows = $this->connection->fetchAllAssociative(
+            'SELECT id, verse, word_position, word_text, transliteration, lemma, strongs,
+                    morph_code, is_ketiv, has_qere
+             FROM hebrew_words
+             WHERE book_id = :book_id AND chapter = :chapter
+             ORDER BY verse, word_position',
+            ['book_id' => $bookId, 'chapter' => $chapter],
+        );
+
+        if (empty($baseRows)) {
+            return [];
+        }
+
+        $linkSql = <<<SQL
+            SELECT DISTINCT ON (tv.translation_id, tv.verse, wl.hebrew_word_id, tw.id)
+                tv.verse,
+                wl.hebrew_word_id AS source_word_id,
+                tv.translation_id,
+                tw.id AS tw_id, tw.word_text, tw.word_position,
+                lc.method, lc.score
+            FROM word_links wl
+            JOIN translation_words tw  ON tw.id = wl.translation_word_id
+            JOIN translation_verses tv ON tv.id = tw.verse_id
+            JOIN link_confidence lc    ON lc.link_id = wl.id
+            WHERE tv.translation_id IN (:translation_ids)
+              AND tv.book_id = :book_id
+              AND tv.chapter = :chapter
+            ORDER BY tv.translation_id, tv.verse, wl.hebrew_word_id, tw.id, lc.score DESC
+        SQL;
+
+        $linkRows = $this->connection->fetchAllAssociative($linkSql, [
+            'translation_ids' => $translationIds,
+            'book_id'         => $bookId,
+            'chapter'         => $chapter,
+        ], ['translation_ids' => ArrayParameterType::INTEGER]);
+
+        $linksByVerseTrans = [];
+        foreach ($linkRows as $row) {
+            $v   = (int) $row['verse'];
+            $tid = $row['translation_id'];
+            $sid = $row['source_word_id'];
+            $linksByVerseTrans[$v][$tid][$sid][] = [
+                'tw_id'     => $row['tw_id'],
+                'word_text' => $row['word_text'],
+                'word_pos'  => (int) $row['word_position'],
+                'method'    => $row['method'],
+                'score'     => $row['score'] !== null ? (float) $row['score'] : null,
+            ];
+        }
+
+        $baseByVerse = [];
+        foreach ($baseRows as $row) {
+            $baseByVerse[(int) $row['verse']][] = $row;
+        }
+
+        $result = [];
+        foreach ($baseByVerse as $verse => $rows) {
+            foreach ($translationIds as $tid) {
+                $words = [];
+                foreach ($rows as $row) {
+                    $links = $linksByVerseTrans[$verse][$tid][$row['id']] ?? [];
+                    usort($links, fn($a, $b) => $a['word_pos'] <=> $b['word_pos']);
+                    $words[] = array_merge($row, ['dutch_links' => $links]);
+                }
+                $result[$verse][$tid] = $words;
+            }
+        }
+        return $result;
+    }
+
+    private function fetchDutchVersesForChapter(int $bookId, int $chapter, array $translationIds): array
+    {
+        $sql = <<<SQL
+            SELECT
+                tv.translation_id,
+                tv.verse,
+                tv.id  AS verse_id,
+                tv.verse_text,
+                tw.id  AS word_id,
+                tw.word_position,
+                tw.word_text,
+                tw.char_start,
+                tw.char_end,
+                tw.is_filler::int AS is_filler,
+                COALESCE(wl_best.method, itl_best.method) AS best_method,
+                COALESCE(wl_best.score,  itl_best.score)  AS best_score
+            FROM translation_verses tv
+            JOIN translation_words tw ON tw.verse_id = tv.id
+            LEFT JOIN LATERAL (
+                SELECT lc2.method, lc2.score
+                FROM word_links wl2
+                JOIN link_confidence lc2 ON lc2.link_id = wl2.id
+                WHERE wl2.translation_word_id = tw.id
+                ORDER BY lc2.score DESC LIMIT 1
+            ) wl_best ON true
+            LEFT JOIN LATERAL (
+                SELECT itl.method, itl.confidence::float / 100.0 AS score
+                FROM inter_translation_links itl
+                WHERE (itl.word_a_id = tw.id OR itl.word_b_id = tw.id)
+                  AND itl.method != 'manual_empty'
+                ORDER BY CASE itl.method
+                    WHEN 'manual'            THEN 0
+                    WHEN 'auto_source_pivot' THEN 1
+                    WHEN 'auto_sequence'     THEN 2
+                    ELSE 3 END
+                LIMIT 1
+            ) itl_best ON true
+            WHERE tv.translation_id IN (:translation_ids)
+              AND tv.book_id = :book_id
+              AND tv.chapter = :chapter
+            ORDER BY tv.translation_id, tv.verse, tw.word_position
+        SQL;
+
+        $rows = $this->connection->fetchAllAssociative($sql, [
+            'translation_ids' => $translationIds,
+            'book_id'         => $bookId,
+            'chapter'         => $chapter,
+        ], ['translation_ids' => ArrayParameterType::INTEGER]);
+
+        $grouped = [];
+        foreach ($rows as $row) {
+            $tid   = $row['translation_id'];
+            $verse = (int) $row['verse'];
+            unset($row['translation_id'], $row['verse']);
+            $grouped[$verse][$tid][] = $row;
+        }
+
+        $result = [];
+        foreach ($grouped as $verse => $byTrans) {
+            foreach ($byTrans as $tid => $verseRows) {
+                $result[$verse][$tid] = self::addPunctuation($verseRows);
+            }
+        }
+        return $result;
+    }
+
+    /**
+     * Propagated links for an entire chapter across multiple target translations.
+     * Returns [verseNumber => [targetTranslationId => [sourceWordId => [links]]]].
+     *
+     * @param int[] $targetTranslationIds
+     */
+    public function fetchPropagatedLinksForChapterBatch(
+        int    $bookId,
+        int    $chapter,
+        string $testament,
+        int    $authorityTranslationId,
+        array  $targetTranslationIds,
+    ): array {
+        if (empty($targetTranslationIds)) {
+            return [];
+        }
+
+        $sourceIdCol = $testament === 'OT' ? 'hebrew_word_id' : 'greek_word_id';
+
+        $sql = <<<SQL
+            WITH authority_links AS (
+                SELECT wl.{$sourceIdCol} AS source_word_id,
+                       tw_auth.id        AS auth_tw_id,
+                       tv_auth.verse
+                FROM word_links wl
+                JOIN translation_words tw_auth  ON tw_auth.id = wl.translation_word_id
+                JOIN translation_verses tv_auth ON tv_auth.id = tw_auth.verse_id
+                WHERE tv_auth.translation_id = :authority_id
+                  AND tv_auth.book_id = :book_id
+                  AND tv_auth.chapter = :chapter
+            )
+            SELECT
+                al.verse,
+                al.source_word_id,
+                tv_t.translation_id,
+                tw_t.id AS tw_id, tw_t.word_text, tw_t.word_position,
+                itl.method AS itl_method, itl.confidence
+            FROM authority_links al
+            JOIN inter_translation_links itl
+                ON (itl.word_a_id = al.auth_tw_id OR itl.word_b_id = al.auth_tw_id)
+               AND itl.method != 'manual_empty'
+            JOIN translation_words tw_t
+                ON tw_t.id = CASE
+                    WHEN itl.word_a_id = al.auth_tw_id THEN itl.word_b_id
+                    ELSE itl.word_a_id
+                END
+            JOIN translation_verses tv_t ON tv_t.id = tw_t.verse_id
+                AND tv_t.translation_id IN (:target_ids)
+            ORDER BY al.verse, tv_t.translation_id, al.source_word_id, tw_t.word_position
+        SQL;
+
+        $rows = $this->connection->fetchAllAssociative($sql, [
+            'authority_id' => $authorityTranslationId,
+            'target_ids'   => $targetTranslationIds,
+            'book_id'      => $bookId,
+            'chapter'      => $chapter,
+        ], ['target_ids' => ArrayParameterType::INTEGER]);
+
+        $result = [];
+        foreach ($rows as $row) {
+            $verse = (int) $row['verse'];
+            $tid   = $row['translation_id'];
+            $srcId = $row['source_word_id'];
+            $result[$verse][$tid][$srcId][] = [
+                'tw_id'     => $row['tw_id'],
+                'word_text' => $row['word_text'],
+                'word_pos'  => (int) $row['word_position'],
+                'method'    => $row['itl_method'],
+                'score'     => $row['confidence'] !== null ? (float) $row['confidence'] / 100.0 : null,
+            ];
+        }
+        return $result;
+    }
+
     /** Returns verse counts per chapter for a book/testament combination. Cached indefinitely (book structure never changes). */
     public function getChapterVerseCounts(int $bookId): array
     {

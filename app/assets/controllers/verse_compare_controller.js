@@ -43,9 +43,9 @@ export default class extends Controller {
 
     // ── Turbo frame reload handler ────────────────────────────────────────────
 
-    #onFrameLoad = () => {
-        // After a frame navigation (next/prev verse), re-apply the active
-        // translation state so button highlights and indicator CSS are correct.
+    #onFrameLoad = (event) => {
+        // Alleen reageren op de verse-navigatieframe, niet op strongs-panel of andere frames.
+        if (event.target.id !== 'verse-frame') return
         this.#applyTranslationState(this.#activeTrans)
         this.#clickLocked = false
     }
@@ -53,7 +53,7 @@ export default class extends Controller {
     // ── Initial DOM sync ──────────────────────────────────────────────────────
 
     #syncStateFromDom() {
-        const grid = this.element.querySelector('.verse-compare-grid')
+        const grid = this.#grid()
         if (grid?.dataset.activeTranslation) {
             this.#activeTrans = grid.dataset.activeTranslation
         }
@@ -64,7 +64,7 @@ export default class extends Controller {
 
     #applyTranslationState(code) {
         // Set CSS attribute used to toggle sv-indicators / hsv-indicators visibility
-        const grid = this.element.querySelector('.verse-compare-grid')
+        const grid = this.#grid()
         if (grid) grid.dataset.activeTranslation = code
 
         // Sync switcher button active state
@@ -159,6 +159,10 @@ export default class extends Controller {
             const el = this.element.querySelector(`[data-tw-id="${id}"]`)
             if (el) el.classList.add(cssClass)
         })
+    }
+
+    #grid() {
+        return this.element.querySelector('.verse-compare-grid, .chapter-verse-grid')
     }
 
     #splitIds(idsStr) {

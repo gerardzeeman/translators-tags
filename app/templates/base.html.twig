@@ -1,37 +1,104 @@
 <!DOCTYPE html>
-<html lang="nl">
+<html lang="nl" data-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     {% block head %}{% endblock %}
     <title>{% block title %}Bijbel Vergelijking{% endblock %}</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    {% block stylesheets %}
-        {{ encore_entry_link_tags('app') }}
-    {% endblock %}
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Frank+Ruhl+Libre:wght@400;700&family=GFS+Didot&display=swap" rel="stylesheet">
+    {# Thema vóór stylesheet toepassen om FOUC te voorkomen #}
+    <script>var t=localStorage.getItem('theme');if(t)document.documentElement.dataset.theme=t;</script>
+    {% block stylesheets %}{% endblock %}
 </head>
 <body>
 
 <header class="site-header">
     <nav class="nav-inner">
+
+        {# Logo #}
         <a href="{{ path('app_home') }}" class="site-logo">
-            <span class="logo-he">בראשית</span>
-            <span class="logo-sep">·</span>
-            <span class="logo-title">(H)SV Translators Tags</span>
-            <span class="logo-sep">·</span>
-            <span class="logo-gk">Ἐν ἀρχῇ</span>
+            <svg viewBox="0 0 200 200" width="30" height="30" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <defs>
+                    <radialGradient id="bgGrad" cx="50%" cy="36%" r="68%">
+                        <stop offset="0%" stop-color="#301e10"/>
+                        <stop offset="100%" stop-color="#0c0805"/>
+                    </radialGradient>
+                    <radialGradient id="shineGrad" cx="50%" cy="20%" r="55%">
+                        <stop offset="0%" stop-color="rgba(106,58,26,0.35)"/>
+                        <stop offset="100%" stop-color="rgba(0,0,0,0)"/>
+                    </radialGradient>
+                    <linearGradient id="alefGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%" stop-color="#ecc07a"/>
+                        <stop offset="40%" stop-color="#ecc07a"/>
+                        <stop offset="85%" stop-color="#ecc07a" stop-opacity="0"/>
+                        <stop offset="100%" stop-color="#ecc07a" stop-opacity="0"/>
+                    </linearGradient>
+                    <linearGradient id="omegaGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%" stop-color="#c07238" stop-opacity="0"/>
+                        <stop offset="15%" stop-color="#c07238" stop-opacity="0"/>
+                        <stop offset="34%" stop-color="#c07238"/>
+                        <stop offset="100%" stop-color="#c07238"/>
+                    </linearGradient>
+                </defs>
+                <circle cx="100" cy="100" r="98" fill="url(#bgGrad)"/>
+                <circle cx="100" cy="100" r="98" fill="url(#shineGrad)"/>
+                <circle cx="100" cy="100" r="95" fill="none" stroke="#5e3018" stroke-width="1.4"/>
+                <circle cx="100" cy="100" r="90" fill="none" stroke="#2c1508" stroke-width="0.6"/>
+                <text x="100" y="100" text-anchor="middle" dominant-baseline="central"
+                      font-size="120" font-family="Frank Ruhl Libre, serif" fill="url(#alefGrad)">א</text>
+                <text x="100" y="100" text-anchor="middle" dominant-baseline="central"
+                      font-size="120" font-family="GFS Didot, serif" fill="url(#omegaGrad)">Ω</text>
+            </svg>
+            <span class="site-logo-name">Alef–Omega</span>
         </a>
-        <div class="nav-links">
-            <a href="{{ path('app_home') }}">Bijbelboeken</a>
-            <a href="{{ path('app_linking_home') }}">Koppelen</a>
-            <a href="{{ path('app_linking_strongs_home') }}">Koppelen Strong's</a>
-            {% if is_granted('ROLE_LINKER') %}
-            <a href="{{ path('app_trans_linking_home') }}">Vertalingen koppelen</a>
-            {% endif %}
-            {% if is_granted('ROLE_EDIT_STRONG_TRNL') %}
-            <a href="{{ path('app_strongs_translate_home') }}">Vertalen Strong's</a>
-            {% endif %}
+
+        <div class="nav-sep"></div>
+
+        {# Bijbel-dropdown #}
+        <div class="nav-dropdown">
+            <button class="nav-dropdown-btn" type="button">Bijbel ▾</button>
+            <div class="nav-dropdown-menu">
+                <a href="{{ path('app_home') }}">Bijbelboeken</a>
+            </div>
+        </div>
+
+        {# Editor-dropdown — alleen als gebruiker ten minste één editorrole heeft #}
+        {% if is_granted('ROLE_LINKER') or is_granted('ROLE_EDIT_STRONG_TRNL') %}
+        <div class="nav-sep"></div>
+        <div class="nav-dropdown">
+            <button class="nav-dropdown-btn" type="button">Editor ▾</button>
+            <div class="nav-dropdown-menu">
+                {% if is_granted('ROLE_LINKER') %}
+                <a href="{{ path('app_linking_home') }}">Koppelen</a>
+                <a href="{{ path('app_linking_strongs_home') }}">Strong's koppelen</a>
+                <a href="{{ path('app_trans_linking_home') }}">Vertalingen koppelen</a>
+                {% endif %}
+                {% if is_granted('ROLE_EDIT_STRONG_TRNL') %}
+                <a href="{{ path('app_strongs_translate_home') }}">Vertalen Strong's</a>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+        {# Boek/hoofdstuk-knop — ingevuld door child templates #}
+        {% block nav_center %}{% endblock %}
+
+        {# Rechter groep #}
+        <div class="nav-right">
+
+            {# Donker/licht toggle #}
+            <button class="nav-theme-btn"
+                    type="button"
+                    data-controller="theme"
+                    data-action="click->theme#toggle"
+                    aria-label="Thema wisselen">
+                <span data-theme-target="iconLight">☀</span>
+                <span data-theme-target="iconDark" style="display:none">🌙</span>
+            </button>
+
+            {# Gebruikermenu #}
             {% if app.user %}
             <div class="nav-user">
                 <button class="nav-user-btn" type="button">
@@ -42,7 +109,10 @@
                     <a href="{{ path('app_logout') }}" class="nav-logout">Uitloggen</a>
                 </div>
             </div>
+            {% else %}
+            <a href="{{ path('app_login') }}" class="nav-login-btn">Inloggen</a>
             {% endif %}
+
         </div>
     </nav>
 </header>
@@ -56,8 +126,7 @@
 </footer>
 
 {% block javascripts %}
-            {% block importmap %}{{ importmap('app', {'data-turbo-permanent': 'data-turbo-permanent'}) }}{% endblock %}
-    {{ encore_entry_script_tags('app') }}
+    {% block importmap %}{{ importmap('app', {'data-turbo-permanent': 'data-turbo-permanent'}) }}{% endblock %}
 {% endblock %}
 
 </body>
