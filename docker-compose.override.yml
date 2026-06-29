@@ -19,3 +19,7 @@ services:
   postgres:
     ports:
       - "5432:5432"
+
+  adminer:
+    ports:
+      - "8081:8080"
