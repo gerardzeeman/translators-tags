@@ -81,7 +81,7 @@ class SecurityHeadersSubscriber implements EventSubscriberInterface
                 "script-src 'self' " .
                     ($hash ? "{$hash} " : '') .
                     "; " .
-                "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " .
+                "style-src 'self' https://fonts.googleapis.com; " .
                 "font-src 'self' https://fonts.gstatic.com; " .
                 "img-src 'self' data:; " .
                 "connect-src 'self'; " .

@@ -60,7 +60,7 @@
     </div>
 
     {# Dutch words #}
-    <div class="dutch-words-flow" style="margin-top:.75rem;">
+    <div class="dutch-words-flow">
         {% for word in v.dutch_words %}
         {% set best_method = word.links|length > 0 ? word.links|first.method : 'none' %}
         <span class="nl-word method-underline-{{ best_method }}"
@@ -76,7 +76,7 @@
     {# Action bar per verse block #}
     <div class="action-bar action-bar-inline"
          data-word-linker-target="actionBar"
-         style="display:none; margin-top:.75rem;">
+         >
         <div class="action-bar-inner">
             <span class="action-label">
                 Geselecteerd: <strong data-word-linker-target="selectedLabel">–</strong>

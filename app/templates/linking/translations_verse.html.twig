@@ -49,10 +49,9 @@
             Klik een of meerdere woorden links, dan rechts, dan "Opslaan".
         </span>
         <button type="button"
-                class="btn btn-save-links"
+                class="btn btn-save-links is-hidden"
                 data-translation-linker-target="saveBtn"
-                data-action="click->translation-linker#saveLinks"
-                style="display:none">
+                data-action="click->translation-linker#saveLinks">
             ✓ Koppeling opslaan
         </button>
     </div>
@@ -165,10 +164,10 @@
         {% endif %}
 
         {# Data for JS: word ID lists for reset #}
-        <span style="display:none"
+        <span class="is-hidden"
               data-translation-linker-target="wordIdsA"
               data-ids="{{ words_a|map(w => w.id)|join(',') }}"></span>
-        <span style="display:none"
+        <span class="is-hidden"
               data-translation-linker-target="wordIdsB"
               data-ids="{{ words_b|map(w => w.id)|join(',') }}"></span>
     </div>
@@ -179,7 +178,7 @@
         <span class="legend-item"><span class="method-badge method-badge-auto_source_pivot">bron-pivot</span> Gedeeld bronwoord</span>
         <span class="legend-item"><span class="method-badge method-badge-auto_sequence">volgorde</span> Volgorde-uitlijning</span>
         <span class="legend-item"><span class="method-badge method-badge-auto_positional">positie</span> Positioneel</span>
-        <span class="legend-item word-filler" style="padding: .2rem .5rem">cursief*</span> Aanvullend woord (geen bronwoord)
+        <span class="legend-item word-filler">cursief*</span> Aanvullend woord (geen bronwoord)
     </div>
 
 </div>{# /trans-linking-screen #}

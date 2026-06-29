@@ -2,19 +2,18 @@
 {% block title %}Strong's koppelen – Bijbel Vergelijking{% endblock %}
 
 {% block body %}
-<div class="page-strongs-home" style="max-width:560px; margin:3rem auto; text-align:center;">
-    <h1 style="font-size:1.8rem; margin-bottom:.5rem;">Koppelen per Strong's</h1>
-    <p style="color:var(--color-ink-muted); margin-bottom:2rem; font-style:italic;">
+<div class="page-strongs-home">
+    <h1>Koppelen per Strong's</h1>
+    <p>
         Voer een Strong's nummer in om alle voorkomens te bekijken en te koppelen.
     </p>
 
-    <div style="background:#fff; border:1px solid var(--color-border); border-radius:8px; padding:2rem; box-shadow:var(--shadow);">
-        <div class="form-group" style="margin-bottom:1rem;">
-            <label style="display:block; font-size:.85rem; color:var(--color-ink-light); margin-bottom:.4rem; text-align:left;">
+    <div class="strongs-home-card">
+        <div class="form-group">
+            <label>
                 Vertaling
             </label>
-            <select id="strongs-translation"
-                    style="width:100%; padding:.55rem .8rem; border:1px solid var(--color-border); border-radius:4px; font-family:var(--font-serif); font-size:.95rem; background:#fdfaf5; color:var(--color-ink); margin-bottom:.75rem;">
+            <select id="strongs-translation">
                 {% for t in translations %}
                 {% if t.code == 'SV' or is_granted('ROLE_VIEWER_HSV') %}
                 <option value="{{ t.code }}">{{ t.name }}</option>
@@ -22,20 +21,18 @@
                 {% endfor %}
             </select>
         </div>
-        <div class="form-group" style="margin-bottom:1rem;">
-            <label style="display:block; font-size:.85rem; color:var(--color-ink-light); margin-bottom:.4rem; text-align:left;">
+        <div class="form-group">
+            <label>
                 Strong's nummer
             </label>
             <input type="text"
                    id="strongs-search"
-                   placeholder="bijv. H0430 of G2316"
-                   style="width:100%; padding:.65rem .9rem; border:1px solid var(--color-border); border-radius:4px; font-family:var(--font-serif); font-size:1.1rem; text-align:center;">
-            <p style="font-size:.75rem; color:var(--color-ink-muted); margin-top:.35rem;">
+                   placeholder="bijv. H0430 of G2316">
+            <p class="field-hint">
                 H = Hebreeuws (OT) &nbsp;·&nbsp; G = Grieks (NT)
             </p>
         </div>
-        <button id="strongs-btn" class="btn-primary"
-                style="width:100%; padding:.7rem; background:var(--color-accent); color:#fff; border:none; border-radius:4px; font-family:var(--font-serif); font-size:1rem; cursor:pointer;">
+        <button id="strongs-btn" class="btn-primary">
             Zoek woord →
         </button>
     </div>

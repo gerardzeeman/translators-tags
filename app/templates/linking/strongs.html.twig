@@ -53,8 +53,8 @@
             </div>
             <div class="progress-bar-track">
                 {# Layered bar: total linked (blue) underneath, manual (green) on top #}
-                <div id="progress-bar-linked" class="progress-bar-linked" style="width: {{ pct_linked }}%"></div>
-                <div id="progress-bar-manual" class="progress-bar-manual" style="width: {{ pct_manual }}%"></div>
+                <div id="progress-bar-linked" class="progress-bar-linked" data-bar-width="{{ pct_linked }}"></div>
+                <div id="progress-bar-manual" class="progress-bar-manual" data-bar-width="{{ pct_manual }}"></div>
             </div>
             <div id="progress-pct" class="progress-pct">{{ pct_manual }}% handmatig bevestigd</div>
         </div>
@@ -116,7 +116,7 @@
     {% endif %}
 
     {# ── Legend ───────────────────────────────────────────────────────────── #}
-    <div class="linking-legend" style="margin-bottom:1.5rem;">
+    <div class="linking-legend">
         <span><span class="dot method-manual"></span> Handmatig</span>
         <span><span class="dot method-manual-empty"></span> Handmatig leeg</span>
         <span><span class="dot method-manual_hint"></span> Hint</span>
