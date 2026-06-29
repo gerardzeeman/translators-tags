@@ -433,6 +433,7 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --remove-o
    | Secret | Waarde |
    |---|---|
    | `DROPLET_IP` | IP-adres van de droplet |
+   | `DROPLET_USER` | Gebruikersnaam op de droplet (bv. `deploy`, niet `root`) |
    | `SSH_PRIVATE_KEY` | Inhoud van `~/.ssh/translatorstags_deploy` (de **private** key) |
 
 4. Test de workflow: push een commit op `main` en kijk bij **Actions** of de deploy slaagt.

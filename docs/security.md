@@ -1,17 +1,20 @@
 # Security Audit
 
-> Datum: 2026-06-29 · Scope: volledige codebase · Auditor: Claude Sonnet 4.6
+> Datum: 2026-06-29 · Scope: volledige codebase · Auditor: Claude Sonnet 4.6  
+> Gefixte bevindingen: zie branch `feature/security-fixes`
 
 ## Samenvatting
 
-| Ernst    | Aantal |
-|----------|--------|
-| Kritiek  | 2      |
-| Hoog     | 4      |
-| Medium   | 5      |
-| Laag     | 4      |
-| Info     | 3      |
-| **Totaal** | **18** |
+| Ernst    | Gevonden | Open |
+|----------|----------|------|
+| Kritiek  | 2        | 0 ✅ |
+| Hoog     | 4        | 1 ⚠️ |
+| Medium   | 5        | 5    |
+| Laag     | 4        | 4    |
+| Info     | 3        | 3    |
+| **Totaal** | **18** | **13** |
+
+> ⚠️ Open hoog: **Registratie is open voor iedereen** — vereist een product-beslissing (e-mailverificatie vs. uitnodigingssysteem).
 
 ---
 
@@ -19,9 +22,10 @@
 
 ---
 
-### KRITIEK — SQL-injectie via `implode` in `translationWordsBelongToTranslation`
+### ✅ OPGELOST — KRITIEK — SQL-injectie via `implode` in `translationWordsBelongToTranslation`
 
-**Locatie:** `app/src/Repository/LinkingRepository.php:682`
+**Locatie:** `app/src/Repository/LinkingRepository.php:682`  
+**Fix:** Vervangen door `ArrayParameterType::INTEGER` (branch `feature/security-fixes`)
 
 **Beschrijving:**
 De methode `translationWordsBelongToTranslation()` bouwt een raw SQL-query via `implode` op een niet-gesanitiseerde array van integers:
@@ -58,9 +62,10 @@ $count = (int) $this->connection->fetchOne(
 
 ---
 
-### KRITIEK — Productiegereed secrets staan in `app/.env` (niet in `.gitignore`)
+### ✅ OPGELOST — KRITIEK — Productiegereed secrets staan in `app/.env` (niet in `.gitignore`)
 
-**Locatie:** `app/.env:1-7`
+**Locatie:** `app/.env:1-7`  
+**Fix:** `app/.env` opgeschoond tot pure template met placeholders (branch `feature/security-fixes`)
 
 **Beschrijving:**
 Het bestand `app/.env` bevat echte productie-secrets:
@@ -104,9 +109,10 @@ Implementeer e-mailverificatie (reeds voorzien in de codebase via `symfony/reset
 
 ---
 
-### HOOG — `innerHTML` met server-gegenereerde HTML in `word_linker_controller.js`
+### ✅ OPGELOST — HOOG — `innerHTML` met server-gegenereerde HTML in `word_linker_controller.js`
 
-**Locatie:** `app/assets/controllers/word_linker_controller.js:274`
+**Locatie:** `app/assets/controllers/word_linker_controller.js:274`  
+**Fix:** Vervangen door `DOMParser().parseFromString()` (branch `feature/security-fixes`)
 
 **Beschrijving:**
 De `#refreshVerseBlock()` methode haalt een HTML-fragment op via `fetch()` en plaatst dit via `innerHTML` in de DOM:
@@ -129,9 +135,10 @@ Gebruik `Turbo.renderStreamMessage()` of de Turbo Streams API om HTML-fragmenten
 
 ---
 
-### HOOG — GitHub Actions deployt als `root` via SSH
+### ✅ OPGELOST — HOOG — GitHub Actions deployt als `root` via SSH
 
-**Locatie:** `.github/workflows/deploy.yml:10`
+**Locatie:** `.github/workflows/deploy.yml:10`  
+**Fix:** `username` vervangen door `${{ secrets.DROPLET_USER }}`; action gepind op SHA (branch `feature/security-fixes`)
 
 **Beschrijving:**
 De deploy-workflow logt in als `root` op de productieserver:
@@ -151,9 +158,10 @@ Dit betekent dat elke compromittering van de GitHub Actions secrets (`SSH_PRIVAT
 
 ---
 
-### HOOG — Geen `X-Powered-By` / Server-header onderdrukking; FrankenPHP lekt versie-info
+### ✅ OPGELOST — HOOG — Geen `X-Powered-By` / Server-header onderdrukking; FrankenPHP lekt versie-info
 
-**Locatie:** `app/Caddyfile` · `app/Dockerfile`
+**Locatie:** `app/Caddyfile` · `app/Dockerfile`  
+**Fix:** `expose_php = Off` toegevoegd via `app/Dockerfile` (branch `feature/security-fixes`)
 
 **Beschrijving:**
 Caddy en FrankenPHP voegen standaard `Server: Caddy` en `X-Powered-By: PHP/8.x` headers toe. De `Caddyfile` en de `SecurityHeadersSubscriber` verwijderen deze niet. PHP's `expose_php = On` (standaard) zorgt voor versie-lekkage.

@@ -269,10 +269,9 @@ export default class extends Controller {
 
         const html = await resp.text()
 
-        // Parse the returned HTML fragment into a real element
-        const tmp = document.createElement('div')
-        tmp.innerHTML = html.trim()
-        const newBlock = tmp.firstElementChild
+        // Parse via DOMParser (safer than innerHTML, avoids script execution)
+        const doc = new DOMParser().parseFromString(html.trim(), 'text/html')
+        const newBlock = doc.body.firstElementChild
 
         // Swap: Stimulus will auto-disconnect the old controller and
         // auto-connect the new one via its MutationObserver.

@@ -9,10 +9,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1
+        uses: appleboy/ssh-action@4a03da89e5c43da56e502053be0e9d0a998b9a8a  # v1.0.0
         with:
           host: ${{ secrets.DROPLET_IP }}
-          username: root
+          username: ${{ secrets.DROPLET_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             set -e
