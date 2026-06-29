@@ -25,7 +25,7 @@
             </div>
             <div class="stat-bar">
                 {% set pct = row.total_words > 0 ? (row.linked_words / row.total_words * 100) : 0 %}
-                <div class="stat-bar-fill" style="width: {{ pct|round }}%"></div>
+                <div class="stat-bar-fill" data-bar-width="{{ pct|round }}"></div>
             </div>
             <div class="stat-methods">
                 <span class="badge badge-manual">Handmatig: {{ row.manual_links }}</span>

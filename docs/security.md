@@ -9,12 +9,10 @@
 |----------|----------|------|
 | Kritiek  | 2        | 0 ✅ |
 | Hoog     | 4        | 0 ✅ |
-| Medium   | 5        | 1 ⚠️ |
+| Medium   | 5        | 0 ✅ |
 | Laag     | 4        | 4    |
 | Info     | 3        | 3    |
-| **Totaal** | **18** | **8** |
-
-> ⚠️ Open medium: **CSP `unsafe-inline` style-src** — vereist CSS-refactor sprint (53 inline `style=""` attributen in bestaande templates).
+| **Totaal** | **18** | **7** |
 
 ---
 
@@ -249,25 +247,22 @@ Hoewel `docker-compose.yml` this environment variables injecteert en de werkelij
 
 ---
 
-### ⚠️ DEELS — MEDIUM — CSP heeft `'unsafe-inline'` voor `style-src`
+### ✅ OPGELOST — MEDIUM — CSP had `'unsafe-inline'` voor `style-src`
 
-**Locatie:** `app/src/EventSubscriber/SecurityHeadersSubscriber.php:64-65`
+**Locatie:** `app/src/EventSubscriber/SecurityHeadersSubscriber.php`
 
 **Beschrijving:**
-De Content Security Policy voor **productie** staat inline styles toe:
+De Content Security Policy voor **productie** stond inline styles toe via `'unsafe-inline'` in `style-src`. Dit is een bekende CSP-verzwakking die style-based clickjacking en UI redressing mogelijk maakt.
 
+**Oplossing (2026-06-29):**
+- Alle 53 inline `style=""` attributen verplaatst naar CSS-klassen in `app/assets/styles/app.css` (semantische BEM-achtige klassenamen: `.profile-card`, `.alert-error`, `.is-hidden`, etc.)
+- Dynamische widths (progress bars, stat-bar) omgezet naar `data-bar-width` attributen met JS-initialisatie via `app.js`
+- `'unsafe-inline'` verwijderd uit `style-src` in de prod CSP
+
+**Prod CSP style-src is nu:**
 ```
-style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+style-src 'self' https://fonts.googleapis.com;
 ```
-
-Dit is een bekende CSP-verzwakking. Inline style injection via XSS is mogelijk bij andere kwetsbaarheden.
-
-**Risico:** Gedeeltelijk vermindert de effectiviteit van de CSP bij een XSS-aanval (style-based clickjacking, UI redressing).
-
-**Gedaan:** `<style>` block uit `linking/home.html.twig` verplaatst naar `app.css`. De `<style>` block in `security/login.html.twig` blijft staan — die pagina laadt geen AssetMapper en bevat geen user-data (publieke pagina, beperkt risico). 53 inline `style=""` attributen in de overige templates vereisen een CSS-refactor sprint om `'unsafe-inline'` volledig te verwijderen.
-
-**Aanbeveling:**
-Verwijder `'unsafe-inline'` uit `style-src` en gebruik `nonce` of `hash`-gebaseerde CSP voor de paar inline stijlen die nodig zijn. Alternatiefelijk: verplaats alle inline stijlen naar externe stylesheets.
 
 ---
 

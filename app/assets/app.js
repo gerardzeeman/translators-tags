@@ -1,6 +1,12 @@
 import './stimulus_bootstrap.js';
 import './styles/app.css'
 
+document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-bar-width]').forEach(el => {
+        el.style.width = el.dataset.barWidth + '%'
+    })
+})
+
 import { Application } from '@hotwired/stimulus'
 import { startStimulusApp } from '@symfony/stimulus-bundle'
 
