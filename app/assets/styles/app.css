@@ -882,14 +882,14 @@ a:hover { text-decoration: underline; }
 /* ── Kolomkoppenrij ──────────────────────────────────────────────────────── */
 .chapter-grid-header {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
     border: 1px solid var(--divider);
     border-bottom: none;
     border-radius: var(--radius) var(--radius) 0 0;
     overflow: hidden;
 }
 .chapter-grid-header.has-hsv {
-    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) minmax(0, 3fr);
 }
 
 .col-header {
@@ -917,13 +917,13 @@ a:hover { text-decoration: underline; }
 /* ── Vers-grid ───────────────────────────────────────────────────────────── */
 .chapter-verse-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
     border: 1px solid var(--divider);
     border-radius: 0 0 var(--radius) var(--radius);
     overflow: hidden;
 }
 .chapter-verse-grid.has-hsv {
-    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) minmax(0, 3fr);
 }
 
 /* display:contents laat de cellen direct in het ouder-grid participeren.
@@ -958,6 +958,11 @@ a:hover { text-decoration: underline; }
 .verse-cell-sv,
 .verse-cell-hsv   { background: var(--bg); }
 
+/* Broncel: compacter dan vertaalcellen */
+.verse-cell-source {
+    padding: 10px 14px;
+}
+
 /* Hebreeuwse bronkolom: RTL */
 .verse-cell-he {
     direction: rtl;
@@ -966,8 +971,8 @@ a:hover { text-decoration: underline; }
 .verse-cell-he .source-words { direction: rtl; }
 .verse-cell-he .word-text {
     font-family: var(--font-hebrew);
-    font-size: 17px;
-    line-height: 1.9;
+    font-size: 15px;
+    line-height: 1.75;
 }
 
 /* ── Versnummer ──────────────────────────────────────────────────────────── */
@@ -986,7 +991,7 @@ a:hover { text-decoration: underline; }
 .verse-cell-source .source-words {
     display: flex;
     flex-wrap: wrap;
-    gap: .6rem .8rem;
+    gap: .35rem .5rem;
 }
 .verse-cell-source .source-word {
     border-color: var(--divider);
@@ -997,11 +1002,11 @@ a:hover { text-decoration: underline; }
     background: var(--hover-warm);
 }
 
-/* Grieks: GFS Didot, regelafstand 1.82 */
+/* Grieks: GFS Didot */
 .verse-cell-source:not(.verse-cell-he) .word-text {
     font-family: var(--font-greek);
-    font-size: 15px;
-    line-height: 1.82;
+    font-size: 13px;
+    line-height: 1.7;
 }
 
 /* ── Nederlandse verstekst in de hoofdstuk-view ──────────────────────────── */
