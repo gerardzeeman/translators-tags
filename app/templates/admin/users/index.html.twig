@@ -1,0 +1,61 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Gebruikersbeheer – Bijbel Vergelijking{% endblock %}
+
+{% block body %}
+<div class="container" style="max-width:900px;margin:2rem auto;padding:0 1rem">
+
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:1.5rem">
+        <h1 style="font-size:1.6rem;font-weight:500">Gebruikersbeheer</h1>
+        <a href="{{ path('admin_users_new') }}" class="btn btn-primary">+ Nieuwe gebruiker</a>
+    </div>
+
+    {% for label, messages in app.flashes %}
+        {% for message in messages %}
+        <div class="alert alert-{{ label }}" style="margin-bottom:1rem">{{ message }}</div>
+        {% endfor %}
+    {% endfor %}
+
+    <table style="width:100%;border-collapse:collapse;font-size:.95rem">
+        <thead>
+            <tr style="border-bottom:2px solid var(--color-border)">
+                <th style="text-align:left;padding:.5rem .75rem">Naam</th>
+                <th style="text-align:left;padding:.5rem .75rem">E-mail</th>
+                <th style="text-align:left;padding:.5rem .75rem">Rollen</th>
+                <th style="text-align:left;padding:.5rem .75rem">Aangemaakt</th>
+                <th style="text-align:left;padding:.5rem .75rem">Laatste login</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for user in users %}
+            <tr style="border-bottom:1px solid var(--color-border)">
+                <td style="padding:.5rem .75rem">{{ user.displayName }}</td>
+                <td style="padding:.5rem .75rem">{{ user.email }}</td>
+                <td style="padding:.5rem .75rem">
+                    {% for role in user.roles %}
+                        {% if role != 'ROLE_USER' %}
+                        <span style="display:inline-block;padding:.1rem .4rem;background:var(--color-accent-muted,#eee);border-radius:3px;font-size:.8rem;margin:.1rem">{{ role|replace({'ROLE_': ''}) }}</span>
+                        {% endif %}
+                    {% endfor %}
+                </td>
+                <td style="padding:.5rem .75rem">{{ user.createdAt|date('d-m-Y') }}</td>
+                <td style="padding:.5rem .75rem">{{ user.lastLoginAt ? user.lastLoginAt|date('d-m-Y H:i') : '–' }}</td>
+                <td style="padding:.5rem .75rem;white-space:nowrap">
+                    <a href="{{ path('admin_users_edit', {id: user.id}) }}">Bewerken</a>
+                    {% if user != app.user %}
+                    <form method="post" action="{{ path('admin_users_delete', {id: user.id}) }}" style="display:inline" onsubmit="return confirm('Gebruiker {{ user.email|e('js') }} verwijderen?')">
+                        <input type="hidden" name="_csrf_token" value="{{ csrf_token('admin_user_delete_' ~ user.id) }}">
+                        <button type="submit" style="background:none;border:none;color:var(--color-error,#922);cursor:pointer;padding:0;margin-left:.75rem">Verwijderen</button>
+                    </form>
+                    {% endif %}
+                </td>
+            </tr>
+        {% else %}
+            <tr><td colspan="6" style="padding:1rem .75rem;color:var(--color-muted)">Geen gebruikers gevonden.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+</div>
+{% endblock %}

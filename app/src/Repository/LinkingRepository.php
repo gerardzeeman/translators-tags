@@ -646,12 +646,12 @@ class LinkingRepository
                     );
                 }
 
-                if ($linkIds) {
-                    $placeholders = implode(',', array_map(fn($id) => "({$id}, 'manual', 1.000, NOW())", $linkIds));
+                foreach ($linkIds as $linkId) {
                     $this->connection->executeStatement(
                         "INSERT INTO link_confidence (link_id, method, score, created_at)
-                         VALUES {$placeholders}
-                         ON CONFLICT (link_id, method) DO UPDATE SET score = 1.000, created_at = NOW()"
+                         VALUES (:link_id, 'manual', 1.000, NOW())
+                         ON CONFLICT (link_id, method) DO UPDATE SET score = 1.000, created_at = NOW()",
+                        ['link_id' => (int) $linkId]
                     );
                 }
             });
@@ -678,14 +678,14 @@ class LinkingRepository
         if (empty($twIds)) {
             return true;
         }
-        $list  = implode(',', array_map('intval', $twIds));
         $count = (int) $this->connection->fetchOne(
             "SELECT COUNT(DISTINCT tw.id)
              FROM translation_words tw
              JOIN translation_verses tv ON tv.id = tw.verse_id
-             WHERE tw.id IN ({$list})
+             WHERE tw.id IN (:ids)
                AND tv.translation_id = :translation_id",
-            ['translation_id' => $translationId]
+            ['ids' => $twIds, 'translation_id' => $translationId],
+            ['ids' => ArrayParameterType::INTEGER]
         );
         return $count === count($twIds);
     }

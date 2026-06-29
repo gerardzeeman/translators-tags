@@ -159,6 +159,10 @@ class LinkingController extends AbstractController
             $twIds = [];
         }
 
+        if (count($twIds) > 100) {
+            return $this->json(['error' => 'Too many IDs.'], 400);
+        }
+
         // Verify all target words belong to the requested translation (IDOR guard)
         if (!empty($twIds) && !$this->linkingRepo->translationWordsBelongToTranslation($twIds, $translationId)) {
             return $this->json(['error' => 'Invalid parameters.'], 400);

@@ -13,6 +13,9 @@ RUN install-php-extensions \
     apcu \
     mbstring
 
+# Suppress PHP version header
+RUN echo "expose_php = Off" > /usr/local/etc/php/conf.d/security.ini
+
 # Install Composer
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 

@@ -1,0 +1,51 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Nieuwe gebruiker – Bijbel Vergelijking{% endblock %}
+
+{% block body %}
+<div class="container" style="max-width:520px;margin:2rem auto;padding:0 1rem">
+
+    <h1 style="font-size:1.6rem;font-weight:500;margin-bottom:1.5rem">Nieuwe gebruiker aanmaken</h1>
+
+    {% if error %}
+    <div class="alert alert-error" style="margin-bottom:1rem">{{ error }}</div>
+    {% endif %}
+
+    <form method="post">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token('admin_user_new') }}">
+
+        <div class="form-group" style="margin-bottom:1rem">
+            <label for="display_name">Naam</label>
+            <input type="text" id="display_name" name="display_name" required minlength="2" class="form-control">
+        </div>
+
+        <div class="form-group" style="margin-bottom:1rem">
+            <label for="email">E-mailadres</label>
+            <input type="email" id="email" name="email" required class="form-control">
+        </div>
+
+        <div class="form-group" style="margin-bottom:1rem">
+            <label for="password">Tijdelijk wachtwoord <small style="color:var(--color-muted)">(minimaal 8 tekens)</small></label>
+            <input type="password" id="password" name="password" required minlength="8" autocomplete="new-password" class="form-control">
+        </div>
+
+        <div class="form-group" style="margin-bottom:1.5rem">
+            <label>Rollen</label>
+            {% for value, label in assignable_roles %}
+            <div style="margin-top:.4rem">
+                <label style="display:flex;align-items:center;gap:.5rem;font-weight:normal">
+                    <input type="checkbox" name="roles[]" value="{{ value }}">
+                    {{ label }} <small style="color:var(--color-muted)">({{ value }})</small>
+                </label>
+            </div>
+            {% endfor %}
+        </div>
+
+        <div style="display:flex;gap:1rem">
+            <button type="submit" class="btn btn-primary">Aanmaken</button>
+            <a href="{{ path('admin_users_index') }}" class="btn btn-secondary">Annuleren</a>
+        </div>
+    </form>
+
+</div>
+{% endblock %}
