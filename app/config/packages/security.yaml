@@ -35,6 +35,8 @@ security:
                 lifetime: 604800   # 7 days
                 path: /
                 samesite: strict
+                httponly: true
+                secure: true
 
     role_hierarchy:
         ROLE_VIEWER:            [ROLE_USER]

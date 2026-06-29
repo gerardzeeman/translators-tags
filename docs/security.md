@@ -9,10 +9,12 @@
 |----------|----------|------|
 | Kritiek  | 2        | 0 ✅ |
 | Hoog     | 4        | 0 ✅ |
-| Medium   | 5        | 5    |
+| Medium   | 5        | 1 ⚠️ |
 | Laag     | 4        | 4    |
 | Info     | 3        | 3    |
-| **Totaal** | **18** | **12** |
+| **Totaal** | **18** | **8** |
+
+> ⚠️ Open medium: **CSP `unsafe-inline` style-src** — vereist CSS-refactor sprint (53 inline `style=""` attributen in bestaande templates).
 
 ---
 
@@ -180,9 +182,10 @@ expose_php = Off
 
 ---
 
-### MEDIUM — Onbeperkte grootte van `twIds` array leidt tot DoS-risico
+### ✅ OPGELOST — MEDIUM — Onbeperkte grootte van `twIds` array leidt tot DoS-risico
 
-**Locatie:** `app/src/Controller/LinkingController.php:145-165` · `app/src/Repository/LinkingRepository.php:682`
+**Locatie:** `app/src/Controller/LinkingController.php:145-165` · `app/src/Repository/LinkingRepository.php:682`  
+**Fix:** `count($twIds) > 100` guard toegevoegd in `LinkingController::save()` (branch `feature/security-fixes`)
 
 **Beschrijving:**
 De `save` API-endpoint accepteert een arbitrair grote `tw_ids` array vanuit de POST-body. Er is geen maximumlimiet op het aantal elementen. Dit resulteert in een `IN (:list)` clause in de database met potentieel duizenden of miljoenen integers, wat kan leiden tot:
@@ -202,9 +205,10 @@ if (count($twIds) > 100) {
 
 ---
 
-### MEDIUM — `remember_me` cookie heeft geen `httponly`-vlag expliciet ingesteld; sessie-fixatie mogelijk
+### ✅ OPGELOST — MEDIUM — `remember_me` cookie heeft geen `httponly`-vlag expliciet ingesteld; sessie-fixatie mogelijk
 
-**Locatie:** `app/config/packages/security.yaml:33-38` · `app/config/packages/framework.yaml:5-10`
+**Locatie:** `app/config/packages/security.yaml:33-38` · `app/config/packages/framework.yaml:5-10`  
+**Fix:** `httponly: true` en `secure: true` expliciet ingesteld in `security.yaml` (branch `feature/security-fixes`)
 
 **Beschrijving:**
 De `remember_me` cookie configuratie stelt `samesite: strict` in maar vermeldt geen expliciete `httponly: true`. Symfony's standaard stelt `httponly` in voor sessie-cookies, maar niet altijd voor `remember_me` cookies afhankelijk van de versie. De framework-sessieconfiguratie gebruikt `cookie_secure: auto` (goed) en `cookie_samesite: strict` (goed), maar `cookie_httponly` wordt niet expliciet ingesteld (standaard is `true` in Symfony, maar het is beter om dit expliciet te bevestigen).
@@ -223,9 +227,10 @@ remember_me:
 
 ---
 
-### MEDIUM — `APP_SECRET` in root `.env` is een placeholder (`changeme`)
+### ✅ OPGELOST — MEDIUM — `APP_SECRET` in root `.env` is een placeholder (`changeme`)
 
-**Locatie:** `.env:9`
+**Locatie:** `.env:9`  
+**Fix:** Startup-check in `SecurityHeadersSubscriber::onKernelRequest()` — gooit HTTP 500 als `APP_SECRET` een bekende placeholder heeft in prod (branch `feature/security-fixes`)
 
 **Beschrijving:**
 De root `.env` die wel in git staat bevat:
@@ -244,7 +249,7 @@ Hoewel `docker-compose.yml` this environment variables injecteert en de werkelij
 
 ---
 
-### MEDIUM — CSP heeft `'unsafe-inline'` voor `style-src`
+### ⚠️ DEELS — MEDIUM — CSP heeft `'unsafe-inline'` voor `style-src`
 
 **Locatie:** `app/src/EventSubscriber/SecurityHeadersSubscriber.php:64-65`
 
@@ -259,14 +264,17 @@ Dit is een bekende CSP-verzwakking. Inline style injection via XSS is mogelijk b
 
 **Risico:** Gedeeltelijk vermindert de effectiviteit van de CSP bij een XSS-aanval (style-based clickjacking, UI redressing).
 
+**Gedaan:** `<style>` block uit `linking/home.html.twig` verplaatst naar `app.css`. De `<style>` block in `security/login.html.twig` blijft staan — die pagina laadt geen AssetMapper en bevat geen user-data (publieke pagina, beperkt risico). 53 inline `style=""` attributen in de overige templates vereisen een CSS-refactor sprint om `'unsafe-inline'` volledig te verwijderen.
+
 **Aanbeveling:**
 Verwijder `'unsafe-inline'` uit `style-src` en gebruik `nonce` of `hash`-gebaseerde CSP voor de paar inline stijlen die nodig zijn. Alternatiefelijk: verplaats alle inline stijlen naar externe stylesheets.
 
 ---
 
-### MEDIUM — Geen `Content-Security-Policy` `upgrade-insecure-requests` in productie
+### ✅ OPGELOST — MEDIUM — Geen `Content-Security-Policy` `upgrade-insecure-requests` in productie
 
-**Locatie:** `app/src/EventSubscriber/SecurityHeadersSubscriber.php:58-69`
+**Locatie:** `app/src/EventSubscriber/SecurityHeadersSubscriber.php:58-69`  
+**Fix:** `upgrade-insecure-requests` toegevoegd aan prod CSP (branch `feature/security-fixes`)
 
 **Beschrijving:**
 De CSP bevat geen `upgrade-insecure-requests` directive. Externe font-links (Google Fonts) worden via HTTP aangeroepen als de browser geen TLS enforceert.
