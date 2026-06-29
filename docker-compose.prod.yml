@@ -1,0 +1,22 @@
+# Production overrides — gebruik: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# Sluit app aan op het gedeelde caddy_net zodat de centrale Caddy reverse proxy kan proxyen.
+# Adminer is alleen via SSH-tunnel bereikbaar.
+
+services:
+
+  app:
+    build:
+      target: prod
+    networks:
+      - bible_net
+      - caddy_net
+
+  adminer:
+    ports:
+      - "127.0.0.1:8081:8080"   # alleen via SSH-tunnel: ssh -L 8081:localhost:8081 root@<ip>
+
+networks:
+  bible_net:
+    driver: bridge
+  caddy_net:
+    external: true

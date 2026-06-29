@@ -46,19 +46,19 @@ Legenda: ✅ gereed · ⚠️ deels · ❌ nog te doen
 
 | Status | # | Punt | Bestand | Actie |
 |---|---|---|---|---|
-| ❌ | 1 | **Poort 5432 (PostgreSQL) publiek exposed** | `docker-compose.yml` r.22 | Verwijder `ports: - "5432:5432"` — alleen intern netwerk nodig in productie |
-| ❌ | 2 | **Adminer publiek exposed op :8081** | `docker-compose.yml` r.69-75 | Verwijder in productie, of bind aan `127.0.0.1:8081` (SSH-tunnel) |
+| ✅ | 1 | **Poort 5432 (PostgreSQL) publiek exposed** | `docker-compose.yml` | Verwijderd — alleen beschikbaar via `docker-compose.override.yml` in dev |
+| ✅ | 2 | **Adminer publiek exposed op :8081** | `docker-compose.yml` | Verwijderd uit basis-compose; prod bindt aan `127.0.0.1` via `docker-compose.prod.yml` |
 | ❌ | 3 | **Standaard wachtwoorden in `.env`** (`changeme`) | `.env` r.4,9 | Vervangen in `.env.local` op de server door sterke secrets (zie §4) |
 | ❌ | 4 | **`APP_SECRET` is niet uniek** | `.env` r.9 | Genereer: `openssl rand -hex 32` |
 | ⚠️ | 5 | **`REMEMBER_ME_SECRET` in docker-compose als fallback** | `docker-compose.yml` r.39 | Staat nu als `change_me_in_production_32chars`; stel in via `.env.local` |
 | ✅ | 6 | **Automatische database-backups** | `docker-compose.yml` r.77-97 | Geïmplementeerd via `backup`-service + `scripts/backup-to-spaces.sh` |
-| ❌ | 7 | **Poorten 80/443 conflict bij multi-app** | `docker-compose.yml` r.32-34 | Aanpak uit §3 volgen (centrale Caddy, ports verwijderen) |
+| ✅ | 7 | **Poorten 80/443 conflict bij multi-app** | `docker-compose.yml` | Verwijderd uit basis-compose; `docker-compose.prod.yml` voegt `caddy_net` toe |
 
 ### Hoog (sterk aanbevolen)
 
 | Status | # | Punt | Actie |
 |---|---|---|---|
-| ❌ | 8 | **Geen health-check op app-container** | Voeg `healthcheck` toe (zie §3.4) |
+| ✅ | 8 | **Geen health-check op app-container** | Toegevoegd in `docker-compose.yml` — curl op `/up` elke 30s |
 | ❌ | 9 | **Geen log-rotatie** | Stel Docker log driver in met `max-size` (zie §6) |
 | ❌ | 10 | **Offsite backup naar Spaces nog niet ingesteld** | `scripts/backup-to-spaces.sh` is klaar; cron en `.env.backup` moeten worden ingesteld op de droplet (zie `docs/backups.md`) |
 | ⚠️ | 11 | **Geen SMTP-configuratie** | App verstuurt momenteel geen e-mail; instellen zodra dit nodig is via `MAILER_DSN` |
@@ -69,7 +69,7 @@ Legenda: ✅ gereed · ⚠️ deels · ❌ nog te doen
 |---|---|---|---|
 | ❌ | 12 | **Geen rate limiting op login-endpoint** | Symfony RateLimiter of Caddy `rate_limit`-directive |
 | ⚠️ | 13 | **`APP_ENV` in container** | In `docker-compose.yml` staat `APP_ENV: prod` hardcoded (r.37) — correct. Controleer na deploy via `docker exec bible_app php bin/console about` |
-| ❌ | 14 | **Geen GitHub Actions deploy-workflow** | Handmatig deployen via SSH; automatiseer met een workflow (zie §5) |
+| ✅ | 14 | **Geen GitHub Actions deploy-workflow** | Aangemaakt in `.github/workflows/deploy.yml` — deploy bij push op `main` |
 
 ---
 
@@ -175,55 +175,21 @@ cp .env .env.local
 nano .env.local   # zie §4 voor de waarden
 ```
 
-Pas `docker-compose.yml` aan voor productie — de onderstaande wijzigingen zijn
-**niet** in de repo doorgevoerd (ze zijn server-specifiek en horen in `.env.local`
-of een lokale override):
-
-```yaml
-services:
-  postgres:
-    ports: []          # ← verwijder de publieke 5432-binding
-
-  app:
-    container_name: bible_app
-    ports: []          # ← geen directe 80/443 binding; Caddy proxiet
-    networks:
-      - bible_net
-      - caddy_net      # ← toevoegen zodat Caddy de container kan bereiken
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 40s
-
-  adminer:
-    ports:
-      - "127.0.0.1:8081:8080"   # alleen via SSH-tunnel bereikbaar
-
-networks:
-  bible_net:
-    driver: bridge
-  caddy_net:
-    external: true
-```
-
-> **Tip:** gebruik `docker-compose.override.yml` voor server-specifieke overrides
-> zodat de hoofd-`docker-compose.yml` ongewijzigd blijft en `git pull` nooit
-> conflicten geeft.
+De productie-overrides (caddy_net, adminer SSH-only) staan in `docker-compose.prod.yml` in de repo.
+Geen handmatige aanpassingen nodig op de server.
 
 Image bouwen en starten:
 
 ```bash
-docker compose build --pull --no-cache
-docker compose up -d
+docker compose -f docker-compose.yml -f docker-compose.prod.yml build --pull --no-cache
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
 
 Controleer:
 
 ```bash
-docker compose ps
-docker compose logs app --tail=50
+docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
+docker compose -f docker-compose.yml -f docker-compose.prod.yml logs app --tail=50
 docker exec bible_app php bin/console about   # bevestig APP_ENV=prod
 ```
 
@@ -298,10 +264,10 @@ cd /translatorstags
 git pull
 
 # Image herbouwen
-docker compose build --pull --no-cache
+docker compose -f docker-compose.yml -f docker-compose.prod.yml build --pull --no-cache
 
 # Herstarten (Compose start nieuwe container vóór stop)
-docker compose up -d --remove-orphans
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --remove-orphans
 
 # Cache vernieuwen
 docker exec bible_app php bin/console cache:clear
@@ -312,37 +278,16 @@ docker compose ps
 docker compose logs app --tail=20
 ```
 
-### Automatisch deployen via GitHub Actions (optioneel)
+### Automatisch deployen via GitHub Actions
 
-Maak `.github/workflows/deploy.yml` aan:
+De workflow staat al in `.github/workflows/deploy.yml` en deployt automatisch bij elke push op `main`.
 
-```yaml
-name: Deploy to production
+Voeg de volgende secrets toe in de GitHub repository (Settings → Secrets → Actions):
 
-on:
-  push:
-    branches: [main]
-
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.DROPLET_IP }}
-          username: root
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
-            cd /translatorstags
-            git pull
-            docker compose build --pull --no-cache
-            docker compose up -d --remove-orphans
-            docker exec bible_app php bin/console cache:clear
-            docker exec bible_app php bin/console asset-map:compile
-```
-
-Voeg `DROPLET_IP` en `SSH_PRIVATE_KEY` toe als GitHub repository secrets.
+| Secret | Waarde |
+|---|---|
+| `DROPLET_IP` | IP-adres van de droplet |
+| `SSH_PRIVATE_KEY` | Inhoud van de private SSH-key die toegang heeft tot de droplet |
 
 ---
 
@@ -350,8 +295,8 @@ Voeg `DROPLET_IP` en `SSH_PRIVATE_KEY` toe als GitHub repository secrets.
 
 | Status | Punt |
 |---|---|
-| ❌ | Poort 5432 (PostgreSQL) niet publiek exposed — verwijder uit `docker-compose.yml` op de server |
-| ❌ | Adminer niet publiek exposed — bind aan `127.0.0.1` of verwijder |
+| ✅ | Poort 5432 (PostgreSQL) niet publiek exposed — verwijderd uit `docker-compose.yml` |
+| ✅ | Adminer niet publiek exposed — bind aan `127.0.0.1` via `docker-compose.prod.yml` |
 | ❌ | `APP_SECRET` uniek en minimaal 32 bytes — genereer via `openssl rand -hex 32` |
 | ❌ | `DB_PASSWORD` sterk en uniek |
 | ❌ | `REMEMBER_ME_SECRET` ingesteld |
@@ -362,7 +307,7 @@ Voeg `DROPLET_IP` en `SSH_PRIVATE_KEY` toe als GitHub repository secrets.
 | ❌ | Offsite backup naar Spaces geconfigureerd en getest (zie `docs/backups.md`) |
 | ❌ | `APP_ENV=prod` bevestigd na deploy (`docker exec bible_app php bin/console about`) |
 | ❌ | Log-rotatie geconfigureerd in `/etc/docker/daemon.json` |
-| ❌ | GitHub Actions deploy-workflow opgezet (optioneel maar aanbevolen) |
+| ✅ | GitHub Actions deploy-workflow opgezet — `.github/workflows/deploy.yml` |
 
 ---
 

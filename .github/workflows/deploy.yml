@@ -1,0 +1,25 @@
+name: Deploy to production
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DROPLET_IP }}
+          username: root
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -e
+            cd /translatorstags
+            git pull
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml build --pull --no-cache
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --remove-orphans
+            docker exec bible_app php bin/console cache:clear
+            docker exec bible_app php bin/console asset-map:compile
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
