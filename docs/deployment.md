@@ -8,7 +8,7 @@
 ## Inhoudsopgave
 
 1. [Architectuurkeuze: multi-app op één droplet](#1-architectuurkeuze)
-2. [Productie-gereedheid: wat ontbreekt nog](#2-productie-gereedheid)
+2. [Productie-gereedheid](#2-productie-gereedheid)
 3. [Stap-voor-stap deployment](#3-stap-voor-stap-deployment)
 4. [Omgevingsvariabelen](#4-omgevingsvariabelen)
 5. [Updates deployen](#5-updates-deployen)
@@ -28,50 +28,48 @@ Eén globale Caddy-instantie op de droplet vangt al het verkeer op poorten 80/44
 
 ```
 Internet → Caddy (host, :80/:443)
-              ├── translatorstags.nl  → bible_app container (:8080)
-              └── andere-app.nl       → andere container (:8081)
+              ├── translatorstags.nl  → bible_app container (:80 intern)
+              └── andere-app.nl       → andere container (:80 intern)
 ```
 
 **Voordeel:** één TLS-beheerder, eenvoudig uit te breiden met nieuwe apps.
-
-### Optie B — Nginx/Caddy reverse proxy per app (eenvoudiger te starten)
-
-Elke app-container luistert op een intern poort; Nginx op de host proxiet op basis van `Host`-header.
-
-**Nadeel:** minder schaalbaar, twee lagen configuratie.
 
 **→ Dit document volgt Optie A.**
 
 ---
 
-## 2. Productie-gereedheid: wat ontbreekt nog
+## 2. Productie-gereedheid
+
+Legenda: ✅ gereed · ⚠️ deels · ❌ nog te doen
 
 ### Kritiek (moet vóór go-live)
 
-| # | Probleem | Bestand | Actie |
-|---|---|---|---|
-| 1 | **Poort 5432 (PostgreSQL) publiek exposed** | `docker-compose.yml` r.14 | Verwijder `ports: - "5432:5432"` — alleen intern netwerk nodig |
-| 2 | **Adminer publiek exposed op :8081** | `docker-compose.yml` r.50-52 | Verwijder of zet achter authenticatie / VPN |
-| 3 | **Standaard wachtwoorden** in `.env` (`changeme`) | `.env` | Vervangen door sterke secrets (zie §4) |
-| 4 | **`APP_SECRET` is niet uniek** | `.env` | Genereer: `openssl rand -hex 32` |
-| 5 | **`REMEMBER_ME_SECRET` ontbreekt in prod** | `docker-compose.yml` | Voeg toe als secret (zie §4) |
-| 6 | **Geen database-backups** | — | Stel automatische pg_dump-cron in |
-| 7 | **Poorten 80/443 conflict** bij multi-app | `docker-compose.yml` | Aanpak uit §3 volgen |
+| Status | # | Punt | Bestand | Actie |
+|---|---|---|---|---|
+| ❌ | 1 | **Poort 5432 (PostgreSQL) publiek exposed** | `docker-compose.yml` r.22 | Verwijder `ports: - "5432:5432"` — alleen intern netwerk nodig in productie |
+| ❌ | 2 | **Adminer publiek exposed op :8081** | `docker-compose.yml` r.69-75 | Verwijder in productie, of bind aan `127.0.0.1:8081` (SSH-tunnel) |
+| ❌ | 3 | **Standaard wachtwoorden in `.env`** (`changeme`) | `.env` r.4,9 | Vervangen in `.env.local` op de server door sterke secrets (zie §4) |
+| ❌ | 4 | **`APP_SECRET` is niet uniek** | `.env` r.9 | Genereer: `openssl rand -hex 32` |
+| ⚠️ | 5 | **`REMEMBER_ME_SECRET` in docker-compose als fallback** | `docker-compose.yml` r.39 | Staat nu als `change_me_in_production_32chars`; stel in via `.env.local` |
+| ✅ | 6 | **Automatische database-backups** | `docker-compose.yml` r.77-97 | Geïmplementeerd via `backup`-service + `scripts/backup-to-spaces.sh` |
+| ❌ | 7 | **Poorten 80/443 conflict bij multi-app** | `docker-compose.yml` r.32-34 | Aanpak uit §3 volgen (centrale Caddy, ports verwijderen) |
 
 ### Hoog (sterk aanbevolen)
 
-| # | Probleem | Actie |
-|---|---|---|
-| 8 | **Geen health-check op app-container** | Voeg `healthcheck` toe (zie §3) |
-| 9 | **Geen log-rotatie** | Stel Docker log driver in met `max-size` |
-| 10 | **Geen SMTP-configuratie** | Stel `MAILER_DSN` in als de app e-mail verstuurt |
+| Status | # | Punt | Actie |
+|---|---|---|---|
+| ❌ | 8 | **Geen health-check op app-container** | Voeg `healthcheck` toe (zie §3.4) |
+| ❌ | 9 | **Geen log-rotatie** | Stel Docker log driver in met `max-size` (zie §6) |
+| ❌ | 10 | **Offsite backup naar Spaces nog niet ingesteld** | `scripts/backup-to-spaces.sh` is klaar; cron en `.env.backup` moeten worden ingesteld op de droplet (zie `docs/backups.md`) |
+| ⚠️ | 11 | **Geen SMTP-configuratie** | App verstuurt momenteel geen e-mail; instellen zodra dit nodig is via `MAILER_DSN` |
 
 ### Medium
 
-| # | Probleem | Actie |
-|---|---|---|
-| 11 | **Geen rate limiting** op login-endpoint | Symfony RateLimiter of Caddy `rate_limit` |
-| 12 | **`APP_ENV=dev` in de container** (de cache:clear zei "dev environment") | Controleer of `APP_ENV=prod` correct doorgegeven wordt |
+| Status | # | Punt | Actie |
+|---|---|---|---|
+| ❌ | 12 | **Geen rate limiting op login-endpoint** | Symfony RateLimiter of Caddy `rate_limit`-directive |
+| ⚠️ | 13 | **`APP_ENV` in container** | In `docker-compose.yml` staat `APP_ENV: prod` hardcoded (r.37) — correct. Controleer na deploy via `docker exec bible_app php bin/console about` |
+| ❌ | 14 | **Geen GitHub Actions deploy-workflow** | Handmatig deployen via SSH; automatiseer met een workflow (zie §5) |
 
 ---
 
@@ -79,17 +77,36 @@ Elke app-container luistert op een intern poort; Nginx op de host proxiet op bas
 
 ### 3.1 Droplet aanmaken
 
-1. Maak een DigitalOcean droplet aan via **Marketplace → Docker** (Ubuntu 22.04 + Docker voorgeïnstalleerd).  
+1. Maak een DigitalOcean droplet aan via **Marketplace → Docker** (Ubuntu 22.04 + Docker voorgeïnstalleerd).
    Minimale grootte: **2 GB RAM / 1 vCPU** (4 GB aanbevolen voor meerdere apps).
-2. Stel SSH-toegang in met een key pair.
-3. Wijs een **domeinnaam** toe: maak een DNS A-record aan dat naar het IP van de droplet wijst.  
+2. Stel SSH-toegang in met een key pair. Schakel wachtwoord-login uit:
+   ```bash
+   sed -i 's/^PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config
+   systemctl reload sshd
+   ```
+3. Wijs een **domeinnaam** toe: maak een DNS A-record aan dat naar het IP van de droplet wijst.
    Let's Encrypt vereist een echte domeinnaam — bare IP-adressen worden niet ondersteund.
 
 ### 3.2 Droplet inrichten
 
 ```bash
-# Aanmelden
 ssh root@<droplet-ip>
+
+# UFW firewall instellen (zie ook §6)
+ufw allow OpenSSH
+ufw allow 80/tcp
+ufw allow 443/tcp
+ufw allow 443/udp   # HTTP/3
+ufw enable
+
+# Log-rotatie instellen
+cat > /etc/docker/daemon.json <<'EOF'
+{
+  "log-driver": "json-file",
+  "log-opts": { "max-size": "10m", "max-file": "3" }
+}
+EOF
+systemctl restart docker
 
 # Centrale mappen aanmaken
 mkdir -p /srv/caddy/{data,config}
@@ -150,27 +167,26 @@ cd /srv/caddy && docker compose up -d
 ```bash
 cd /translatorstags
 
-# Code ophalen
-git clone <repo-url> .
-# Of via SCP/rsync als de repo privé is zonder deploy key
+# Code ophalen (gebruik een deploy key als de repo privé is)
+git clone https://github.com/gerardzeeman/translators-tags.git .
 
 # Productie-omgevingsvariabelen instellen
-cp .env .env.local  # nooit .env aanpassen op de server
-nano .env.local     # zie §4 voor de waarden
+cp .env .env.local
+nano .env.local   # zie §4 voor de waarden
 ```
 
-Pas `docker-compose.yml` aan voor de multi-app setup — **verwijder de conflicterende poorten** en **verbind met het gedeelde Caddy-netwerk**:
+Pas `docker-compose.yml` aan voor productie — de onderstaande wijzigingen zijn
+**niet** in de repo doorgevoerd (ze zijn server-specifiek en horen in `.env.local`
+of een lokale override):
 
 ```yaml
 services:
   postgres:
-    # ... bestaande config ...
     ports: []          # ← verwijder de publieke 5432-binding
 
   app:
-    # ... bestaande config ...
     container_name: bible_app
-    ports: []          # ← geen directe 80/443 binding meer; Caddy proxiet
+    ports: []          # ← geen directe 80/443 binding; Caddy proxiet
     networks:
       - bible_net
       - caddy_net      # ← toevoegen zodat Caddy de container kan bereiken
@@ -182,35 +198,53 @@ services:
       start_period: 40s
 
   adminer:
-    # Verwijder in productie, of bind alleen aan localhost:
     ports:
-      - "127.0.0.1:8081:8080"   # alleen bereikbaar via SSH-tunnel
+      - "127.0.0.1:8081:8080"   # alleen via SSH-tunnel bereikbaar
 
 networks:
   bible_net:
     driver: bridge
   caddy_net:
-    external: true      # ← het gedeelde netwerk van de centrale Caddy
+    external: true
 ```
+
+> **Tip:** gebruik `docker-compose.override.yml` voor server-specifieke overrides
+> zodat de hoofd-`docker-compose.yml` ongewijzigd blijft en `git pull` nooit
+> conflicten geeft.
 
 Image bouwen en starten:
 
 ```bash
-cd /translatorstags
 docker compose build --pull --no-cache
 docker compose up -d
 ```
 
-Controleer of de app draait:
+Controleer:
 
 ```bash
 docker compose ps
 docker compose logs app --tail=50
+docker exec bible_app php bin/console about   # bevestig APP_ENV=prod
 ```
 
-### 3.5 TLS verifiëren
+### 3.5 Backups activeren
 
-Caddy vraagt automatisch een Let's Encrypt-certificaat aan zodra het eerste verzoek binnenkomt op de domeinnaam. Controleer:
+Zie `docs/backups.md` voor de volledige setup. Kort samengevat:
+
+```bash
+cp .env.backup.example .env.backup
+nano .env.backup   # Spaces-credentials invullen
+
+chmod +x scripts/backup-to-spaces.sh
+
+# Cron: dagelijks om 03:15
+(crontab -l 2>/dev/null; echo "15 3 * * * /translatorstags/scripts/backup-to-spaces.sh >> /var/log/backup-spaces.log 2>&1") | crontab -
+```
+
+### 3.6 TLS verifiëren
+
+Caddy vraagt automatisch een Let's Encrypt-certificaat aan zodra het eerste verzoek
+binnenkomt. Controleer:
 
 ```bash
 curl -I https://translatorstags.nl
@@ -221,32 +255,36 @@ curl -I https://translatorstags.nl
 
 ## 4. Omgevingsvariabelen
 
-Maak `/translatorstags/.env.local` aan (nooit committen):
+Maak `/translatorstags/.env.local` aan (nooit committen — staat in `.gitignore`):
 
 ```dotenv
 # Database
 DB_NAME=bible_compare
 DB_USER=bible
-DB_PASSWORD=<sterk-wachtwoord>
+DB_PASSWORD=<genereer: openssl rand -hex 32>
 
 # Symfony
 APP_ENV=prod
-APP_SECRET=<openssl rand -hex 32>
-REMEMBER_ME_SECRET=<openssl rand -hex 32>
+APP_SECRET=<genereer: openssl rand -hex 32>
+REMEMBER_ME_SECRET=<genereer: openssl rand -hex 32>
 
-# Caddy/FrankenPHP — intern; de reverse proxy doet de domeinnaam
+# FrankenPHP — intern; de reverse proxy doet TLS
 SERVER_NAME=:80
+
+# Backup-schema (optioneel, standaard @daily)
+# BACKUP_SCHEDULE=@daily
+# BACKUP_KEEP_DAYS=7
 ```
 
 > **Let op:** `SERVER_NAME=:80` zorgt dat FrankenPHP op intern poort 80 luistert
 > zonder zelf TLS te proberen. De centrale Caddy buiten de container beheert TLS.
 
-Genereer secrets:
+Secrets genereren:
 
 ```bash
-openssl rand -hex 32   # voor APP_SECRET
-openssl rand -hex 32   # voor DB_PASSWORD
-openssl rand -hex 32   # voor REMEMBER_ME_SECRET
+openssl rand -hex 32   # APP_SECRET
+openssl rand -hex 32   # DB_PASSWORD
+openssl rand -hex 32   # REMEMBER_ME_SECRET
 ```
 
 ---
@@ -259,66 +297,79 @@ cd /translatorstags
 # Nieuwe code ophalen
 git pull
 
-# Image herbouwen (--no-cache voor verse composer install)
+# Image herbouwen
 docker compose build --pull --no-cache
 
-# Vervangen met zero-downtime (Compose start nieuwe container vóór stop)
+# Herstarten (Compose start nieuwe container vóór stop)
 docker compose up -d --remove-orphans
 
-# Migaties draaien (indien van toepassing)
-docker compose exec app php bin/console doctrine:migrations:migrate --no-interaction
+# Cache vernieuwen
+docker exec bible_app php bin/console cache:clear
+docker exec bible_app php bin/console asset-map:compile
 
 # Controleer
 docker compose ps
 docker compose logs app --tail=20
 ```
 
-### Automatisch deployen (optioneel)
+### Automatisch deployen via GitHub Actions (optioneel)
 
-Voeg een GitHub Actions workflow toe (`.github/workflows/deploy.yml`) die bij een push naar `main` via SSH inlogt en bovenstaande commando's uitvoert. Gebruik een **deploy key** of **SSH secret** in de repo-instellingen.
+Maak `.github/workflows/deploy.yml` aan:
+
+```yaml
+name: Deploy to production
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DROPLET_IP }}
+          username: root
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd /translatorstags
+            git pull
+            docker compose build --pull --no-cache
+            docker compose up -d --remove-orphans
+            docker exec bible_app php bin/console cache:clear
+            docker exec bible_app php bin/console asset-map:compile
+```
+
+Voeg `DROPLET_IP` en `SSH_PRIVATE_KEY` toe als GitHub repository secrets.
 
 ---
 
 ## 6. Beveiliging checklist
 
-- [ ] Poort 5432 (PostgreSQL) niet publiek exposed
-- [ ] Adminer niet publiek exposed (of verwijderd)
-- [ ] `APP_SECRET` uniek en minimaal 32 bytes
-- [ ] `DB_PASSWORD` sterk en uniek
-- [ ] `REMEMBER_ME_SECRET` ingesteld
-- [ ] `.env.local` staat in `.gitignore` (controleer: `git check-ignore .env.local`)
-- [ ] SSH-toegang alleen via key (wachtwoord-login uitgeschakeld in `/etc/ssh/sshd_config`)
-- [ ] UFW firewall: alleen poorten 22, 80, 443 open
-- [ ] Automatische database-backups (cron + `pg_dump`)
-- [ ] `APP_ENV=prod` in alle containers actief
-- [ ] Log-rotatie geconfigureerd (`/etc/docker/daemon.json`)
-
-### UFW instellen
-
-```bash
-ufw allow OpenSSH
-ufw allow 80/tcp
-ufw allow 443/tcp
-ufw allow 443/udp   # HTTP/3
-ufw enable
-```
-
-### Log-rotatie (`/etc/docker/daemon.json`)
-
-```json
-{
-  "log-driver": "json-file",
-  "log-opts": {
-    "max-size": "10m",
-    "max-file": "3"
-  }
-}
-```
+| Status | Punt |
+|---|---|
+| ❌ | Poort 5432 (PostgreSQL) niet publiek exposed — verwijder uit `docker-compose.yml` op de server |
+| ❌ | Adminer niet publiek exposed — bind aan `127.0.0.1` of verwijder |
+| ❌ | `APP_SECRET` uniek en minimaal 32 bytes — genereer via `openssl rand -hex 32` |
+| ❌ | `DB_PASSWORD` sterk en uniek |
+| ❌ | `REMEMBER_ME_SECRET` ingesteld |
+| ✅ | `.env.local` en `.env.backup` staan in `.gitignore` |
+| ❌ | SSH-toegang alleen via key — `PasswordAuthentication no` in `/etc/ssh/sshd_config` |
+| ❌ | UFW firewall: alleen poorten 22, 80, 443 open |
+| ✅ | Automatische lokale database-backups (`backup`-service in docker-compose) |
+| ❌ | Offsite backup naar Spaces geconfigureerd en getest (zie `docs/backups.md`) |
+| ❌ | `APP_ENV=prod` bevestigd na deploy (`docker exec bible_app php bin/console about`) |
+| ❌ | Log-rotatie geconfigureerd in `/etc/docker/daemon.json` |
+| ❌ | GitHub Actions deploy-workflow opgezet (optioneel maar aanbevolen) |
 
 ---
 
 ## Referenties
 
+- [`docs/backups.md`](backups.md) — backup-setup en herstelstappen
+- [`docs/data-sync.md`](data-sync.md) — prod↔dev database-synchronisatie
 - [symfony-docker production docs](https://github.com/dunglas/symfony-docker/blob/main/docs/production.md)
 - [FrankenPHP documentatie](https://frankenphp.dev)
 - [Caddy reverse proxy docs](https://caddyserver.com/docs/caddyfile/directives/reverse_proxy)
