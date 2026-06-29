@@ -28,3 +28,4 @@ app/.env.dev
 graphify-out/
 *.zip
 redesign_tmp/
+.env.backup
