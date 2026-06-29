@@ -8,13 +8,11 @@
 | Ernst    | Gevonden | Open |
 |----------|----------|------|
 | Kritiek  | 2        | 0 ✅ |
-| Hoog     | 4        | 1 ⚠️ |
+| Hoog     | 4        | 0 ✅ |
 | Medium   | 5        | 5    |
 | Laag     | 4        | 4    |
 | Info     | 3        | 3    |
-| **Totaal** | **18** | **13** |
-
-> ⚠️ Open hoog: **Registratie is open voor iedereen** — vereist een product-beslissing (e-mailverificatie vs. uitnodigingssysteem).
+| **Totaal** | **18** | **12** |
 
 ---
 
@@ -90,9 +88,10 @@ Het Symfony-standaard `.gitignore` in `app/` bevat regels voor `.env.local` en `
 
 ---
 
-### HOOG — Registratie is open voor iedereen (geen uitnodigingssysteem)
+### ✅ OPGELOST — HOOG — Registratie is open voor iedereen (geen uitnodigingssysteem)
 
-**Locatie:** `app/src/Controller/SecurityController.php:39-105` · `app/config/packages/security.yaml:48`
+**Locatie:** `app/src/Controller/SecurityController.php:39-105` · `app/config/packages/security.yaml:48`  
+**Fix:** `/register` route verwijderd; `AdminUserController` aangemaakt voor admin-beheerde gebruikersaanmaak (branch `feature/security-fixes`)
 
 **Beschrijving:**
 `/register` is publiek toegankelijk en verleent na registratie standaard `ROLE_USER`. Elke bezoeker kan een account aanmaken. Hoewel er rate limiting op 5 pogingen per 15 minuten zit (per IP), is er geen:
