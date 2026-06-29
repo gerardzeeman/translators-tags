@@ -82,6 +82,17 @@
         </div>
         {% endif %}
 
+        {# Admin-dropdown — alleen voor admins #}
+        {% if is_granted('ROLE_ADMIN') %}
+        <div class="nav-sep"></div>
+        <div class="nav-dropdown">
+            <button class="nav-dropdown-btn" type="button">Beheer ▾</button>
+            <div class="nav-dropdown-menu">
+                <a href="{{ path('admin_users_index') }}">Gebruikers</a>
+            </div>
+        </div>
+        {% endif %}
+
         {# Boek/hoofdstuk-knop — ingevuld door child templates #}
         {% block nav_center %}{% endblock %}
 

@@ -3,13 +3,11 @@
 namespace App\Controller;
 
 use App\Entity\User;
-use App\Repository\UserRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
-use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Authentication\AuthenticationUtils;
 
@@ -34,74 +32,6 @@ class SecurityController extends AbstractController
     {
         // Intercepted by the security firewall — this code is never reached.
         throw new \LogicException('This method should never be called directly.');
-    }
-
-    #[Route('/register', name: 'app_register')]
-    public function register(
-        Request $request,
-        UserPasswordHasherInterface $passwordHasher,
-        EntityManagerInterface $em,
-        UserRepository $userRepository,
-        RateLimiterFactory $registerIpLimiter,
-    ): Response {
-        if ($this->getUser()) {
-            return $this->redirectToRoute('app_home');
-        }
-
-        $error       = null;
-        $lastEmail   = '';
-        $lastName    = '';
-
-        if ($request->isMethod('POST')) {
-            $limiter = $registerIpLimiter->create($request->getClientIp());
-            if (!$limiter->consume(1)->isAccepted()) {
-                $error = 'Te veel registratiepogingen. Probeer het over 15 minuten opnieuw.';
-            }
-
-            $email    = trim($request->request->get('email', ''));
-            $name     = trim($request->request->get('display_name', ''));
-            $password = $request->request->get('password', '');
-            $confirm  = $request->request->get('confirm_password', '');
-
-            if ($error) {
-                // rate limited — fall through to render with error
-            } elseif (!$this->isCsrfTokenValid('register', $request->request->get('_csrf_token'))) {
-                $error = 'Ongeldig formulierverzoek.';
-            } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-                $error = 'Voer een geldig e-mailadres in.';
-            } elseif (strlen($name) < 2) {
-                $error = 'Naam moet minimaal 2 tekens bevatten.';
-            } elseif (strlen($password) < 8) {
-                $error = 'Wachtwoord moet minimaal 8 tekens bevatten.';
-            } elseif ($password !== $confirm) {
-                $error = 'Wachtwoorden komen niet overeen.';
-            } elseif ($userRepository->findByEmail($email)) {
-                $error = 'Registratie mislukt. Controleer uw gegevens en probeer het opnieuw.';
-            }
-
-            if (!$error) {
-                $user = new User();
-                $user->setEmail($email);
-                $user->setDisplayName($name);
-                $user->setPassword($passwordHasher->hashPassword($user, $password));
-                $user->setIsVerified(true); // Auto-verify; add email verification later if needed
-
-                $em->persist($user);
-                $em->flush();
-
-                $this->addFlash('success', 'Account aangemaakt. U kunt nu inloggen.');
-                return $this->redirectToRoute('app_login');
-            }
-
-            $lastEmail = $email;
-            $lastName  = $name;
-        }
-
-        return $this->render('security/register.html.twig', [
-            'error'      => $error,
-            'last_email' => $lastEmail,
-            'last_name'  => $lastName,
-        ]);
     }
 
     #[Route('/profile', name: 'app_profile')]
