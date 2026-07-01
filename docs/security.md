@@ -1,9 +1,136 @@
 # Security Audit
 
-> Datum: 2026-06-29 · Scope: volledige codebase · Auditor: Claude Sonnet 4.6  
-> Gefixte bevindingen: zie branch `feature/security-fixes`
+## Audit-rondes
 
-## Samenvatting
+| Ronde | Datum | Scope | Branch | Open bevindingen |
+|-------|-------|-------|--------|-----------------|
+| 1 | 2026-06-29 | Volledige codebase | `feature/security-fixes` | 7 |
+| 2 | 2026-07-01 | `/login/` pagina & auth-flow | `security/login-audit` | 6 |
+
+---
+
+## Ronde 2 — 2026-07-01 · Scope: /login/ pagina
+
+> Auditor: Claude Sonnet 4.6 · Branch: `security/login-audit`
+
+### Samenvatting
+
+| Ernst    | Gevonden | Gefixt | Open |
+|----------|----------|--------|------|
+| Hoog     | 1        | 1 ✅   | 0    |
+| Medium   | 3        | 2 ✅   | 1    |
+| Laag     | 4        | 2 ✅   | 2    |
+| Info     | 3        | 0      | 3    |
+| **Totaal** | **11** | **5** | **6** |
+
+### ✅ OPGELOST — HOOG — `.env.dev` niet in `.gitignore`, bevat echte APP_SECRET
+
+**Locatie:** `app/.gitignore`, `app/.env.dev`  
+**Fix:** `/.env.dev` toegevoegd aan `app/.gitignore` (branch `security/login-audit`)
+
+**Beschrijving:**  
+`app/.env.dev` bevatte `APP_SECRET=54f88194d7875c76482111d2254e7c51` maar het bestand stond niet in `.gitignore`. De bestaande regels (`/.env.local`, `/.env.*.local`) dekken `.env.dev` niet. Eén `git add .` volstaat om het secret in de repository-geschiedenis te schrijven, waarna sessies en CSRF-tokens triviaal vervalst kunnen worden.
+
+**Actie vereist:** Roteer de APP_SECRET in `app/.env.dev` en `app/.env.local` via `openssl rand -hex 32`.
+
+---
+
+### ✅ OPGELOST — MEDIUM — Ontbrekende HTTP security headers in Caddyfile
+
+**Locatie:** `app/Caddyfile`  
+**Fix:** HSTS, CSP, Permissions-Policy en `-Server` headers toegevoegd (branch `security/login-audit`)
+
+**Beschrijving:**  
+De applicatie had een `SecurityHeadersSubscriber` die headers instelde, maar de Caddyfile (webserver-niveau) miste:
+- `Strict-Transport-Security` — browsers konden verbindingen downgraden naar HTTP
+- `Content-Security-Policy` — geen beperking op toegestane resource-bronnen
+- `Permissions-Policy` — camera, microfoon, geolocation onbeperkt beschikbaar
+- `Server`-header werd niet onderdrukt
+
+Headers op webserver-niveau zijn robuuster dan applicatie-niveau (werken ook bij PHP-fouten vóór Symfony bootstrap).
+
+**Toegevoegde headers:**
+```caddy
+Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+Content-Security-Policy   "default-src 'self'; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; script-src 'self'; form-action 'self'; frame-ancestors 'none'"
+Permissions-Policy        "camera=(), microphone=(), geolocation=(), payment=()"
+-Server
+```
+
+---
+
+### ✅ OPGELOST — LAAG — `displayName` zonder maximale lengtevalidatie
+
+**Locatie:** `app/src/Controller/SecurityController.php`  
+**Fix:** Max-lengte (100) toegevoegd aan validatie (branch `security/login-audit`)
+
+**Beschrijving:** Identiek aan bevinding LAAG uit Ronde 1 — ook in `SecurityController::profile()` ontbrak de maximale-lengtecheck. Zonder max-grens gooit Doctrine een generieke exception bij invoer >100 tekens.
+
+---
+
+### MEDIUM — Password-reset bundle geïnstalleerd maar niet geconfigureerd
+
+**Locatie:** `app/config/packages/reset_password.yaml`  
+**Status:** Open
+
+**Beschrijving:**  
+`symfonycasts/reset-password-bundle` is geïnstalleerd met de placeholder `symfonycasts.reset_password.fake_request_repository`. Er is geen `ResetPasswordRequestRepository`, geen controller en geen route. Gebruikers die hun wachtwoord vergeten zijn volledig afhankelijk van een beheerder.
+
+**Aanbeveling:** Implementeer het wachtwoordherstelsysteem volledig, of verwijder de ongebruikte bundle (`composer remove symfonycasts/reset-password-bundle`).
+
+---
+
+### LAAG — Minimale wachtwoordsterkte (alleen lengte ≥ 8)
+
+**Locatie:** `app/src/Controller/AdminUserController.php:61`, `app/src/Controller/SecurityController.php:74`  
+**Status:** Open
+
+**Beschrijving:** Wachtwoorden worden alleen op minimale lengte (8 tekens) gevalideerd. Er is geen controle op veelgebruikte wachtwoorden of complexiteit. Zie ook Ronde 1 LAAG.
+
+**Aanbeveling:** Gebruik `Symfony\Component\Validator\Constraints\PasswordStrength` of verhoog het minimum naar 12 tekens.
+
+---
+
+### LAAG — Google Fonts extern geladen op loginpagina
+
+**Locatie:** `app/templates/security/login.html.twig:9-10`  
+**Status:** Open
+
+**Beschrijving:** De loginpagina laadt fonts via `fonts.googleapis.com`. Dit voegt een externe dependency toe aan een kritische pagina en stelt Google in staat laad-metadata te verzamelen per loginpoging.
+
+**Aanbeveling:** Self-host de EB Garamond font-bestanden via `app/public/fonts/`.
+
+---
+
+### INFO — `APP_ENV=dev` als standaard in `.env` template
+
+**Status:** Open — zie ook Ronde 1 INFO
+
+Bij productie-deployments moet `APP_ENV=prod` worden ingesteld via `.env.local`. Het template heeft `APP_ENV=dev`, wat bij een vergeten override debug-mode activeert.
+
+---
+
+### INFO — Remember-me tokens niet geïnvalideerd bij wachtwoordwijziging
+
+**Status:** Open
+
+Remember-me cookies (lifetime 7 dagen) worden niet geïnvalideerd wanneer een gebruiker zijn wachtwoord wijzigt in `/profile`. Een gestolen remember-me cookie blijft tot 7 dagen geldig na wachtwoordwijziging. Implementeer database-backed tokens via `RememberMeTokenProvider`.
+
+---
+
+### INFO — Geen audit logging van mislukte loginpogingen
+
+**Status:** Open
+
+`LoginSubscriber` logt alleen succesvolle logins (via `lastLoginAt`). Mislukte pogingen, rate-limit triggers en wachtwoordwijzigingen worden niet gelogd. Voeg een `AuthenticationFailureHandlerInterface` toe met Monolog `security` channel.
+
+---
+
+## Ronde 1 — 2026-06-29 · Scope: volledige codebase
+
+> Auditor: Claude Sonnet 4.6 · Branch: `feature/security-fixes`
+
+### Samenvatting
 
 | Ernst    | Gevonden | Open |
 |----------|----------|------|
