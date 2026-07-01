@@ -31,3 +31,9 @@ graphify-out/
 redesign_tmp/
 .env.backup
 TEHMC - Translators Expansion of Hebrew Morphology Codes - STEPBible.org CC BY.txt
+/strongs_he_batch1_utf8.csv
+/strongs_he_batch1.csv
+/strongs_he_batch2_utf8.csv
+/strongs_he_batch2.csv
+/strongs_he_batch3.csv
+/strongs_he_batch4.csv
