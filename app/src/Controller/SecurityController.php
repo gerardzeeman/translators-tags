@@ -53,8 +53,8 @@ class SecurityController extends AbstractController
                     $error = 'Ongeldig formulierverzoek.';
                 } else {
                     $name = trim($request->request->get('display_name', ''));
-                    if (strlen($name) < 2) {
-                        $error = 'Naam moet minimaal 2 tekens bevatten.';
+                    if (strlen($name) < 2 || strlen($name) > 100) {
+                        $error = 'Naam moet tussen 2 en 100 tekens zijn.';
                     } else {
                         $user->setDisplayName($name);
                         $em->flush();
