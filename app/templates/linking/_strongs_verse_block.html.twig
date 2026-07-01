@@ -41,9 +41,11 @@
             {% if word.transliteration %}
             <span class="src-translit">{{ word.transliteration }}</span>
             {% endif %}
-            <span class="src-strongs {% if is_target %}strongs-highlight{% endif %}">
-                {{ word.strongs }}
-            </span>
+            <div class="word-popup">
+                <span class="src-strongs {% if is_target %}strongs-highlight{% endif %}">
+                    {{ word.strongs }}
+                </span>
+            </div>
 
             <div class="src-links">
                 {% for link in word.links %}

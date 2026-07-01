@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+    <linearGradient id="fa" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#ecc07a"></stop>
+      <stop offset="40%" stop-color="#ecc07a"></stop>
+      <stop offset="66%" stop-color="#ecc07a" stop-opacity="0.30"></stop>
+      <stop offset="85%" stop-color="#ecc07a" stop-opacity="0.03"></stop>
+      <stop offset="100%" stop-color="#ecc07a" stop-opacity="0"></stop>
+    </linearGradient>
+    <linearGradient id="fo" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#c07238" stop-opacity="0"></stop>
+      <stop offset="15%" stop-color="#c07238" stop-opacity="0.03"></stop>
+      <stop offset="34%" stop-color="#c07238" stop-opacity="0.30"></stop>
+      <stop offset="60%" stop-color="#c07238"></stop>
+      <stop offset="100%" stop-color="#c07238"></stop>
+    </linearGradient>
+    <radialGradient id="bg" cx="50%" cy="36%" r="68%">
+      <stop offset="0%" stop-color="#301e10"></stop>
+      <stop offset="100%" stop-color="#0c0805"></stop>
+    </radialGradient>
+    <radialGradient id="hl" cx="50%" cy="20%" r="55%">
+      <stop offset="0%" stop-color="#6a3a1a" stop-opacity="0.35"></stop>
+      <stop offset="100%" stop-color="#6a3a1a" stop-opacity="0"></stop>
+    </radialGradient>
+    <clipPath id="circle-clip">
+      <circle cx="100" cy="100" r="98"></circle>
+    </clipPath>
+  </defs>
+
+  
+  <circle cx="100" cy="100" r="98" fill="url(#bg)"></circle>
+  <circle cx="100" cy="100" r="98" fill="url(#hl)"></circle>
+
+  
+  <circle cx="100" cy="100" r="95" fill="none" stroke="#5e3018" stroke-width="1.4"></circle>
+  <circle cx="100" cy="100" r="90" fill="none" stroke="#2c1508" stroke-width="0.6"></circle>
+
+  
+  <g clip-path="url(#circle-clip)">
+    <text x="100" y="100" text-anchor="middle" dominant-baseline="central" font-size="120" font-family="&#39;Frank Ruhl Libre&#39;, Georgia, serif" fill="url(#fa)">א</text>
+    <text x="100" y="100" text-anchor="middle" dominant-baseline="central" font-size="120" font-family="Georgia, Palatino, &#39;Book Antiqua&#39;, serif" fill="url(#fo)">Ω</text>
+  </g>
+</svg>

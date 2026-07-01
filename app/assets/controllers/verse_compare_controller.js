@@ -37,6 +37,7 @@ export default class extends Controller {
         const code = event.currentTarget.dataset.translation
         if (!code || code === this.#activeTrans) return
         this.#activeTrans = code
+        localStorage.setItem('ao:active-translation', code)
         this.#applyTranslationState(code)
         this.#clearAll()   // clear highlights — indicator set has changed
     }
@@ -53,10 +54,9 @@ export default class extends Controller {
     // ── Initial DOM sync ──────────────────────────────────────────────────────
 
     #syncStateFromDom() {
-        const grid = this.#grid()
-        if (grid?.dataset.activeTranslation) {
-            this.#activeTrans = grid.dataset.activeTranslation
-        }
+        const saved = localStorage.getItem('ao:active-translation')
+        const grid  = this.#grid()
+        this.#activeTrans = saved ?? grid?.dataset.activeTranslation ?? 'SV'
         this.#applyTranslationState(this.#activeTrans)
     }
 

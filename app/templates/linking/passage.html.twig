@@ -102,7 +102,9 @@
                     {% endif %}
 
                     {% if word.strongs %}
-                    <span class="src-strongs">{{ word.strongs }}</span>
+                    <div class="word-popup">
+                        <span class="src-strongs">{{ word.strongs }}</span>
+                    </div>
                     {% endif %}
 
                     <div class="src-links">
@@ -166,7 +168,7 @@
     </div>
 
     {# ── Action bar (shown when a source word is selected) ────────────────── #}
-    <div class="action-bar" data-word-linker-target="actionBar">
+    <div class="action-bar action-bar-inline" data-word-linker-target="actionBar">
         <div class="action-bar-inner">
             <span class="action-label">
                 Geselecteerd: <strong data-word-linker-target="selectedLabel">–</strong>

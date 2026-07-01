@@ -3,7 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Inloggen – Bijbel Vergelijking</title>
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <title>Inloggen – alefomega.nl</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
     <style>
@@ -46,20 +48,15 @@
         .auth-logo {
             text-align: center;
             margin-bottom: 2rem;
-        }
-        .auth-logo .logo-he {
-            display: block;
-            font-size: 2.2rem;
-            direction: rtl;
-            color: var(--color-accent);
-            line-height: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: .5rem;
         }
         .auth-logo .logo-title {
-            display: block;
-            font-size: 1rem;
+            font-size: .95rem;
             color: var(--color-ink-muted);
-            margin-top: .4rem;
-            letter-spacing: .04em;
+            letter-spacing: .06em;
         }
 
         h1 {
@@ -151,8 +148,8 @@
 
 <div class="auth-card">
     <div class="auth-logo">
-        <span class="logo-he">בְּרֵאשִׁית</span>
-        <span class="logo-title">Bijbel Vergelijking</span>
+        <img src="/favicon.svg" width="80" height="80" alt="Alef-Omega logo">
+        <span class="logo-title">alefomega.nl</span>
     </div>
 
     <h1>Inloggen</h1>
