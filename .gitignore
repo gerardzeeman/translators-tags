@@ -21,7 +21,6 @@ node_modules/
 .DS_Store
 Thumbs.db
 desktop.ini
-app/.env
 app/.env.dev
 
 # Lokale bestanden
