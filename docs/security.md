@@ -443,7 +443,7 @@ Het gebruik van een tag (`v1`) in plaats van een commit-SHA maakt de workflow kw
 **Aanbeveling:**
 Pin acties aan een specifieke commit-SHA:
 ```yaml
-uses: appleboy/ssh-action@4a03da89e5c43da56e502053be0e9d0a998b9a8a  # v1.0.0
+uses: appleboy/ssh-action@55dabf81b49d4120609345970c91507e2d734799  # v1.0.0
 ```
 
 ---
