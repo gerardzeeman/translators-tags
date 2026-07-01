@@ -25,6 +25,7 @@ app/.env
 app/.env.dev
 
 # Lokale bestanden
+strongs_he_batch*
 graphify-out/
 *.zip
 redesign_tmp/
