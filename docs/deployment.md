@@ -68,7 +68,7 @@ Legenda: ✅ gereed · ⚠️ deels · ❌ nog te doen
 
 | Status | # | Punt | Actie |
 |---|---|---|---|
-| ❌ | 12 | **Geen rate limiting op login-endpoint** | Symfony RateLimiter of Caddy `rate_limit`-directive |
+| ✅ | 12 | **Rate limiting op login-endpoint** | Geconfigureerd via `login_throttling` in `security.yaml` (5 pogingen per 15 min) |
 | ⚠️ | 13 | **`APP_ENV` in container** | In `docker-compose.yml` staat `APP_ENV: prod` hardcoded (r.37) — correct. Controleer na deploy via `docker exec bible_app php bin/console about` |
 | ✅ | 14 | **Geen GitHub Actions deploy-workflow** | Aangemaakt in `.github/workflows/deploy.yml` — deploy bij push op `main` |
 
@@ -301,7 +301,7 @@ Voeg de volgende secrets toe in de GitHub repository (Settings → Secrets → A
 | ❌ | `APP_SECRET` uniek en minimaal 32 bytes — genereer via `openssl rand -hex 32` |
 | ❌ | `DB_PASSWORD` sterk en uniek |
 | ❌ | `REMEMBER_ME_SECRET` ingesteld |
-| ✅ | `.env.local` en `.env.backup` staan in `.gitignore` |
+| ✅ | `.env.local`, `.env.dev` en `.env.backup` staan in `.gitignore` |
 | ❌ | SSH-toegang alleen via key — `PasswordAuthentication no` in `/etc/ssh/sshd_config` |
 | ❌ | UFW firewall: alleen poorten 22, 80, 443 open |
 | ✅ | Automatische lokale database-backups (`backup`-service in docker-compose) |
@@ -475,29 +475,9 @@ crontab -l
 
 ---
 
-### 7.7 Rate limiting op login-endpoint (punt 12)
+### 7.7 Rate limiting op login-endpoint (punt 12) — ✅ Geïmplementeerd
 
-Voeg een Symfony rate limiter toe aan de login-route. Dit doe je op je **dev-pc** en commit je daarna.
-
-**Stap 1** — installeer het rate limiter pakket:
-
-```bash
-cd app
-composer require symfony/rate-limiter
-```
-
-**Stap 2** — configureer een limiter in `config/packages/rate_limiter.yaml`:
-
-```yaml
-framework:
-    rate_limiter:
-        login:
-            policy: fixed_window
-            limit: 5           # max 5 pogingen
-            interval: '1 minute'
-```
-
-**Stap 3** — koppel de limiter aan de login-firewall in `config/packages/security.yaml`:
+Rate limiting is geconfigureerd via `login_throttling` in `app/config/packages/security.yaml`:
 
 ```yaml
 security:
@@ -505,16 +485,10 @@ security:
         main:
             login_throttling:
                 max_attempts: 5
-                interval: '1 minute'
+                interval: '15 minutes'
 ```
 
-> Symfony's `login_throttling` gebruikt automatisch de rate limiter. Na 5 mislukte pogingen per minuut blokkeert het de poging met HTTP 429.
-
-**Stap 4** — test lokaal en commit:
-
-```bash
-php bin/console debug:config framework rate_limiter
-```
+Na 5 mislukte pogingen per 15 minuten wordt het loginformulier geblokkeerd. Geen verdere actie vereist.
 
 ---
 
