@@ -1,5 +1,4 @@
 import './stimulus_bootstrap.js';
-import './styles/app.css'
 
 document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('[data-bar-width]').forEach(el => {
@@ -21,15 +20,19 @@ import StrongsSelectController from './controllers/strongs_select_controller.js'
 import NavPanelController      from './controllers/nav_panel_controller.js'
 import StrongsPanelController  from './controllers/strongs_panel_controller.js'
 import ThemeController         from './controllers/theme_controller.js'
-import ChapterStripController  from './controllers/chapter_strip_controller.js'
+import ChapterStripController        from './controllers/chapter_strip_controller.js'
+import TranslationSelectorController from './controllers/translation_selector_controller.js'
+import MobileNavController           from './controllers/mobile_nav_controller.js'
 
-app.register('verse-compare',   VerseCompareController)
-app.register('source-word',     SourceWordController)
-app.register('dutch-word',      DutchWordController)
-app.register('word-linker',     WordLinkerController)
-app.register('passage-select',  PassageSelectController)
-app.register('strongs-select',  StrongsSelectController)
-app.register('nav-panel',       NavPanelController)
-app.register('strongs-panel',   StrongsPanelController)
-app.register('theme',           ThemeController)
-app.register('chapter-strip',   ChapterStripController)
+app.register('verse-compare',        VerseCompareController)
+app.register('source-word',          SourceWordController)
+app.register('dutch-word',           DutchWordController)
+app.register('word-linker',          WordLinkerController)
+app.register('passage-select',       PassageSelectController)
+app.register('strongs-select',       StrongsSelectController)
+app.register('nav-panel',            NavPanelController)
+app.register('strongs-panel',        StrongsPanelController)
+app.register('theme',                ThemeController)
+app.register('chapter-strip',        ChapterStripController)
+app.register('translation-selector', TranslationSelectorController)
+app.register('mobile-nav',           MobileNavController)

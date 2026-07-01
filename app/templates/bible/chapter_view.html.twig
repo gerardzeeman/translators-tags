@@ -1,9 +1,8 @@
 {% extends 'base.html.twig' %}
 {% block title %}{{ book.nameNl }} {{ chapter }} – Bijbel Vergelijking{% endblock %}
 
-{# Boek/hoofdstuk-knop in de navbar #}
-{% block nav_center %}
-<div class="nav-sep"></div>
+{# nav-book-btn vervangt de Bijbel-dropdown en staat links #}
+{% block nav_bijbel %}
 <div data-controller="nav-panel">
     <button class="nav-book-btn"
             type="button"
@@ -66,6 +65,36 @@
     {# Overlay — klik erop sluit het paneel #}
     <div class="nav-overlay" data-nav-panel-target="overlay"
          data-action="click->nav-panel#close"></div>
+</div>
+{% endblock %}
+
+{% block nav_center %}{% endblock %}
+
+{% block nav_right_extra %}
+{% set available_translations = ['SV'] %}
+{% if is_granted('ROLE_VIEWER_HSV') %}{% set available_translations = available_translations|merge(['HSV']) %}{% endif %}
+<div class="nav-trans-selector"
+     data-controller="translation-selector"
+     data-translation-selector-translations-value="{{ available_translations|json_encode }}">
+    <button class="nav-user-btn" type="button">Vertalingen ▾</button>
+    <div class="nav-trans-menu">
+        <label class="nav-check-item">
+            <input type="checkbox"
+                   data-action="change->translation-selector#toggle"
+                   data-translation="SV"
+                   checked>
+            <span>Statenvertaling SV</span>
+        </label>
+        {% if is_granted('ROLE_VIEWER_HSV') %}
+        <label class="nav-check-item">
+            <input type="checkbox"
+                   data-action="change->translation-selector#toggle"
+                   data-translation="HSV"
+                   checked>
+            <span>Herz. Statenv. HSV</span>
+        </label>
+        {% endif %}
+    </div>
 </div>
 {% endblock %}
 
@@ -174,17 +203,17 @@
                         <span class="word-translit">{{ word.transliteration }}</span>
                         {% endif %}
 
-                        {% if word.strongs %}
-                        <a href="{{ path('app_strongs', {number: word.strongs}) }}"
-                           class="word-strongs"
-                           data-turbo-frame="strongs-panel"
-                           tabindex="-1">{{ word.strongs }}</a>
-                        {% endif %}
-
-                        {% if word.morph_description %}
-                        <span class="word-morph" title="{{ word.morph_description }}">
-                            {{ testament == 'OT' ? word.morph_code : word.parse_code }}
-                        </span>
+                        {% if word.strongs or word.morph_description %}
+                        <div class="word-popup">
+                            {% if word.strongs %}
+                            <a href="{{ path('app_strongs', {number: word.strongs}) }}"
+                               class="word-strongs"
+                               data-turbo-frame="strongs-panel">{{ word.strongs }}</a>
+                            {% endif %}
+                            {% if word.morph_description %}
+                            <span class="word-morph">{{ word.morph_description }}</span>
+                            {% endif %}
+                        </div>
                         {% endif %}
 
                         {# Koppel-indicatoren — alleen voor ROLE_LINKER #}

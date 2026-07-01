@@ -10,16 +10,18 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Frank+Ruhl+Libre:wght@400;700&family=GFS+Didot&display=swap" rel="stylesheet">
-    {# Thema vóór stylesheet toepassen om FOUC te voorkomen #}
+    {# CSS direct als link zodat browser styles kent vóór eerste render (voorkomt FOUC) #}
+    <link rel="stylesheet" href="{{ asset('styles/app.css') }}">
+    {# Thema vóór render toepassen om FOUC bij dark mode te voorkomen #}
     <script>var t=localStorage.getItem('theme');if(t)document.documentElement.dataset.theme=t;</script>
     {% block stylesheets %}{% endblock %}
 </head>
 <body>
 
-<header class="site-header">
+<header class="site-header" data-controller="mobile-nav">
     <nav class="nav-inner">
 
-        {# Logo #}
+        {# Logo — altijd zichtbaar #}
         <a href="{{ path('app_home') }}" class="site-logo">
             <svg viewBox="0 0 200 200" width="30" height="30" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                 <defs>
@@ -56,77 +58,94 @@
             <span class="site-logo-name">Alef–Omega</span>
         </a>
 
-        <div class="nav-sep"></div>
+        {# Hamburger-knop — alleen zichtbaar op mobiel #}
+        <button class="nav-hamburger"
+                type="button"
+                data-mobile-nav-target="hamburger"
+                data-action="click->mobile-nav#toggle"
+                aria-label="Menu openen"
+                aria-expanded="false">
+            <span class="hamburger-bar"></span>
+            <span class="hamburger-bar"></span>
+            <span class="hamburger-bar"></span>
+        </button>
 
-        {# Bijbel-dropdown #}
-        <div class="nav-dropdown">
-            <button class="nav-dropdown-btn" type="button">Bijbel ▾</button>
-            <div class="nav-dropdown-menu">
-                <a href="{{ path('app_home') }}">Bijbelboeken</a>
-            </div>
-        </div>
+        {# Nav-links — op mobiel verborgen tot hamburger geopend is #}
+        <div class="nav-links" data-mobile-nav-target="menu">
 
-        {# Editor-dropdown — alleen als gebruiker ten minste één editorrole heeft #}
-        {% if is_granted('ROLE_LINKER') or is_granted('ROLE_EDIT_STRONG_TRNL') %}
-        <div class="nav-sep"></div>
-        <div class="nav-dropdown">
-            <button class="nav-dropdown-btn" type="button">Editor ▾</button>
-            <div class="nav-dropdown-menu">
-                {% if is_granted('ROLE_LINKER') %}
-                <a href="{{ path('app_linking_home') }}">Koppelen</a>
-                <a href="{{ path('app_linking_strongs_home') }}">Strong's koppelen</a>
-                <a href="{{ path('app_trans_linking_home') }}">Vertalingen koppelen</a>
-                {% endif %}
-                {% if is_granted('ROLE_EDIT_STRONG_TRNL') %}
-                <a href="{{ path('app_strongs_translate_home') }}">Vertalen Strong's</a>
-                {% endif %}
-            </div>
-        </div>
-        {% endif %}
+            <div class="nav-sep"></div>
 
-        {# Admin-dropdown — alleen voor admins #}
-        {% if is_granted('ROLE_ADMIN') %}
-        <div class="nav-sep"></div>
-        <div class="nav-dropdown">
-            <button class="nav-dropdown-btn" type="button">Beheer ▾</button>
-            <div class="nav-dropdown-menu">
-                <a href="{{ path('admin_users_index') }}">Gebruikers</a>
-            </div>
-        </div>
-        {% endif %}
+            {# Bijbel-navigatie — kan per pagina worden overschreven #}
+            {% block nav_bijbel %}
+            <a href="{{ path('app_home') }}" class="nav-book-btn">Bijbel</a>
+            {% endblock %}
 
-        {# Boek/hoofdstuk-knop — ingevuld door child templates #}
-        {% block nav_center %}{% endblock %}
-
-        {# Rechter groep #}
-        <div class="nav-right">
-
-            {# Donker/licht toggle #}
-            <button class="nav-theme-btn"
-                    type="button"
-                    data-controller="theme"
-                    data-action="click->theme#toggle"
-                    aria-label="Thema wisselen">
-                <span data-theme-target="iconLight">☀</span>
-                <span data-theme-target="iconDark" class="is-hidden">🌙</span>
-            </button>
-
-            {# Gebruikermenu #}
-            {% if app.user %}
-            <div class="nav-user">
-                <button class="nav-user-btn" type="button">
-                    {{ app.user.displayName }} ▾
-                </button>
-                <div class="nav-user-menu">
-                    <a href="{{ path('app_profile') }}">Profiel</a>
-                    <a href="{{ path('app_logout') }}" class="nav-logout">Uitloggen</a>
+            {# Editor-dropdown — alleen als gebruiker ten minste één editorrole heeft #}
+            {% if is_granted('ROLE_LINKER') or is_granted('ROLE_EDIT_STRONG_TRNL') %}
+            <div class="nav-sep"></div>
+            <div class="nav-dropdown">
+                <button class="nav-dropdown-btn" type="button">Editor ▾</button>
+                <div class="nav-dropdown-menu">
+                    {% if is_granted('ROLE_LINKER') %}
+                    <a href="{{ path('app_linking_home') }}">Koppelen</a>
+                    <a href="{{ path('app_linking_strongs_home') }}">Strong's koppelen</a>
+                    <a href="{{ path('app_trans_linking_home') }}">Vertalingen koppelen</a>
+                    {% endif %}
+                    {% if is_granted('ROLE_EDIT_STRONG_TRNL') %}
+                    <a href="{{ path('app_strongs_translate_home') }}">Vertalen Strong's</a>
+                    {% endif %}
                 </div>
             </div>
-            {% else %}
-            <a href="{{ path('app_login') }}" class="nav-login-btn">Inloggen</a>
             {% endif %}
 
-        </div>
+            {# Admin-dropdown — alleen voor admins #}
+            {% if is_granted('ROLE_ADMIN') %}
+            <div class="nav-sep"></div>
+            <div class="nav-dropdown">
+                <button class="nav-dropdown-btn" type="button">Beheer ▾</button>
+                <div class="nav-dropdown-menu">
+                    <a href="{{ path('admin_users_index') }}">Gebruikers</a>
+                </div>
+            </div>
+            {% endif %}
+
+            {# Boek/hoofdstuk-knop — ingevuld door child templates #}
+            {% block nav_center %}{% endblock %}
+
+            {# Rechter groep #}
+            <div class="nav-right">
+
+                {# Donker/licht toggle #}
+                <button class="nav-theme-btn"
+                        type="button"
+                        data-controller="theme"
+                        data-action="click->theme#toggle"
+                        aria-label="Thema wisselen">
+                    <span data-theme-target="iconLight">☀</span>
+                    <span data-theme-target="iconDark" style="display:none">🌙</span>
+                </button>
+
+                {# Extra nav-right items (bijv. Vertalingen-dropdown per pagina) #}
+                {% block nav_right_extra %}{% endblock %}
+
+                {# Gebruikermenu #}
+                {% if app.user %}
+                <div class="nav-user">
+                    <button class="nav-user-btn" type="button">
+                        {{ app.user.displayName }} ▾
+                    </button>
+                    <div class="nav-user-menu">
+                        <a href="{{ path('app_profile') }}">Profiel</a>
+                        <a href="{{ path('app_logout') }}" class="nav-logout">Uitloggen</a>
+                    </div>
+                </div>
+                {% else %}
+                <a href="{{ path('app_login') }}" class="nav-login-btn">Inloggen</a>
+                {% endif %}
+
+            </div>
+        </div>{# /nav-links #}
+
     </nav>
 </header>
 

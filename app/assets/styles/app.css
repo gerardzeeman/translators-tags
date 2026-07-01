@@ -50,25 +50,25 @@
 
 /* ─── Donkere modus ─────────────────────────────────────────────────────── */
 [data-theme="dark"] {
-    --bg:          #221509;
-    --card-warm:   #1d1208;
-    --hover-warm:  #261a0e;
-    --nav:         #0c0805;
-    --nav-text:    #c0a884;
-    --text:        #e8d4bc;
-    --verse-num:   #7a5c3c;
-    --col-label:   #c09060;
-    --divider:     rgba(236, 192, 122, 0.08);
+    --bg:          #1a1a1e;
+    --card-warm:   #141417;
+    --hover-warm:  #1f1f24;
+    --nav:         #0e0e11;
+    --nav-text:    #b8b4ac;
+    --text:        #ddd9d2;
+    --verse-num:   #6b6660;
+    --col-label:   #9a9590;
+    --divider:     rgba(255, 255, 255, 0.07);
     --accent:      #c07238;
     --gold:        #ecc07a;
     --amber:       #c07238;
 
-    --color-parchment:   #1d1208;
-    --color-ink:         #e8d4bc;
-    --color-ink-light:   #c0a884;
-    --color-ink-muted:   #7a6850;
-    --color-border:      rgba(236, 192, 122, 0.14);
-    --color-border-light:rgba(236, 192, 122, 0.08);
+    --color-parchment:   #141417;
+    --color-ink:         #ddd9d2;
+    --color-ink-light:   #b8b4ac;
+    --color-ink-muted:   #706c66;
+    --color-border:      rgba(255, 255, 255, 0.10);
+    --color-border-light:rgba(255, 255, 255, 0.06);
     --color-accent:      #c07238;
 }
 
@@ -148,6 +148,46 @@ a:hover { text-decoration: underline; }
     flex-shrink: 0;
 }
 
+/* Nav-links wrapper — desktop: gewone flex-rij; mobiel: uitklapbaar menu */
+.nav-links {
+    display: contents; /* Kinderen participeren direct in nav-inner flex */
+}
+
+/* Hamburger — alleen op mobiel zichtbaar */
+.nav-hamburger {
+    display: none;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 5px;
+    margin-left: auto;
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 6px;
+    padding: 6px 8px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.nav-hamburger:hover { background: rgba(255, 255, 255, 0.06); }
+.hamburger-bar {
+    display: block;
+    width: 20px;
+    height: 2px;
+    background: var(--nav-text);
+    border-radius: 2px;
+    transition: transform 0.25s, opacity 0.25s;
+}
+/* ✕-animatie wanneer open */
+.nav-open .nav-hamburger .hamburger-bar:nth-child(1) {
+    transform: translateY(7px) rotate(45deg);
+}
+.nav-open .nav-hamburger .hamburger-bar:nth-child(2) {
+    opacity: 0;
+}
+.nav-open .nav-hamburger .hamburger-bar:nth-child(3) {
+    transform: translateY(-7px) rotate(-45deg);
+}
+
 /* Dropdown-navigatie */
 .nav-dropdown {
     position: relative;
@@ -175,7 +215,7 @@ a:hover { text-decoration: underline; }
 .nav-dropdown-menu {
     display: none;
     position: absolute;
-    top: calc(100% + 6px);
+    top: 100%;
     left: 0;
     background: var(--nav);
     border: 1px solid rgba(255, 255, 255, 0.09);
@@ -184,6 +224,7 @@ a:hover { text-decoration: underline; }
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
     z-index: 300;
     overflow: hidden;
+    padding-top: 6px;
 }
 .nav-dropdown:hover .nav-dropdown-menu,
 .nav-dropdown:focus-within .nav-dropdown-menu {
@@ -208,6 +249,55 @@ a:hover { text-decoration: underline; }
     text-decoration: none;
 }
 
+/* Vertalingen-selector — zelfde patroon als .nav-user */
+.nav-trans-selector {
+    position: relative;
+}
+.nav-trans-menu {
+    display: none;
+    position: absolute;
+    right: 0;
+    top: 100%;
+    background: var(--nav);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 4px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    min-width: 190px;
+    z-index: 300;
+    overflow: hidden;
+    padding: 12px 0 6px;
+}
+.nav-trans-selector:hover .nav-trans-menu,
+.nav-trans-selector:focus-within .nav-trans-menu {
+    display: block;
+}
+.nav-check-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 8px 16px;
+    cursor: pointer;
+    color: var(--nav-text);
+    font-size: 13px;
+    font-family: var(--font-ui);
+    letter-spacing: 0.04em;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    transition: background 0.15s;
+    user-select: none;
+    box-sizing: border-box;
+}
+.nav-check-item:last-child { border-bottom: none; }
+.nav-check-item:hover { background: rgba(255, 255, 255, 0.06); color: #fff; }
+.nav-check-item input[type="checkbox"] {
+    accent-color: #ecc07a;
+    width: 14px;
+    height: 14px;
+    cursor: pointer;
+    flex-shrink: 0;
+    margin: 0;
+}
+
 /* Rechter nav-groep */
 .nav-right {
     display: flex;
@@ -223,7 +313,9 @@ a:hover { text-decoration: underline; }
     border-radius: 20px;
     color: var(--nav-text);
     font-size: 13px;
-    padding: 4px 10px;
+    padding: 4px 0;
+    width: 34px;
+    text-align: center;
     cursor: pointer;
     transition: background 0.2s, color 0.2s, border-color 0.2s;
     white-space: nowrap;
@@ -260,7 +352,7 @@ a:hover { text-decoration: underline; }
     display: none;
     position: absolute;
     right: 0;
-    top: calc(100% + 6px);
+    top: 100%;
     background: var(--nav);
     border: 1px solid rgba(255, 255, 255, 0.09);
     border-radius: 4px;
@@ -268,6 +360,7 @@ a:hover { text-decoration: underline; }
     min-width: 150px;
     z-index: 300;
     overflow: hidden;
+    padding-top: 6px;
 }
 .nav-user:hover .nav-user-menu,
 .nav-user:focus-within .nav-user-menu {
@@ -308,6 +401,7 @@ a:hover { text-decoration: underline; }
 
 /* ─── Main & footer ─────────────────────────────────────────────────────── */
 .site-main { flex: 1; max-width: 1400px; margin: 0 auto; padding: 2rem; width: 100%; }
+@media (max-width: 768px) { .site-main { padding: 0; } }
 .site-footer {
     text-align: center;
     padding: 1.5rem;
@@ -568,14 +662,13 @@ a:hover { text-decoration: underline; }
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: .15rem;
-    padding: .5rem .75rem;
+    padding: .5rem 3px;
     border: 1px solid var(--color-border);
     border-radius: var(--radius);
     cursor: pointer;
     transition: border-color .15s, box-shadow .15s, background .15s;
-    min-width: 60px;
     text-align: center;
+    position: relative;
 }
 .source-word:hover, .source-word.active {
     border-color: var(--accent);
@@ -584,7 +677,6 @@ a:hover { text-decoration: underline; }
 }
 .word-text {
     font-size: 1.5rem;
-    line-height: 1.3;
     font-family: var(--font-greek);
 }
 .dir-rtl .word-text {
@@ -592,27 +684,62 @@ a:hover { text-decoration: underline; }
     font-family: var(--font-hebrew);
 }
 .word-translit { font-size: .7rem; color: var(--color-ink-muted); font-style: italic; }
+.word-popup {
+    display: none;
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--nav);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 4px;
+    padding: 5px 10px;
+    z-index: 200;
+    white-space: nowrap;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    direction: ltr;
+    pointer-events: none;
+}
+/* Popup zichtbaar bij hover of terwijl de link focus heeft (klikbaar) */
+.source-word:hover .word-popup,
+.source-word:focus-within .word-popup {
+    display: flex;
+    pointer-events: auto;
+}
+/* Kleine pijl-punt onderaan de popup */
+.word-popup::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 5px solid transparent;
+    border-top-color: var(--nav);
+}
 .word-strongs {
     font-family: var(--font-mono);
-    font-size: .65rem;
-    color: var(--accent);
-    border: 1px solid var(--divider);
-    border-radius: 2px;
-    padding: 0 .3rem;
+    font-size: .7rem;
+    color: #ecc07a;
+    padding: 0 .2rem;
+    text-decoration: none;
 }
+.word-strongs:hover { text-decoration: underline; }
 .word-morph {
     font-family: var(--font-mono);
-    font-size: .6rem;
-    color: var(--color-ink-muted);
+    font-size: .65rem;
+    color: rgba(255, 255, 255, 0.55);
 }
-.link-indicators { display: flex; flex-wrap: wrap; gap: .2rem; justify-content: center; }
+.link-indicators { display: flex; flex-wrap: wrap; gap: .1rem; justify-content: center; direction: ltr; }
 .link-dot {
     font-size: .65rem;
-    padding: .1rem .35rem;
+    padding: .02rem .08rem;
     border-radius: 2px;
-    color: #fff;
+    color: #4d7a63;
 }
-.no-link-badge { font-size: .65rem; color: var(--color-none); }
+.no-link-badge { font-size: .65rem; color: #4d7a63; }
 
 /* ─── Nederlandse vers ───────────────────────────────────────────────────── */
 .dutch-verse { font-size: 1.25rem; line-height: 2.2; }
@@ -634,12 +761,12 @@ a:hover { text-decoration: underline; }
 .dutch-word[data-method="none"]        { color: var(--color-ink-muted); }
 
 /* Link-dot kleuren */
-.method-manual       { background: var(--color-manual); }
-.method-manual-empty { background: transparent; border: 2px dashed var(--color-manual); }
-.method-manual_hint  { background: var(--color-manual-hint); }
-.method-proper_noun  { background: var(--color-proper-noun); }
-.method-positional   { background: var(--color-positional); }
-.method-none         { background: var(--color-none); }
+.method-manual,
+.method-manual-empty,
+.method-manual_hint,
+.method-proper_noun,
+.method-positional,
+.method-none         { background: transparent; }
 
 /* Legenda */
 .confidence-legend {
@@ -882,14 +1009,14 @@ a:hover { text-decoration: underline; }
 /* ── Kolomkoppenrij ──────────────────────────────────────────────────────── */
 .chapter-grid-header {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 2fr 1fr;
     border: 1px solid var(--divider);
     border-bottom: none;
     border-radius: var(--radius) var(--radius) 0 0;
     overflow: hidden;
 }
 .chapter-grid-header.has-hsv {
-    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-columns: 2fr 1fr 1fr;
 }
 
 .col-header {
@@ -917,13 +1044,13 @@ a:hover { text-decoration: underline; }
 /* ── Vers-grid ───────────────────────────────────────────────────────────── */
 .chapter-verse-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 2fr 1fr;
     border: 1px solid var(--divider);
     border-radius: 0 0 var(--radius) var(--radius);
-    overflow: hidden;
+    overflow: visible;
 }
 .chapter-verse-grid.has-hsv {
-    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-columns: 2fr 1fr 1fr;
 }
 
 /* display:contents laat de cellen direct in het ouder-grid participeren.
@@ -948,9 +1075,36 @@ a:hover { text-decoration: underline; }
     border-right: none;
 }
 
+/* Verberg-klassen die de translation-selector controller toepast */
+.chapter-verse-grid.hide-sv  .verse-cell-sv,
+.chapter-verse-grid.hide-hsv .verse-cell-hsv { display: none; }
+.chapter-grid-header.hide-sv  .col-header-sv,
+.chapter-grid-header.hide-hsv .col-header-hsv { display: none; }
+
+/* Pas grid-kolommen aan op basis van verborgen vertalingen */
+/* Alleen SV zichtbaar (HSV verborgen) */
+.chapter-verse-grid.has-hsv.hide-hsv { grid-template-columns: 2fr 1fr; }
+.chapter-grid-header.has-hsv.hide-hsv { grid-template-columns: 2fr 1fr; }
+/* Alleen HSV zichtbaar (SV verborgen) */
+.chapter-verse-grid.has-hsv.hide-sv { grid-template-columns: 2fr 1fr; }
+.chapter-grid-header.has-hsv.hide-sv { grid-template-columns: 2fr 1fr; }
+
+/* border-right correctie: als sv de enige vertaling is, geen rand */
+.chapter-verse-grid.has-hsv.hide-hsv .verse-cell-sv { border-right: none; }
+/* Als sv verborgen is, is source de enige + hsv = laatste; source heeft al geen right-border nodig */
+.chapter-verse-grid.has-hsv.hide-sv .verse-cell-source { border-right: 1px solid var(--divider); }
+.chapter-verse-grid.has-hsv.hide-sv .verse-cell-hsv { border-right: none; }
+
 /* Laatste rij: geen onderrand op de cellen */
 .verse-row:last-child .verse-cell {
     border-bottom: none;
+}
+.verse-row:last-child .verse-cell-source {
+    border-bottom-left-radius: var(--radius);
+}
+.chapter-verse-grid:not(.has-hsv) .verse-row:last-child .verse-cell-sv,
+.chapter-verse-grid.has-hsv .verse-row:last-child .verse-cell-hsv {
+    border-bottom-right-radius: var(--radius);
 }
 
 .verse-cell-source { background: var(--card-warm); }
@@ -991,7 +1145,7 @@ a:hover { text-decoration: underline; }
 .verse-cell-source .source-words {
     display: flex;
     flex-wrap: wrap;
-    gap: .35rem .5rem;
+    gap: .35rem .1rem;
 }
 .verse-cell-source .source-word {
     border-color: var(--divider);
@@ -1022,7 +1176,7 @@ a:hover { text-decoration: underline; }
     position: fixed;
     top: var(--nav-height);
     right: 0;
-    width: 264px;
+    width: 340px;
     height: calc(100vh - var(--nav-height));
     background: var(--bg);
     border-left: 1px solid var(--divider);
@@ -1086,9 +1240,119 @@ a:hover { text-decoration: underline; }
     display: none; /* desktop: verborgen */
 }
 
-/* Wanneer één kolom actief is op mobiel, verberg de andere */
+/* ── Mobiel (≤ 768px) ────────────────────────────────────────────────────── */
 @media (max-width: 768px) {
-    /* Hoofdstukstrip — sticky direct onder navbar */
+
+    /* ── Hamburger-menu ── */
+    .nav-hamburger {
+        display: flex;
+    }
+
+    /* nav-links: verborgen totdat hamburger wordt geopend */
+    .nav-links {
+        display: none;
+        position: fixed;
+        top: var(--nav-height);
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: var(--nav);
+        z-index: 490;
+        flex-direction: column;
+        align-items: stretch;
+        overflow-y: auto;
+        padding-bottom: 2rem;
+        border-top: 1px solid rgba(255, 255, 255, 0.07);
+    }
+
+    .site-header.nav-open .nav-links {
+        display: flex;
+    }
+
+    /* Scheidingslijnen worden horizontale regels in het mobiele menu */
+    .nav-links .nav-sep {
+        width: 100%;
+        height: 1px;
+        margin: 4px 0;
+        background: rgba(255, 255, 255, 0.06);
+    }
+
+    /* Boek-knop, dropdown-knoppen, login-knop: volle breedte */
+    .nav-links .nav-book-btn,
+    .nav-links .nav-dropdown-btn {
+        width: 100%;
+        text-align: left;
+        padding: 14px 24px;
+        border-radius: 0;
+        border: none;
+        font-size: 15px;
+    }
+
+    /* Dropdowns: ingeklapt, uitklapbaar via .is-open (beheerd door mobile-nav controller) */
+    .nav-links .nav-dropdown,
+    .nav-links .nav-user,
+    .nav-links .nav-trans-selector { position: static; }
+
+    .nav-links .nav-dropdown-menu,
+    .nav-links .nav-user-menu,
+    .nav-links .nav-trans-menu {
+        display: none;
+        position: static;
+        background: rgba(255, 255, 255, 0.04);
+        border: none;
+        border-radius: 0;
+        box-shadow: none;
+        padding: 0 0 4px;
+        min-width: 0;
+    }
+
+    .nav-links .nav-dropdown.is-open .nav-dropdown-menu,
+    .nav-links .nav-user.is-open .nav-user-menu,
+    .nav-links .nav-trans-selector.is-open .nav-trans-menu { display: block; }
+
+    .nav-links .nav-dropdown-menu a,
+    .nav-links .nav-user-menu a {
+        padding: 11px 36px;
+        font-size: 14px;
+    }
+    .nav-links .nav-check-item {
+        padding: 11px 36px;
+        font-size: 14px;
+    }
+
+
+    /* nav-right: kolom in het mobiele menu */
+    .nav-links .nav-right {
+        flex-direction: column;
+        align-items: stretch;
+        margin-left: 0;
+        gap: 0;
+        padding: 4px 0;
+    }
+
+    /* Thema-toggle: volle breedte rij */
+    .nav-links .nav-theme-btn {
+        width: auto;
+        align-self: flex-start;
+        margin: 8px 24px;
+        border-radius: 20px;
+    }
+
+    .nav-links .nav-user-btn {
+        width: 100%;
+        text-align: left;
+        padding: 14px 24px;
+        border-radius: 0;
+        border: none;
+        font-size: 15px;
+    }
+    .nav-links .nav-login-btn {
+        display: block;
+        padding: 14px 24px;
+        font-size: 15px;
+    }
+
+    /* ── Hoofdstukstrip — sticky direct onder navbar ── */
     .mobile-chapter-strip {
         display: flex;
         position: sticky;
@@ -1099,7 +1363,7 @@ a:hover { text-decoration: underline; }
         -webkit-overflow-scrolling: touch;
         scrollbar-width: none;
         background: var(--nav);
-        border-bottom: 1px solid rgba(192,168,132,.12);
+        border-bottom: 1px solid rgba(192, 168, 132, .12);
         padding: 0 6px;
         height: 40px;
         align-items: center;
@@ -1124,7 +1388,7 @@ a:hover { text-decoration: underline; }
         text-decoration: none;
         transition: background .12s, color .12s;
     }
-    .mobile-chapter-btn:hover { background: rgba(192,168,132,.15); color: var(--gold); }
+    .mobile-chapter-btn:hover { background: rgba(192, 168, 132, .15); color: var(--gold); }
     .mobile-chapter-btn.is-active {
         background: var(--accent);
         color: #fff;
@@ -1161,37 +1425,65 @@ a:hover { text-decoration: underline; }
         border-color: var(--accent);
     }
 
-    /* Verberg HSV-kolom standaard op mobiel; toon alleen als actief.
-       .has-hsv-role garandeert dat deze regels alleen vuren voor ROLE_VIEWER_HSV-gebruikers. */
-    .chapter-verse-grid.has-hsv-role[data-active-translation="SV"]  .verse-cell-hsv { display: none; }
-    .chapter-verse-grid.has-hsv-role[data-active-translation="HSV"] .verse-cell-sv  { display: none; }
-    /* Bronkolom altijd zichtbaar op mobiel */
-    .chapter-verse-grid.has-hsv-role[data-active-translation="HSV"] .verse-cell-source { display: block; }
-}
-
-/* ── Mobiel ──────────────────────────────────────────────────────────────── */
-@media (max-width: 768px) {
-    .page-chapter-view { padding: 1rem 0 4rem; }
-
-    .chapter-nav { padding: 0 1rem; }
-
-    /* Op mobiel stapelen we kolommen: bron boven, vertaling eronder */
-    .chapter-grid-header { display: none; } /* kolomlabels niet op mobiel */
+    /* ── Vers-grid: één kolom, gestapeld ── */
+    .page-chapter-view { padding: 3px 0 4rem; }
+    .chapter-nav { padding: 2px 1rem; margin-bottom: .25rem; font-size: 12px; }
+    .chapter-grid-header { display: none; }
 
     .chapter-verse-grid,
     .chapter-verse-grid.has-hsv {
-        grid-template-columns: 1fr;
+        display: block; /* geen grid op mobiel — gewoon blokken */
         border-radius: 0;
         border-left: none;
         border-right: none;
     }
 
-    .verse-row { display: block; }
+    .verse-row {
+        display: block;
+        border-bottom: 2px solid var(--divider);
+    }
+    .verse-row:last-child { border-bottom: none; }
 
     .verse-cell {
-        padding: 14px 16px;
+        padding: 12px 16px;
         border-right: none;
+        border-bottom: 1px solid var(--divider);
     }
+    .verse-cell:last-child { border-bottom: none; }
+
+    /* Hide-klassen van de translation-selector (ingesteld op desktop) mogen op mobiel niets verbergen */
+    .chapter-verse-grid.hide-sv  .verse-cell-sv,
+    .chapter-verse-grid.hide-hsv .verse-cell-hsv { display: block; }
+
+    /* Verberg HSV-kolom standaard op mobiel; toon alleen als actief.
+       .has-hsv-role garandeert dat deze regels alleen vuren voor ROLE_VIEWER_HSV-gebruikers. */
+    .chapter-verse-grid.has-hsv-role[data-active-translation="SV"]  .verse-cell-hsv { display: none; }
+    .chapter-verse-grid.has-hsv-role[data-active-translation="HSV"] .verse-cell-sv  { display: none; }
+
+    .source-word { padding: .2rem 2px; }
+
+    .source-words-grid .src-word { padding: .15rem 2px; }
+
+    .linking-area .link-panel  { padding: .75rem 1rem; }
+    .link-panel .panel-label   { margin-bottom: .5rem; padding-bottom: .35rem; }
+    .link-panel .dutch-words-flow { font-size: 1rem; line-height: 2; margin-top: .4rem; }
+
+    .linking-status-bar { flex-direction: column; align-items: stretch; gap: .5rem; }
+    .linking-status     { flex: none; }
+    .btn-confirm-proposals { align-self: flex-start; }
+    .src-text            { font-size: 1.05rem; }
+    .source-words-grid.rtl .src-text { font-size: 1.25rem; }
+    .src-translit   { font-size: .55rem; }
+    .source-words-grid { gap: .2rem .1rem; }
+
+    .link-indicators, .no-link-badge { display: none; }
+
+    .word-popup {
+        white-space: normal;
+        max-width: min(220px, 80vw);
+        text-align: center;
+    }
+    .word-morph { font-size: .6rem; }
 
     /* Broncel bovenlabel op mobiel */
     .verse-cell-source::before {
@@ -1205,7 +1497,25 @@ a:hover { text-decoration: underline; }
         font-family: var(--font-ui);
     }
 
-    /* Strong's: bottom sheet op mobiel — altijd in de render tree, animatie via transform */
+    /* Action-bar: zwevend onderaan het scherm op mobiel */
+    .action-bar-inline {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        z-index: 400;
+        margin-top: 0;
+        border-radius: 0;
+        border: none;
+        border-top: 1px solid var(--color-border);
+        box-shadow: 0 -4px 20px rgba(0, 0, 0, .25);
+        background: var(--nav);
+        padding: .75rem 1.5rem;
+    }
+    .action-bar-inline .action-label { color: var(--nav-text); }
+    .action-bar-inline .btn-cancel   { color: var(--nav-text); border-color: rgba(255,255,255,.2); }
+
+    /* Strong's: bottom sheet op mobiel */
     .strongs-sidebar {
         display: flex;
         top: auto;
@@ -1227,7 +1537,6 @@ a:hover { text-decoration: underline; }
         pointer-events: auto;
     }
 
-    .page-chapter-view.strongs-open .chapter-grid-header,
     .page-chapter-view.strongs-open .chapter-verse-grid {
         margin-right: 0;
     }
@@ -1330,7 +1639,7 @@ a:hover { text-decoration: underline; }
 .source-words-grid {
     display: flex;
     flex-wrap: wrap;
-    gap: .6rem .75rem;
+    gap: .35rem .1rem;
 }
 .source-words-grid.rtl { direction: rtl; }
 
@@ -1339,11 +1648,10 @@ a:hover { text-decoration: underline; }
     flex-direction: column;
     align-items: center;
     gap: .1rem;
-    padding: .5rem .7rem;
+    padding: .5rem 3px;
     border: 2px solid var(--color-border);
     border-radius: 5px;
     cursor: pointer;
-    min-width: 52px;
     text-align: center;
     transition: border-color .12s, box-shadow .12s, background .12s;
     position: relative;
@@ -1384,21 +1692,24 @@ a:hover { text-decoration: underline; }
 .src-text    { font-size: 1.4rem; line-height: 1.3; font-family: var(--font-greek); }
 .rtl .src-text { font-size: 1.7rem; font-family: var(--font-hebrew); }
 .src-translit { font-size: .65rem; color: var(--color-ink-muted); font-style: italic; }
-.src-strongs  { font-family: var(--font-mono); font-size: .6rem; color: var(--color-accent-2); }
-.strongs-highlight { color: var(--accent); font-weight: 600; }
+/* src-strongs zit in .word-popup; stijl zichtbaar in popup */
+.src-strongs  { font-family: var(--font-mono); font-size: .7rem; color: #ecc07a; text-decoration: none; }
+.strongs-highlight { color: #ecc07a; font-weight: 600; }
+/* Popup activeren voor .src-word (zelfde mechanisme als .source-word) */
+.src-word:hover .word-popup,
+.src-word:focus-within .word-popup { display: flex; pointer-events: auto; }
 
-.src-links { display: flex; flex-wrap: wrap; gap: .15rem; justify-content: center; margin-top: .15rem; }
+.src-links { display: flex; flex-wrap: wrap; gap: .1rem; justify-content: center; margin-top: .1rem; }
 .link-chip {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 14px;
-    height: 14px;
-    border-radius: 50%;
+    border-radius: 3px;
     font-size: .6rem;
-    color: #fff;
-    cursor: default;
-    opacity: .8;
+    padding: .02rem .15rem;
+    color: #4d7a63;
+    background: transparent;
+    cursor: pointer;
 }
 
 .dutch-words-flow { font-size: 1.15rem; line-height: 2.4; margin-top: .75rem; }
@@ -1845,6 +2156,10 @@ a:hover { text-decoration: underline; }
 .method-auto_source_pivot  { background: var(--color-auto-pivot);      color: #fff; }
 .method-auto_sequence      { background: var(--color-auto-sequence);    color: #fff; }
 .method-auto_positional    { background: var(--color-auto-positional);  color: #fff; }
+/* link-dots: auto-methodes zelfde neutrale stijl als de andere dots */
+.link-dot.method-auto_source_pivot,
+.link-dot.method-auto_sequence,
+.link-dot.method-auto_positional { background: transparent; color: #4d7a63; }
 .dot.method-auto_source_pivot  { background: var(--color-auto-pivot); }
 .dot.method-auto_sequence      { background: var(--color-auto-sequence); }
 .dot.method-auto_positional    { background: var(--color-auto-positional); }

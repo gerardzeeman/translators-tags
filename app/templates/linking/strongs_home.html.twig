@@ -8,12 +8,14 @@
         Voer een Strong's nummer in om alle voorkomens te bekijken en te koppelen.
     </p>
 
-    <div class="strongs-home-card">
+    <form class="strongs-home-card"
+          data-controller="strongs-select"
+          action="#">
+
         <div class="form-group">
-            <label>
-                Vertaling
-            </label>
-            <select id="strongs-translation">
+            <label for="strongs-translation">Vertaling</label>
+            <select id="strongs-translation"
+                    data-strongs-select-target="translation">
                 {% for t in translations %}
                 {% if t.code == 'SV' or is_granted('ROLE_VIEWER_HSV') %}
                 <option value="{{ t.code }}">{{ t.name }}</option>
@@ -21,25 +23,25 @@
                 {% endfor %}
             </select>
         </div>
+
         <div class="form-group">
-            <label>
-                Strong's nummer
-            </label>
+            <label for="strongs-search">Strong's nummer</label>
             <input type="text"
                    id="strongs-search"
-                   placeholder="bijv. H0430 of G2316">
+                   placeholder="bijv. H0430 of G2316"
+                   data-strongs-select-target="input"
+                   data-action="keydown.enter->strongs-select#navigate">
             <p class="field-hint">
                 H = Hebreeuws (OT) &nbsp;·&nbsp; G = Grieks (NT)
             </p>
         </div>
-        <button id="strongs-btn" class="btn-primary">
+
+        <button type="button"
+                class="btn-primary"
+                data-action="click->strongs-select#navigate">
             Zoek woord →
         </button>
-    </div>
-</div>
-{% endblock %}
 
-{% block javascripts %}
-    {{ parent() }}
-    <script src="{{ asset('strongs_search.js') }}" defer></script>
+    </form>
+</div>
 {% endblock %}
