@@ -51,7 +51,7 @@ RUN composer install \
 COPY . .
 
 RUN composer run-script post-install-cmd --no-interaction 2>/dev/null || true \
-    && php bin/console cache:warmup \
-    && php bin/console asset-map:compile 2>/dev/null || true
+    && php bin/console asset-map:compile \
+    && php bin/console cache:warmup
 
 CMD ["frankenphp", "run", "--config", "/app/Caddyfile"]
