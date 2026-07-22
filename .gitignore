@@ -23,6 +23,11 @@ Thumbs.db
 desktop.ini
 app/.env.dev
 
+# DB dumps (kunnen wachtwoordhashes/PII bevatten -- nooit committen)
+/bible_compare.dump
+/bible_compare.sql
+*.dump
+
 # Lokale bestanden
 strongs_he_batch*
 graphify-out/

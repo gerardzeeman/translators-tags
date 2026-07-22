@@ -30,6 +30,10 @@ Daarna kunnen de automatische koppelingen handmatig worden gecontroleerd en geco
 
 Beheerders kunnen via `/admin/users` gebruikers aanmaken en rollen toewijzen. Er zijn vijf rollen: `ROLE_VIEWER`, `ROLE_VIEWER_HSV`, `ROLE_LINKER`, `ROLE_EDIT_STRONG_TRNL` en `ROLE_ADMIN`.
 
+### Institutio-pijplijn (los onderdeel)
+
+Naast de Bijbeltekst bevat het project een aparte, in opzet vergelijkbare pijplijn die Calvijns *Institutio christianae religionis* (1559, Latijn) verwerkt tot een gelaagde Latijns-Nederlandse editie (interlineaire glossen + vloeiende LLM-vertaling met SimAlign-woordalignment). Dit gebruikt eigen tabellen (`work`/`segment`/`token`/`lemma_gloss`/`translation`/`alignment`) naast de bestaande Hebreeuws/Grieks-tabellen. Zie [`ingest/institutio/README.md`](ingest/institutio/README.md).
+
 ---
 
 ## Technische stack
@@ -144,3 +148,4 @@ docker compose down -v && docker compose up -d
 | [`docs/backups.md`](docs/backups.md) | Database-backups naar DigitalOcean Spaces |
 | [`docs/data-sync.md`](docs/data-sync.md) | Database synchronisatie prod ↔ dev |
 | [`docs/security.md`](docs/security.md) | Security audit-rapporten |
+| [`ingest/institutio/README.md`](ingest/institutio/README.md) | Institutio-pijplijn (Latijn → Nederlands) |

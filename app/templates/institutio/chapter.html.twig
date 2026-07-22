@@ -1,0 +1,100 @@
+{% extends 'base.html.twig' %}
+{% set page_title = book is not null ? 'Institutio ' ~ book ~ '.' ~ chapter : 'Institutio · Voorwoord' %}
+{% block title %}{{ page_title }} – Bijbel Vergelijking{% endblock %}
+
+{% macro note_marker(kind, glyph, note, verse_href) %}<span class="institutio-note institutio-note-{{ kind }}" tabindex="0"><sup class="institutio-note-glyph">{% if verse_href %}<a href="{{ verse_href }}" data-turbo-frame="institutio-verse-panel" title="Bekijk Bijbeltekst">{{ glyph }}</a>{% else %}{{ glyph }}{% endif %}</sup><span class="institutio-note-popup"><span class="institutio-note-popup-kind">{{ kind == 'variant' ? 'Variant lezing' : 'Verwijzing' }}</span>{{ note }}</span></span>{% endmacro %}
+{% macro word_hover(content, lemma, gloss) %}<span class="institutio-word" tabindex="0">{{ content }}<span class="institutio-word-popup"><span class="institutio-word-lemma">{{ lemma ?? content }}</span>{% if gloss %}<span class="institutio-word-gloss">{{ gloss }}</span>{% endif %}</span></span>{% endmacro %}
+{% import _self as m %}
+
+{% block nav_bijbel %}
+{{ include('institutio/_nav_panel.html.twig', {
+    trigger_label: page_title,
+    active_book: book,
+    active_chapter: chapter,
+    book_chapter_counts: book_chapter_counts,
+    has_front_matter: has_front_matter,
+}) }}
+{% endblock %}
+
+{% block nav_center %}{% endblock %}
+
+{% block nav_right_extra %}
+<a href="{{ path('app_institutio_lemmas') }}" class="nav-user-btn">Lemma's</a>
+{% endblock %}
+
+{% block body %}
+<div class="page-institutio" data-controller="verse-panel">
+
+    {# Hoofdstuk-navigatie #}
+    <nav class="chapter-nav" aria-label="Institutio navigatie">
+        <a href="{{ path('app_institutio_home') }}" class="chapter-nav-book">Institutio</a>
+        <span class="chapter-nav-sep">›</span>
+        <span class="chapter-nav-current">
+            {% if book is not null %}Boek {{ book }}, hoofdstuk {{ chapter }}{% else %}Voorwoord{% endif %}
+        </span>
+
+        <div class="chapter-nav-arrows">
+            {% if nav.prev %}
+            <a href="{{ nav.prev.book is not null ? path('app_institutio_chapter', {book: nav.prev.book, chapter: nav.prev.chapter}) : path('app_institutio_front') }}"
+               class="nav-btn" title="Vorig hoofdstuk">‹</a>
+            {% endif %}
+            {% if nav.next %}
+            <a href="{{ nav.next.book is not null ? path('app_institutio_chapter', {book: nav.next.book, chapter: nav.next.chapter}) : path('app_institutio_front') }}"
+               class="nav-btn" title="Volgend hoofdstuk">›</a>
+            {% endif %}
+        </div>
+    </nav>
+
+    {# Hoofdstuktitel #}
+    <div class="institutio-heading{{ heading_nl ? '' : ' institutio-heading-solo' }}">
+        {% if book is not null %}
+            <span class="institutio-heading-ref">{{ book }}.{{ chapter }}:</span> {{ heading }}
+        {% else %}
+            {{ heading }}
+        {% endif %}
+    </div>
+    {% if heading_nl %}
+    <div class="institutio-heading-nl">{{ heading_nl }}</div>
+    {% endif %}
+
+    {# Genummerde secties: Latijn (bron) en Nederlandse vertaling (LLM), zin voor zin uitgelijnd #}
+    <div class="institutio-sections">
+        {% for s in sections %}
+        <div class="institutio-section" id="s{{ s.section }}">
+            <span class="institutio-section-num">{{ s.section }}</span>
+            <div class="institutio-sentence-group">
+                {% for pair in s.sentence_pairs %}
+                <div class="institutio-sentence-row">
+                    <p class="institutio-sentence-la">{% for part in pair.la_parts %}{%- if part.type == 'text' -%}{{ part.content }}{%- elseif part.type == 'word' -%}{{ m.word_hover(part.content, part.lemma, part.gloss) }}{%- else -%}{{ m.note_marker(part.kind, part.glyph, part.note, part.verse_href) }}{%- endif -%}{% endfor %}</p>
+                    {% if pair.nl_text %}
+                    <p class="institutio-sentence-nl">{{ pair.nl_text }}{% if pair.annotations %} {% endif %}{% for a in pair.annotations %}{{ m.note_marker(a.kind, a.glyph, a.note, a.verse_href) }}{% endfor %}</p>
+                    {% else %}
+                    <p class="institutio-sentence-nl institutio-no-translation">Nog niet vertaald.</p>
+                    {% endif %}
+                    {% if is_granted('ROLE_EDIT_INSTITUTIO_TRNL') %}
+                    <a href="{{ path('app_institutio_translate', {id: s.id}) }}"
+                       class="institutio-edit-btn" title="Vertaling bewerken">✎</a>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% else %}
+        <p class="no-verse">Geen tekst gevonden.</p>
+        {% endfor %}
+    </div>
+
+    {# Bijbeltekst-zijpaneel (desktop) / bottom sheet (mobiel) — vulling via Turbo #}
+    <aside class="institutio-verse-sidebar" data-verse-panel-target="sidebar">
+        <div class="institutio-verse-sidebar-header">
+            <span class="institutio-verse-sidebar-title">Bijbeltekst (HSV)</span>
+            <button class="institutio-verse-sidebar-close" type="button"
+                    data-action="click->verse-panel#close" aria-label="Sluiten">×</button>
+        </div>
+        <turbo-frame id="institutio-verse-panel">
+            <p class="institutio-verse-placeholder">Klik op een Schriftverwijzing om de tekst te zien.</p>
+        </turbo-frame>
+    </aside>
+
+</div>{# /page-institutio #}
+{% endblock %}

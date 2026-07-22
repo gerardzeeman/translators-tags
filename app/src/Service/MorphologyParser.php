@@ -397,6 +397,52 @@ class MorphologyParser
         return self::HE_SUFFIX[$rest[0] ?? ''] ?? 'Suffix';
     }
 
+    // ── Latin (Universal Dependencies / LatinCy) ────────────────────────────
+
+    private const LAT_CASE = [
+        'Nom' => 'Nominatief', 'Gen' => 'Genitief', 'Dat' => 'Datief',
+        'Acc' => 'Accusatief', 'Abl' => 'Ablatief', 'Voc' => 'Vocatief',
+        'Loc' => 'Locatief',
+    ];
+    private const LAT_NUMBER = ['Sing' => 'Enkelvoud', 'Plur' => 'Meervoud'];
+    private const LAT_GENDER = ['Masc' => 'Mannelijk', 'Fem' => 'Vrouwelijk', 'Neut' => 'Onzijdig'];
+    private const LAT_TENSE  = [
+        'Pres' => 'Tegenwoordige tijd', 'Past' => 'Verleden tijd',
+        'Fut'  => 'Toekomende tijd',    'Pqp'  => 'Voltooid verleden tijd',
+    ];
+    private const LAT_MOOD = [
+        'Ind' => 'Aantonende wijs', 'Sub' => 'Aanvoegende wijs', 'Imp' => 'Gebiedende wijs',
+    ];
+
+    /**
+     * Decodes a LatinCy/UD morph feature string (e.g. "Case=Gen|Gender=Fem|Number=Sing")
+     * into naamval, getal, geslacht, tijd, modus — in that order, omitting whichever
+     * of the five aren't present for this word (e.g. infinitives have neither).
+     */
+    public function describeLatin(?string $morph): string
+    {
+        if (!$morph) {
+            return '';
+        }
+
+        $features = [];
+        foreach (explode('|', $morph) as $pair) {
+            [$key, $value] = array_pad(explode('=', $pair, 2), 2, null);
+            if ($key !== null && $value !== null) {
+                $features[$key] = $value;
+            }
+        }
+
+        $parts = [];
+        if (isset($features['Case']))   $parts[] = self::LAT_CASE[$features['Case']]     ?? $features['Case'];
+        if (isset($features['Number'])) $parts[] = self::LAT_NUMBER[$features['Number']] ?? $features['Number'];
+        if (isset($features['Gender'])) $parts[] = self::LAT_GENDER[$features['Gender']] ?? $features['Gender'];
+        if (isset($features['Tense']))  $parts[] = self::LAT_TENSE[$features['Tense']]   ?? $features['Tense'];
+        if (isset($features['Mood']))   $parts[] = self::LAT_MOOD[$features['Mood']]     ?? $features['Mood'];
+
+        return implode(', ', $parts);
+    }
+
     /** Parse gender + number + state from a 3-char string */
     private function parseGenderNumberState(string $gns): array
     {

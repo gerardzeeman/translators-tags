@@ -1,0 +1,67 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Vertaling bewerken – {{ segment.ref }} – Bijbel Vergelijking{% endblock %}
+
+{% block nav_center %}{% endblock %}
+
+{% block body %}
+<div class="translate-screen">
+
+    <div class="translate-topbar">
+        <a href="{{ segment.book is not null ? path('app_institutio_chapter', {book: segment.book, chapter: segment.chapter}) : path('app_institutio_front') }}"
+           class="btn-cancel">‹ Terug naar {{ segment.ref }}</a>
+        {% if saved %}
+        <div class="translate-saved-notice">✓ Opgeslagen</div>
+        {% endif %}
+    </div>
+
+    <form method="post" action="{{ path('app_institutio_translate_save', {id: segment.id}) }}" class="translate-form">
+
+        <div class="translate-panels">
+
+            {# Left: Latin (read-only, for reference) #}
+            <div class="translate-panel">
+                <div class="translate-panel-header">
+                    <span class="translate-panel-lang">Latijn</span>
+                    <span class="translate-panel-id">{{ segment.ref }}</span>
+                </div>
+                {% if segment.heading %}
+                <div class="translate-field-group">
+                    <label class="translate-field-label">Hoofdstuktitel</label>
+                    <div class="translate-field-readonly">{{ segment.heading }}</div>
+                </div>
+                {% endif %}
+                <div class="translate-field-group translate-field-group--grow">
+                    <label class="translate-field-label">Tekst</label>
+                    <div class="translate-field-readonly translate-field-readonly--pre">{{ segment.text_la }}</div>
+                </div>
+            </div>
+
+            {# Right: Dutch (editable) #}
+            <div class="translate-panel translate-panel--nl">
+                <div class="translate-panel-header">
+                    <span class="translate-panel-lang">Nederlands</span>
+                </div>
+
+                <div class="translate-field-group translate-field-group--grow">
+                    <label class="translate-field-label" for="text_nl">Vertaling</label>
+                    <textarea
+                        id="text_nl"
+                        name="text_nl"
+                        class="translate-field-textarea"
+                        rows="20"
+                        placeholder="Nog niet vertaald."
+                    >{{ segment.text_nl ?? '' }}</textarea>
+                </div>
+
+                <div class="translate-panel-footer">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token('institutio_translate') }}">
+                    <button type="submit" class="btn-primary btn-save">Opslaan</button>
+                </div>
+            </div>
+
+        </div>{# /.translate-panels #}
+    </form>
+
+</div>{# /.translate-screen #}
+{% endblock %}

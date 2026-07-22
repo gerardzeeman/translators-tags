@@ -39,22 +39,25 @@ security:
                 secure: true
 
     role_hierarchy:
-        ROLE_VIEWER:            [ROLE_USER]
-        ROLE_LINKER:            [ROLE_VIEWER]
-        ROLE_VIEWER_HSV:        [ROLE_VIEWER]
-        ROLE_EDIT_STRONG_TRNL:  [ROLE_VIEWER]
-        ROLE_ADMIN:             [ROLE_LINKER, ROLE_VIEWER_HSV, ROLE_EDIT_STRONG_TRNL]
+        ROLE_VIEWER:                [ROLE_USER]
+        ROLE_LINKER:                [ROLE_VIEWER]
+        ROLE_VIEWER_HSV:            [ROLE_VIEWER]
+        ROLE_EDIT_STRONG_TRNL:      [ROLE_VIEWER]
+        ROLE_EDIT_INSTITUTIO_TRNL:  [ROLE_VIEWER]
+        ROLE_ADMIN:                 [ROLE_LINKER, ROLE_VIEWER_HSV, ROLE_EDIT_STRONG_TRNL, ROLE_EDIT_INSTITUTIO_TRNL]
 
     access_control:
-        - { path: ^/up,                  roles: PUBLIC_ACCESS }
-        - { path: ^/login,               roles: PUBLIC_ACCESS }
-        - { path: ^/admin,               roles: ROLE_ADMIN }
-        - { path: ^/strongs/translate,   roles: ROLE_EDIT_STRONG_TRNL }
-        - { path: ^/api/annotation/word, roles: ROLE_VIEWER }
-        - { path: ^/api/annotation,      roles: ROLE_LINKER }
-        - { path: ^/link,                roles: ROLE_LINKER }
-        - { path: ^/book,                roles: ROLE_VIEWER }
-        - { path: ^/,                    roles: ROLE_USER }
+        - { path: ^/up,                    roles: PUBLIC_ACCESS }
+        - { path: ^/login,                 roles: PUBLIC_ACCESS }
+        - { path: ^/admin,                 roles: ROLE_ADMIN }
+        - { path: ^/strongs/translate,     roles: ROLE_EDIT_STRONG_TRNL }
+        - { path: ^/institutio/bewerk,     roles: ROLE_EDIT_INSTITUTIO_TRNL }
+        - { path: ^/api/annotation/word,   roles: ROLE_VIEWER }
+        - { path: ^/api/annotation,        roles: ROLE_LINKER }
+        - { path: ^/link,                  roles: ROLE_LINKER }
+        - { path: ^/book,                  roles: ROLE_VIEWER }
+        - { path: ^/institutio,            roles: ROLE_VIEWER }
+        - { path: ^/,                      roles: ROLE_USER }
 
 when@test:
     security:

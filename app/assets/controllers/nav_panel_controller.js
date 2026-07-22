@@ -83,6 +83,9 @@ export default class extends Controller {
         const grid           = this.chapterGridTarget
         const currentChapter = parseInt(this.triggerTarget.dataset.chapter ?? '0', 10)
         const isCurrentBook  = (usfm === this.triggerTarget.dataset.usfm)
+        // Root-element data-url-prefix laat andere pagina's (bijv. Institutio)
+        // dit paneel hergebruiken met een ander URL-schema dan /book/{usfm}/{n}.
+        const urlPrefix      = this.element.dataset.urlPrefix ?? '/book'
 
         grid.replaceChildren()
 
@@ -98,7 +101,7 @@ export default class extends Controller {
             const n       = i + 1
             const isActive = isCurrentBook && n === currentChapter
             const a = document.createElement('a')
-            a.href      = `/book/${usfm}/${n}`   // usfm is alphanumeriek, n is integer
+            a.href      = `${urlPrefix}/${usfm}/${n}`   // usfm/book-id is alphanumeriek, n is integer
             a.className = `nav-chapter-btn${isActive ? ' is-active' : ''}`
             a.dataset.action = 'click->nav-panel#close'
             a.textContent    = String(n)
