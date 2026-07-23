@@ -3114,12 +3114,12 @@ a:hover { text-decoration: underline; }
 
 /* ── Institutio alignment editor ─────────────────────────────────────────────── */
 .alignment-screen {
-    max-width: 1100px;
+    max-width: 1400px;
     margin: 0 auto;
     padding: 1.5rem 1rem 3rem;
     display: flex;
     flex-direction: column;
-    gap: 1.25rem;
+    gap: 1.5rem;
 }
 .alignment-status {
     color: var(--color-ink-light);
@@ -3140,13 +3140,26 @@ a:hover { text-decoration: underline; }
     border: 1px solid var(--color-border);
 }
 .alignment-gap-sample.is-boundary-sample { color: var(--color-accent-2); }
+.alignment-columns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    align-items: start;
+}
+@media (max-width: 900px) {
+    .alignment-columns { grid-template-columns: 1fr; }
+}
+.alignment-section {
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+}
 .alignment-panel-label {
     font-size: .75rem;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: .06em;
     color: var(--color-ink-muted);
-    margin-bottom: -.75rem;
 }
 .alignment-panel {
     background: var(--bg);
@@ -3199,5 +3212,11 @@ a:hover { text-decoration: underline; }
     cursor: grabbing;
     background: var(--color-accent-2);
     color: var(--bg);
+}
+.alignment-preview {
+    background: var(--card-warm);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    padding: 1.25rem 1.5rem;
 }
 .lemma-variant-form { font-family: var(--font-serif); font-style: italic; }

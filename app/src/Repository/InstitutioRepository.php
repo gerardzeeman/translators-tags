@@ -617,8 +617,10 @@ class InstitutioRepository
      * which is the segment start and not a togglable gap) that currently
      * start a sentence_alignment row -- i.e. which inter-sentence gaps are
      * "active" row boundaries versus plain splittable gaps. `rows` holds
-     * just the Dutch word lists, in the same order; row count and
-     * boundary_offsets count always match by construction.
+     * each row's Dutch words plus its already-joined Latin text (for the
+     * page's initial preview render, before any JS has run), in the same
+     * order; row count and boundary_offsets count always match by
+     * construction.
      *
      * If the segment has no sentence_alignment yet, the whole translation
      * is offered as a single unsplit starting row (no boundaries), which
@@ -628,7 +630,7 @@ class InstitutioRepository
      *   id: int, ref: string,
      *   la_sentences: array<int, array{offset: int, text: string}>,
      *   boundary_offsets: array<int, int>,
-     *   rows: array<int, array{words: array<int, string>}>
+     *   rows: array<int, array{la_text: string, words: array<int, string>}>
      * }|null
      */
     public function getSegmentAlignmentForEdit(int $segmentId): ?array
@@ -658,10 +660,17 @@ class InstitutioRepository
         $laStarts = array_map(static fn($r) => (int) $r['la_start'], $alignmentRows);
         $boundaryOffsets = array_slice($laStarts, 1);
 
-        $rows = array_map(
-            static fn($r) => ['words' => preg_split('/\s+/u', trim((string) $r['nl_text']), -1, PREG_SPLIT_NO_EMPTY) ?: []],
-            $alignmentRows
-        );
+        $count = count($laStarts);
+        $textLength = mb_strlen($row['text_la']);
+        $rows = [];
+        foreach ($alignmentRows as $i => $r) {
+            $start = $laStarts[$i];
+            $end = $i + 1 < $count ? $laStarts[$i + 1] : $textLength;
+            $rows[] = [
+                'la_text' => trim(mb_substr($row['text_la'], $start, $end - $start)),
+                'words'   => preg_split('/\s+/u', trim((string) $r['nl_text']), -1, PREG_SPLIT_NO_EMPTY) ?: [],
+            ];
+        }
 
         return [
             'id'               => (int) $row['id'],

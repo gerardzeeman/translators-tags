@@ -22,34 +22,52 @@
         weer samen te voegen.
     </p>
 
-    <div class="alignment-panel-label">Latijn</div>
-    <div class="alignment-panel alignment-panel-la" data-alignment-editor-target="laPanel">
-        {% for sent in segment.la_sentences %}
-        <span class="alignment-la-sentence" data-offset="{{ sent.offset }}">{{ sent.text }}</span>
-        {%- if not loop.last -%}
-            {%- set next_offset = segment.la_sentences[loop.index].offset -%}
-            {%- if next_offset in segment.boundary_offsets -%}
-            <span class="alignment-la-gap is-boundary" data-offset="{{ next_offset }}"
-                  data-action="click->alignment-editor#toggleGap" title="Voeg samen met volgende rij">⌃</span>
-            {%- else -%}
-            <span class="alignment-la-gap" data-offset="{{ next_offset }}"
-                  data-action="click->alignment-editor#toggleGap" title="Splits hier">✂</span>
-            {%- endif -%}
-        {%- endif -%}
-        {% endfor %}
+    <div class="alignment-columns">
+        <div class="alignment-section">
+            <div class="alignment-panel-label">Latijn</div>
+            <div class="alignment-panel alignment-panel-la" data-alignment-editor-target="laPanel">
+                {% for sent in segment.la_sentences %}
+                <span class="alignment-la-sentence" data-offset="{{ sent.offset }}">{{ sent.text }}</span>
+                {%- if not loop.last -%}
+                    {%- set next_offset = segment.la_sentences[loop.index].offset -%}
+                    {%- if next_offset in segment.boundary_offsets -%}
+                    <span class="alignment-la-gap is-boundary" data-offset="{{ next_offset }}"
+                          data-action="click->alignment-editor#toggleGap" title="Voeg samen met volgende rij">⌃</span>
+                    {%- else -%}
+                    <span class="alignment-la-gap" data-offset="{{ next_offset }}"
+                          data-action="click->alignment-editor#toggleGap" title="Splits hier">✂</span>
+                    {%- endif -%}
+                {%- endif -%}
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="alignment-section">
+            <div class="alignment-panel-label">Nederlands</div>
+            <div class="alignment-panel alignment-panel-nl" data-alignment-editor-target="nlPanel">
+                {% for row in segment.rows %}
+                    {%- for word in row.words -%}
+                    <span class="alignment-word" data-alignment-editor-target="word">{{ word }}</span>
+                    {%- endfor -%}
+                    {%- if not loop.last -%}
+                    <span class="alignment-boundary" data-alignment-editor-target="boundary"
+                          data-action="pointerdown->alignment-editor#startDrag" title="Sleep om grens te verplaatsen">⟷</span>
+                    {%- endif -%}
+                {% endfor %}
+            </div>
+        </div>
     </div>
 
-    <div class="alignment-panel-label">Nederlands</div>
-    <div class="alignment-panel alignment-panel-nl" data-alignment-editor-target="nlPanel">
-        {% for row in segment.rows %}
-            {%- for word in row.words -%}
-            <span class="alignment-word" data-alignment-editor-target="word">{{ word }}</span>
-            {%- endfor -%}
-            {%- if not loop.last -%}
-            <span class="alignment-boundary" data-alignment-editor-target="boundary"
-                  data-action="pointerdown->alignment-editor#startDrag" title="Sleep om grens te verplaatsen">⟷</span>
-            {%- endif -%}
-        {% endfor %}
+    <div class="alignment-section">
+        <div class="alignment-panel-label">Voorbeeld (zoals het op de hoofdstukpagina komt te staan)</div>
+        <div class="institutio-sentence-group alignment-preview" data-alignment-editor-target="preview">
+            {% for row in segment.rows %}
+            <div class="institutio-sentence-row">
+                <p class="institutio-sentence-la">{{ row.la_text }}</p>
+                <p class="institutio-sentence-nl">{{ row.words|join(' ') }}</p>
+            </div>
+            {% endfor %}
+        </div>
     </div>
 
 </div>

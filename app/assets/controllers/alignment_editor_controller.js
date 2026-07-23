@@ -25,11 +25,12 @@ function csrfToken() {
  * boundary at that same row index).
  */
 export default class extends Controller {
-    static targets = ['laPanel', 'nlPanel', 'word', 'boundary', 'status']
+    static targets = ['laPanel', 'nlPanel', 'word', 'boundary', 'status', 'preview']
     static values  = { saveUrl: String }
 
     connect() {
         this.#recolor()
+        this.#renderPreview()
     }
 
     // ── Latin-side gap toggling (split / merge) ───────────────────────────────
@@ -44,6 +45,7 @@ export default class extends Controller {
             this.#splitAt(gap, rowIndex)
         }
         this.#recolor()
+        this.#renderPreview()
     }
 
     #countActiveBoundariesBefore(gapEl) {
@@ -111,6 +113,7 @@ export default class extends Controller {
             window.removeEventListener('pointermove', onMove)
             window.removeEventListener('pointerup', onUp)
             this.#recolor()
+            this.#renderPreview()
         }
         window.addEventListener('pointermove', onMove)
         window.addEventListener('pointerup', onUp)
@@ -166,15 +169,25 @@ export default class extends Controller {
             }
         }
 
+        let moved = false
         if (target) {
             if (boundaryEl.nextElementSibling !== target) {
                 this.nlPanelTarget.insertBefore(boundaryEl, target)
+                moved = true
             }
         } else {
             const last = lineWords[lineWords.length - 1]
             if (last.nextElementSibling !== boundaryEl) {
                 last.after(boundaryEl)
+                moved = true
             }
+        }
+
+        // Only re-render when the boundary actually moved -- dragMove fires
+        // on every pointermove, most of which don't cross a word gap.
+        if (moved) {
+            this.#recolor()
+            this.#renderPreview()
         }
     }
 
@@ -194,8 +207,8 @@ export default class extends Controller {
     // ── Save ──────────────────────────────────────────────────────────────────
 
     async save() {
-        const rows = this.#currentRows()
-        if (rows.some(r => r.words.length === 0)) {
+        const alignment = this.#currentAlignment()
+        if (alignment.some(r => r.words.length === 0)) {
             this.#setStatus('Elke rij moet minstens één woord bevatten — sleep woorden erin voordat je opslaat.')
             return
         }
@@ -205,7 +218,9 @@ export default class extends Controller {
             const resp = await fetch(this.saveUrlValue, {
                 method:  'POST',
                 headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken() },
-                body: JSON.stringify({ rows }),
+                body: JSON.stringify({
+                    rows: alignment.map(({ la_start, words }) => ({ la_start, words })),
+                }),
             })
             const data = await resp.json()
             if (!data.success) throw new Error(data.error || 'Opslaan mislukt.')
@@ -220,7 +235,10 @@ export default class extends Controller {
         }
     }
 
-    #currentRows() {
+    // Reads the current DOM state of both panels into one row list --
+    // {la_start, la_text, words}[] -- used both to build the save payload
+    // and to render the live preview, so the two can never drift apart.
+    #currentAlignment() {
         const dutchGroups = [[]]
         for (const child of this.nlPanelTarget.children) {
             if (child.matches('.alignment-boundary')) {
@@ -230,18 +248,45 @@ export default class extends Controller {
             }
         }
 
-        const laStarts = []
-        let sawFirstSentence = false
+        const laRows = [{ la_start: null, sentences: [] }]
         for (const child of this.laPanelTarget.children) {
-            if (child.matches('.alignment-la-sentence') && !sawFirstSentence) {
-                laStarts.push(parseInt(child.dataset.offset, 10))
-                sawFirstSentence = true
+            if (child.matches('.alignment-la-sentence')) {
+                const current = laRows[laRows.length - 1]
+                if (current.la_start === null) current.la_start = parseInt(child.dataset.offset, 10)
+                current.sentences.push(child.textContent)
             } else if (child.matches('.alignment-la-gap.is-boundary')) {
-                laStarts.push(parseInt(child.dataset.offset, 10))
+                laRows.push({ la_start: parseInt(child.dataset.offset, 10), sentences: [] })
             }
         }
 
-        return laStarts.map((la_start, i) => ({ la_start, words: dutchGroups[i] ?? [] }))
+        return laRows.map((lr, i) => ({
+            la_start: lr.la_start,
+            la_text:  lr.sentences.join(' '),
+            words:    dutchGroups[i] ?? [],
+        }))
+    }
+
+    // ── Live preview (mirrors chapter.html.twig's sentence-row markup) ─────────
+
+    #renderPreview() {
+        const alignment = this.#currentAlignment()
+        this.previewTarget.replaceChildren(
+            ...alignment.map(row => {
+                const rowEl = document.createElement('div')
+                rowEl.className = 'institutio-sentence-row'
+
+                const laEl = document.createElement('p')
+                laEl.className = 'institutio-sentence-la'
+                laEl.textContent = row.la_text
+
+                const nlEl = document.createElement('p')
+                nlEl.className = 'institutio-sentence-nl'
+                nlEl.textContent = row.words.join(' ') || '(leeg)'
+
+                rowEl.append(laEl, nlEl)
+                return rowEl
+            })
+        )
     }
 
     #setStatus(msg) {
