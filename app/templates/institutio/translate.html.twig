@@ -10,13 +10,50 @@
     <div class="translate-topbar">
         <a href="{{ segment.book is not null ? path('app_institutio_chapter', {book: segment.book, chapter: segment.chapter}) : path('app_institutio_front') }}"
            class="btn-cancel">‹ Terug naar {{ segment.ref }}</a>
+        {% if segment.text_nl %}
+        <a href="{{ path('app_institutio_alignment', {id: segment.id}) }}" class="nav-user-btn">Uitlijning aanpassen</a>
+        {% endif %}
         {% if saved %}
         <div class="translate-saved-notice">✓ Opgeslagen</div>
         {% endif %}
     </div>
 
+    {% for label, messages in app.flashes %}
+        {% for message in messages %}
+        <div class="alert alert-{{ label }}">{{ message }}</div>
+        {% endfor %}
+    {% endfor %}
+
     <form method="post" action="{{ path('app_institutio_translate_save', {id: segment.id}) }}" class="translate-form">
 
+        {% if segment.heading %}
+        <div class="translate-heading-bar">
+            <span class="translate-field-label">Hoofdstuktitel</span>
+            <div class="translate-field-readonly">{{ segment.heading }}</div>
+        </div>
+        {% endif %}
+
+        {% if segment.rows %}
+        {# Already zin-voor-zin uitgelijnd: per rij bewerken houdt de bestaande
+           uitlijning intact (la_start wordt niet aangeraakt). #}
+        <div class="translate-rows">
+            {% for row in segment.rows %}
+            <div class="translate-row">
+                <div class="translate-row-la">{{ row.la_text }}</div>
+                <textarea
+                    name="row_nl[{{ row.id }}]"
+                    class="translate-field-textarea translate-row-textarea"
+                    rows="3"
+                >{{ row.nl_text }}</textarea>
+            </div>
+            {% endfor %}
+        </div>
+        <div class="translate-panel-footer">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token('institutio_translate') }}">
+            <button type="submit" class="btn-primary btn-save">Opslaan</button>
+        </div>
+
+        {% else %}
         <div class="translate-panels">
 
             {# Left: Latin (read-only, for reference) #}
@@ -25,12 +62,6 @@
                     <span class="translate-panel-lang">Latijn</span>
                     <span class="translate-panel-id">{{ segment.ref }}</span>
                 </div>
-                {% if segment.heading %}
-                <div class="translate-field-group">
-                    <label class="translate-field-label">Hoofdstuktitel</label>
-                    <div class="translate-field-readonly">{{ segment.heading }}</div>
-                </div>
-                {% endif %}
                 <div class="translate-field-group translate-field-group--grow">
                     <label class="translate-field-label">Tekst</label>
                     <div class="translate-field-readonly translate-field-readonly--pre">{{ segment.text_la }}</div>
@@ -61,6 +92,7 @@
             </div>
 
         </div>{# /.translate-panels #}
+        {% endif %}
     </form>
 
 </div>{# /.translate-screen #}

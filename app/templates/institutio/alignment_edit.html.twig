@@ -1,0 +1,56 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Uitlijning bewerken – {{ segment.ref }} – Bijbel Vergelijking{% endblock %}
+{% block head %}<meta name="csrf-token" content="{{ csrf_token('institutio_alignment') }}">{% endblock %}
+
+{% block nav_center %}{% endblock %}
+
+{% block body %}
+<div class="alignment-screen" data-controller="alignment-editor"
+     data-alignment-editor-save-url-value="{{ path('app_institutio_alignment_save', {id: segment.id}) }}">
+
+    <div class="translate-topbar">
+        <a href="{{ path('app_institutio_translate', {id: segment.id}) }}" class="btn-cancel">‹ Terug naar {{ segment.ref }}</a>
+        <div class="alignment-status" data-alignment-editor-target="status"></div>
+        <button type="button" class="btn-primary btn-save" data-action="click->alignment-editor#save">Opslaan</button>
+    </div>
+
+    <p class="alignment-help">
+        Sleep <span class="alignment-boundary-sample">⟷</span> in de vertaling om woorden naar de vorige of
+        volgende rij te verplaatsen. Klik <span class="alignment-gap-sample">✂</span> op een Latijnse zinsgrens
+        om een rij te splitsen, of <span class="alignment-gap-sample is-boundary-sample">⌃</span> om twee rijen
+        weer samen te voegen.
+    </p>
+
+    <div class="alignment-panel-label">Latijn</div>
+    <div class="alignment-panel alignment-panel-la" data-alignment-editor-target="laPanel">
+        {% for sent in segment.la_sentences %}
+        <span class="alignment-la-sentence" data-offset="{{ sent.offset }}">{{ sent.text }}</span>
+        {%- if not loop.last -%}
+            {%- set next_offset = segment.la_sentences[loop.index].offset -%}
+            {%- if next_offset in segment.boundary_offsets -%}
+            <span class="alignment-la-gap is-boundary" data-offset="{{ next_offset }}"
+                  data-action="click->alignment-editor#toggleGap" title="Voeg samen met volgende rij">⌃</span>
+            {%- else -%}
+            <span class="alignment-la-gap" data-offset="{{ next_offset }}"
+                  data-action="click->alignment-editor#toggleGap" title="Splits hier">✂</span>
+            {%- endif -%}
+        {%- endif -%}
+        {% endfor %}
+    </div>
+
+    <div class="alignment-panel-label">Nederlands</div>
+    <div class="alignment-panel alignment-panel-nl" data-alignment-editor-target="nlPanel">
+        {% for row in segment.rows %}
+            {%- for word in row.words -%}
+            <span class="alignment-word" data-alignment-editor-target="word">{{ word }}</span>
+            {%- endfor -%}
+            {%- if not loop.last -%}
+            <span class="alignment-boundary" data-alignment-editor-target="boundary"
+                  data-action="pointerdown->alignment-editor#startDrag" title="Sleep om grens te verplaatsen">⟷</span>
+            {%- endif -%}
+        {% endfor %}
+    </div>
+
+</div>
+{% endblock %}

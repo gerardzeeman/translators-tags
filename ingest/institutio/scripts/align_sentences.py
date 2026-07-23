@@ -306,6 +306,14 @@ def main() -> int:
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--limit", type=int, default=None,
                     help="only process the first N un-aligned translations")
+    ap.add_argument("--segment-ids", default=None,
+                    help="comma-separated segment ids to (re-)align regardless of "
+                         "whether alignment already exists -- use this to fix specific "
+                         "segments (e.g. one whose alignment a manual whole-block "
+                         "translation edit dropped) without touching the rest of the "
+                         "un-aligned backlog. Any existing alignment rows for these "
+                         "segments are cleared first so a shorter new grouping can't "
+                         "leave stale leftover rows behind.")
     ap.add_argument("--batch-id", default=None,
                     help="skip submission, re-fetch results from an already-completed "
                          "batch (use this to recover from a parsing bug without paying twice; "
@@ -316,18 +324,32 @@ def main() -> int:
     client = anthropic.Anthropic()
 
     with get_connection() as conn, conn.cursor() as cur:
-        q = """SELECT tr.id, s.text_la, tr.text_nl
-               FROM translation tr
-               JOIN segment s ON s.id = tr.segment_id
-               WHERE tr.layer = 'llm'
-                 AND NOT EXISTS (
-                     SELECT 1 FROM sentence_alignment sa WHERE sa.translation_id = tr.id
-                 )
-               ORDER BY s.seq"""
-        if args.limit:
-            q += f" LIMIT {int(args.limit)}"
-        cur.execute(q)
-        todo = cur.fetchall()
+        if args.segment_ids:
+            ids = [int(x) for x in args.segment_ids.split(",")]
+            cur.execute(
+                """SELECT tr.id, s.text_la, tr.text_nl
+                   FROM translation tr
+                   JOIN segment s ON s.id = tr.segment_id
+                   WHERE tr.layer = 'llm' AND s.id = ANY(%s)
+                   ORDER BY s.seq""",
+                (ids,))
+            todo = cur.fetchall()
+            cur.executemany(
+                "DELETE FROM sentence_alignment WHERE translation_id = %s",
+                [(tr_id,) for tr_id, *_ in todo])
+        else:
+            q = """SELECT tr.id, s.text_la, tr.text_nl
+                   FROM translation tr
+                   JOIN segment s ON s.id = tr.segment_id
+                   WHERE tr.layer = 'llm'
+                     AND NOT EXISTS (
+                         SELECT 1 FROM sentence_alignment sa WHERE sa.translation_id = tr.id
+                     )
+                   ORDER BY s.seq"""
+            if args.limit:
+                q += f" LIMIT {int(args.limit)}"
+            cur.execute(q)
+            todo = cur.fetchall()
         print(f"[work] {len(todo)} translations to align")
 
         # Split sentences up front so outliers (window-based, one at a time,
