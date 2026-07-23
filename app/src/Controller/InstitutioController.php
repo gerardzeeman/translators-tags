@@ -81,7 +81,7 @@ class InstitutioController extends AbstractController
     {
         $counts = $this->institutioRepository->getBookChapterCounts();
         if (!isset($counts[$book]) || $chapter < 1 || $chapter > $counts[$book]) {
-            throw $this->createNotFoundException("Institutio {$book}.{$chapter} niet gevonden.");
+            throw $this->createNotFoundException("Institutie {$book}.{$chapter} niet gevonden.");
         }
 
         $data = $this->institutioRepository->getChapter($book, $chapter);

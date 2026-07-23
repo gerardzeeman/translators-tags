@@ -1,5 +1,5 @@
 {% extends 'base.html.twig' %}
-{% set page_title = book is not null ? 'Institutio ' ~ book ~ '.' ~ chapter : 'Institutio · Voorwoord' %}
+{% set page_title = book is not null ? 'Institutie ' ~ book ~ '.' ~ chapter : 'Institutie · Voorwoord' %}
 {% block title %}{{ page_title }} – Bijbel Vergelijking{% endblock %}
 
 {% macro note_marker(kind, glyph, note, verse_href) %}<span class="institutio-note institutio-note-{{ kind }}" tabindex="0"><sup class="institutio-note-glyph">{% if verse_href %}<a href="{{ verse_href }}" data-turbo-frame="institutio-verse-panel" title="Bekijk Bijbeltekst">{{ glyph }}</a>{% else %}{{ glyph }}{% endif %}</sup><span class="institutio-note-popup"><span class="institutio-note-popup-kind">{{ kind == 'variant' ? 'Variant lezing' : 'Verwijzing' }}</span>{{ note }}</span></span>{% endmacro %}
@@ -26,8 +26,8 @@
 <div class="page-institutio" data-controller="verse-panel">
 
     {# Hoofdstuk-navigatie #}
-    <nav class="chapter-nav" aria-label="Institutio navigatie">
-        <a href="{{ path('app_institutio_home') }}" class="chapter-nav-book">Institutio</a>
+    <nav class="chapter-nav" aria-label="Institutie navigatie">
+        <a href="{{ path('app_institutio_home') }}" class="chapter-nav-book">Institutie</a>
         <span class="chapter-nav-sep">›</span>
         <span class="chapter-nav-current">
             {% if book is not null %}Boek {{ book }}, hoofdstuk {{ chapter }}{% else %}Voorwoord{% endif %}

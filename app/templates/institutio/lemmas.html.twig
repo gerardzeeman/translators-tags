@@ -1,9 +1,9 @@
 {% extends 'base.html.twig' %}
-{% block title %}Lemma's – Institutio – Bijbel Vergelijking{% endblock %}
+{% block title %}Lemma's – Institutie – Bijbel Vergelijking{% endblock %}
 
 {% block nav_bijbel %}
 {{ include('institutio/_nav_panel.html.twig', {
-    trigger_label: 'Institutio',
+    trigger_label: 'Institutie',
     active_book: null,
     active_chapter: null,
     book_chapter_counts: book_chapter_counts,
@@ -17,7 +17,7 @@
 <div class="container container--wide">
 
     <div class="admin-page-header">
-        <h1>Lemma's — Institutio christianae religionis</h1>
+        <h1>Lemma's — Institutie christianae religionis</h1>
         <span class="lemma-total">{{ total }} unieke lemma's</span>
     </div>
 
