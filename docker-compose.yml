@@ -78,6 +78,10 @@ services:
       DB_USER: ${DB_USER:-bible}
       DB_PASSWORD: ${DB_PASSWORD:-changeme}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      # SimAlign's multilingual BERT model otherwise downloads on every
+      # `docker compose run --rm` invocation, since the container's home
+      # directory doesn't survive --rm -- point it at the persisted volume.
+      HF_HOME: /data/institutio/hf_cache
     volumes:
       - institutio_data:/data/institutio
     networks:
