@@ -12,6 +12,7 @@
            class="btn-cancel">‹ Terug naar {{ segment.ref }}</a>
         {% if segment.text_nl %}
         <a href="{{ path('app_institutio_alignment', {id: segment.id}) }}" class="nav-user-btn">Uitlijning aanpassen</a>
+        <a href="{{ path('app_institutio_wordlink', {id: segment.id}) }}" class="nav-user-btn">Woordkoppeling</a>
         {% endif %}
         {% if saved %}
         <div class="translate-saved-notice">✓ Opgeslagen</div>

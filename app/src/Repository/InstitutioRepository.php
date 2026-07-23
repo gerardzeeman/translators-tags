@@ -765,4 +765,186 @@ class InstitutioRepository
             ['translation_id' => $translationId]
         ) > 0;
     }
+
+    /**
+     * Splits Dutch text into words with character offsets, mirroring
+     * align_segments.py's tokenize_nl() (TOKEN_RE = r"\S+") exactly, so a
+     * word's `start` here always matches an `alignment.target_start` value
+     * SimAlign could have written. preg_match_all's OFFSET_CAPTURE reports
+     * byte offsets even with the /u modifier, so each is converted to a
+     * character offset via mb_strlen on the preceding substring (same
+     * conversion as splitLatinSentences).
+     *
+     * @return array<int, array{start: int, end: int, text: string}>
+     */
+    private function splitDutchWords(string $text): array
+    {
+        preg_match_all('/\S+/u', $text, $matches, PREG_OFFSET_CAPTURE);
+        $words = [];
+        foreach ($matches[0] as [$word, $byteOffset]) {
+            $start = mb_strlen(substr($text, 0, $byteOffset), 'UTF-8');
+            $words[] = ['start' => $start, 'end' => $start + mb_strlen($word, 'UTF-8'), 'text' => $word];
+        }
+        return $words;
+    }
+
+    /**
+     * Segment + word-level alignment structure for the word-linking screen
+     * (InstitutioWordLinkController) -- styled and behaved like the Bible
+     * corpus's Hebrew/Greek<->Dutch linking screen (LinkingController +
+     * word_linker_controller.js), reviewing/correcting the `alignment`
+     * table SimAlign populates in phase 4 (align_segments.py).
+     *
+     * Dutch words have no persistent id of their own (unlike the Bible
+     * corpus's translation_words table), so a word's character offset
+     * within translation.text_nl doubles as its stable identifier here --
+     * exactly the value already stored in alignment.target_start.
+     *
+     * @return array{
+     *   id: int, ref: string, translation_id: int,
+     *   tokens: array<int, array{id: int, surface: string, lemma: ?string,
+     *     best_method: string,
+     *     links: array<int, array{start: int, end: int, text: string, source: string}>}>,
+     *   nl_words: array<int, array{start: int, text: string, best_method: string}>
+     * }|null
+     */
+    public function getSegmentWordLinksForEdit(int $segmentId): ?array
+    {
+        $row = $this->connection->fetchAssociative(
+            "SELECT s.id, s.ref, tr.id AS translation_id, tr.text_nl
+             FROM segment s
+             LEFT JOIN translation tr ON tr.segment_id = s.id AND tr.layer = 'llm'
+             WHERE s.id = :id",
+            ['id' => $segmentId]
+        );
+        if ($row === false || $row['translation_id'] === null) {
+            return null;
+        }
+        $translationId = (int) $row['translation_id'];
+
+        $tokenRows = $this->connection->fetchAllAssociative(
+            'SELECT id, surface, lemma FROM token
+             WHERE segment_id = :segment_id AND is_word ORDER BY position',
+            ['segment_id' => $segmentId]
+        );
+
+        $linkRows = $this->connection->fetchAllAssociative(
+            'SELECT token_id, target_start, target_end, target_text, source
+             FROM alignment WHERE translation_id = :translation_id',
+            ['translation_id' => $translationId]
+        );
+
+        $linksByToken = [];
+        $bestByNlStart = [];
+        foreach ($linkRows as $l) {
+            $link = [
+                'start'  => (int) $l['target_start'],
+                'end'    => (int) $l['target_end'],
+                'text'   => $l['target_text'],
+                'source' => $l['source'],
+            ];
+            $linksByToken[(int) $l['token_id']][] = $link;
+            if (!isset($bestByNlStart[$link['start']]) || $link['source'] === 'manual') {
+                $bestByNlStart[$link['start']] = $link['source'];
+            }
+        }
+
+        $tokens = array_map(static function ($t) use ($linksByToken) {
+            $links = $linksByToken[(int) $t['id']] ?? [];
+            $hasManual = (bool) array_filter($links, static fn($l) => $l['source'] === 'manual');
+            return [
+                'id'          => (int) $t['id'],
+                'surface'     => $t['surface'],
+                'lemma'       => $t['lemma'],
+                'links'       => $links,
+                'best_method' => $links ? ($hasManual ? 'manual' : 'simalign') : 'none',
+            ];
+        }, $tokenRows);
+
+        $nlWords = array_map(
+            static fn($w) => [
+                'start'       => $w['start'],
+                'text'        => $w['text'],
+                'best_method' => $bestByNlStart[$w['start']] ?? 'none',
+            ],
+            $this->splitDutchWords((string) $row['text_nl'])
+        );
+
+        return [
+            'id'             => (int) $row['id'],
+            'ref'            => $row['ref'],
+            'translation_id' => $translationId,
+            'tokens'         => $tokens,
+            'nl_words'       => $nlWords,
+        ];
+    }
+
+    /**
+     * Manually (re-)link one Latin word token to zero or more Dutch words,
+     * replacing whatever links (manual or SimAlign) it already had --
+     * mirrors LinkingRepository::saveManualLinks()'s "delete this source
+     * word's links for this translation, then insert the new set" pattern.
+     * An empty $targetStarts is a valid "confirmed: no counterpart" result,
+     * matching that same semantics (no separate "manually empty" marker
+     * table here, unlike the Bible corpus -- an unlinked token and a
+     * confirmed-empty one aren't distinguished, which is an acceptable
+     * simplification for this smaller, single-editor corpus).
+     *
+     * @param array<int, int> $targetStarts Dutch word start offsets (each
+     *   must be a real word boundary in the segment's current translation;
+     *   an offset that doesn't match one is silently skipped rather than
+     *   corrupting a row with a bogus span).
+     * @throws \InvalidArgumentException if the token doesn't belong to this
+     *   segment, or the segment has no translation yet
+     */
+    public function saveManualWordLink(int $segmentId, int $tokenId, array $targetStarts): void
+    {
+        $tokenBelongs = (bool) $this->connection->fetchOne(
+            'SELECT 1 FROM token WHERE id = :token_id AND segment_id = :segment_id AND is_word',
+            ['token_id' => $tokenId, 'segment_id' => $segmentId]
+        );
+        if (!$tokenBelongs) {
+            throw new \InvalidArgumentException('Woord hoort niet bij dit segment.');
+        }
+
+        $translation = $this->connection->fetchAssociative(
+            "SELECT id, text_nl FROM translation WHERE segment_id = :segment_id AND layer = 'llm'",
+            ['segment_id' => $segmentId]
+        );
+        if ($translation === false) {
+            throw new \InvalidArgumentException('Segment heeft nog geen vertaling.');
+        }
+        $translationId = (int) $translation['id'];
+
+        $wordsByStart = [];
+        foreach ($this->splitDutchWords((string) $translation['text_nl']) as $w) {
+            $wordsByStart[$w['start']] = $w;
+        }
+
+        $this->connection->executeStatement(
+            'DELETE FROM alignment WHERE token_id = :token_id AND translation_id = :translation_id',
+            ['token_id' => $tokenId, 'translation_id' => $translationId]
+        );
+
+        foreach ($targetStarts as $start) {
+            $w = $wordsByStart[$start] ?? null;
+            if ($w === null) {
+                continue;
+            }
+            $this->connection->executeStatement(
+                "INSERT INTO alignment (token_id, translation_id, target_start, target_end, target_text, confidence, source)
+                 VALUES (:token_id, :translation_id, :start, :end, :text, NULL, 'manual')
+                 ON CONFLICT (token_id, translation_id, target_start) DO UPDATE
+                     SET target_end = EXCLUDED.target_end, target_text = EXCLUDED.target_text,
+                         source = 'manual', confidence = NULL",
+                [
+                    'token_id'       => $tokenId,
+                    'translation_id' => $translationId,
+                    'start'          => $w['start'],
+                    'end'            => $w['end'],
+                    'text'           => $w['text'],
+                ]
+            );
+        }
+    }
 }

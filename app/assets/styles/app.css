@@ -1680,6 +1680,7 @@ a:hover { text-decoration: underline; }
 .method-border-auto_sequence     { border-color: var(--color-auto-sequence);  border-style: dashed; }
 .method-border-auto_positional   { border-color: var(--color-auto-positional);border-style: dashed; }
 .method-border-propagated        { border-color: var(--color-auto-pivot);     border-style: dashed; }
+.method-border-simalign          { border-color: var(--color-auto-pivot);     border-style: dashed; }
 
 .src-word-propagated { opacity: .85; }
 .propagated-hint {
@@ -1732,6 +1733,7 @@ a:hover { text-decoration: underline; }
 .method-underline-manual_hint  { border-bottom: 2px solid var(--color-manual-hint); }
 .method-underline-proper_noun  { border-bottom: 2px solid var(--color-proper-noun); }
 .method-underline-positional   { border-bottom: 2px dashed var(--color-positional); }
+.method-underline-simalign     { border-bottom: 2px dashed var(--color-auto-pivot); }
 .method-underline-none         {}
 
 .verse-full-text {
@@ -2204,6 +2206,9 @@ a:hover { text-decoration: underline; }
 .dot.method-auto_source_pivot  { background: var(--color-auto-pivot); }
 .dot.method-auto_sequence      { background: var(--color-auto-sequence); }
 .dot.method-auto_positional    { background: var(--color-auto-positional); }
+.dot.method-manual             { background: var(--color-manual); }
+.dot.method-simalign           { background: var(--color-auto-pivot); }
+.dot.method-none               { background: var(--color-border); }
 
 .page-trans-home {
     max-width: 900px;
