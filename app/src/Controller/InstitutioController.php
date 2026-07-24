@@ -142,6 +142,54 @@ class InstitutioController extends AbstractController
         ]);
     }
 
+    private const OCCURRENCES_PER_PAGE = 50;
+
+    /**
+     * One lemma's full detail: gloss (meaning, alternatives, note, source),
+     * every attested word-form with morphology + frequency, and every
+     * occurrence in the corpus with a KWIC-style snippet -- everything the
+     * database has recorded about this lemma, on one page.
+     */
+    #[Route('/institutio/lemma/{lemma}', name: 'app_institutio_lemma_detail')]
+    public function lemmaDetail(string $lemma, Request $request): Response
+    {
+        $gloss = $this->institutioRepository->getLemmaGloss($lemma);
+        $variants = $this->institutioRepository->getLemmaVariants([$lemma])[$lemma] ?? [];
+        if ($gloss === null && !$variants) {
+            throw $this->createNotFoundException("Lemma '{$lemma}' niet gevonden.");
+        }
+
+        $variants = array_map(
+            fn($v) => [
+                'norm'              => $v['norm'],
+                'freq'              => $v['freq'],
+                'morph_description' => $this->morphologyParser->describeLatin($v['morph']),
+            ],
+            $variants
+        );
+        $totalFreq = array_sum(array_column($variants, 'freq'));
+
+        $page = max(1, $request->query->getInt('page', 1));
+        $lastPage = max(1, (int) ceil($totalFreq / self::OCCURRENCES_PER_PAGE));
+        if ($page > $lastPage) {
+            throw $this->createNotFoundException("Pagina {$page} bestaat niet.");
+        }
+        $offset = ($page - 1) * self::OCCURRENCES_PER_PAGE;
+        $occurrences = $this->institutioRepository->getLemmaOccurrences($lemma, self::OCCURRENCES_PER_PAGE, $offset);
+
+        return $this->render('institutio/lemma_detail.html.twig', [
+            'lemma'               => $lemma,
+            'gloss'               => $gloss,
+            'variants'            => $variants,
+            'total_freq'          => $totalFreq,
+            'occurrences'         => $occurrences,
+            'page'                => $page,
+            'last_page'           => $lastPage,
+            'book_chapter_counts' => $this->institutioRepository->getBookChapterCounts(),
+            'has_front_matter'    => $this->institutioRepository->hasFrontMatter(),
+        ]);
+    }
+
     /**
      * Bible verse popup — Turbo Frame endpoint for the "click a Scripture
      * citation" side panel. Re-parses the raw Latin citation note (the same

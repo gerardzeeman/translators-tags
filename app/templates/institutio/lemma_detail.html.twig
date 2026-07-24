@@ -1,0 +1,97 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}{{ lemma }} – Lemma – Institutie – Bijbel Vergelijking{% endblock %}
+
+{% block nav_bijbel %}
+{{ include('institutio/_nav_panel.html.twig', {
+    trigger_label: 'Institutie',
+    active_book: null,
+    active_chapter: null,
+    book_chapter_counts: book_chapter_counts,
+    has_front_matter: has_front_matter,
+}) }}
+{% endblock %}
+
+{% block nav_center %}{% endblock %}
+
+{% block nav_right_extra %}
+<a href="{{ path('app_institutio_lemmas') }}" class="nav-user-btn">‹ Lemma's</a>
+{% endblock %}
+
+{% block body %}
+<div class="container container--wide">
+
+    <div class="admin-page-header">
+        <h1 class="lemma-detail-word">{{ lemma }}</h1>
+        <span class="lemma-total">{{ total_freq }} voorkomen{{ total_freq != 1 ? 's' : '' }}</span>
+    </div>
+
+    {% if gloss %}
+    <div class="lemma-detail-gloss">
+        <div class="lemma-detail-gloss-row">
+            <span class="lemma-detail-gloss-label">Betekenis</span>
+            <span class="lemma-detail-gloss-value">{{ gloss.gloss_nl ?? '–' }}</span>
+            <span class="lemma-gloss-source lemma-gloss-source-{{ gloss.source }}">
+                {{ gloss.source == 'manual' ? 'handmatig' : 'LLM' }}{% if gloss.reviewed %} · gecontroleerd{% endif %}
+            </span>
+        </div>
+        {% if gloss.gloss_alt %}
+        <div class="lemma-detail-gloss-row">
+            <span class="lemma-detail-gloss-label">Alternatieven</span>
+            <span class="lemma-detail-gloss-value">{{ gloss.gloss_alt|join(', ') }}</span>
+        </div>
+        {% endif %}
+        {% if gloss.note %}
+        <div class="lemma-detail-gloss-row lemma-detail-gloss-row--note">
+            <span class="lemma-detail-gloss-label">Noot</span>
+            <p class="lemma-detail-gloss-value">{{ gloss.note }}</p>
+        </div>
+        {% endif %}
+    </div>
+    {% else %}
+    <p class="institutio-no-translation">Nog geen gloss beschikbaar voor dit lemma.</p>
+    {% endif %}
+
+    <h2 class="lemma-detail-heading">Woordvormen ({{ variants|length }})</h2>
+    <table class="admin-table lemma-variant-table lemma-variant-table--standalone">
+        <thead>
+            <tr><th>Vorm</th><th>Morfologie</th><th>Aantal</th></tr>
+        </thead>
+        <tbody>
+        {% for v in variants %}
+            <tr>
+                <td class="lemma-variant-form">{{ v.norm }}</td>
+                <td>{{ v.morph_description|default('–') }}</td>
+                <td>{{ v.freq }}</td>
+            </tr>
+        {% else %}
+            <tr class="empty-row"><td colspan="3">Geen woordvormen gevonden.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+    <h2 class="lemma-detail-heading">Voorkomens in de tekst</h2>
+    <div class="lemma-occurrence-list">
+        {% for o in occurrences %}
+        <a href="{{ (o.book is not null ? path('app_institutio_chapter', {book: o.book, chapter: o.chapter}) : path('app_institutio_front')) ~ '#s' ~ o.section }}"
+           class="lemma-occurrence">
+            <span class="lemma-occurrence-ref">{{ o.ref }}</span>
+            <span class="lemma-occurrence-context">{%- if o.truncated_before -%}…{%- endif -%}{{ o.context_before }}<mark>{{ o.context_word }}</mark>{{ o.context_after }}{%- if o.truncated_after -%}…{%- endif -%}</span>
+        </a>
+        {% else %}
+        <p class="no-verse">Geen voorkomens gevonden.</p>
+        {% endfor %}
+    </div>
+
+    <nav class="lemma-pagination" aria-label="Paginering">
+        {% if page > 1 %}
+        <a href="{{ path('app_institutio_lemma_detail', {lemma: lemma, page: page - 1}) }}" class="nav-btn" title="Vorige pagina">‹</a>
+        {% endif %}
+        <span class="lemma-pagination-current">Pagina {{ page }} van {{ last_page }}</span>
+        {% if page < last_page %}
+        <a href="{{ path('app_institutio_lemma_detail', {lemma: lemma, page: page + 1}) }}" class="nav-btn" title="Volgende pagina">›</a>
+        {% endif %}
+    </nav>
+
+</div>
+{% endblock %}

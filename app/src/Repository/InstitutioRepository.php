@@ -383,6 +383,91 @@ class InstitutioRepository
     }
 
     /**
+     * The LLM-built gloss for one lemma, for the lemma detail page. Null if
+     * this lemma has no gloss yet (batch_gloss.py/load_glosses.py haven't
+     * covered every lemma that ever shows up, e.g. any added after the last
+     * run).
+     *
+     * gloss_alt is a Postgres TEXT[]; DBAL has no native array type mapping
+     * configured here, and its raw `{a,"b c"}` literal syntax is fiddly to
+     * parse correctly by hand (quoting/escaping for multi-word entries), so
+     * Postgres itself unwraps it via array_to_string with an ASCII unit
+     * separator (0x1F) that will never collide with real gloss text.
+     *
+     * @return array{gloss_nl: ?string, gloss_alt: array<int, string>, note: ?string, source: string, reviewed: bool}|null
+     */
+    public function getLemmaGloss(string $lemma): ?array
+    {
+        $row = $this->connection->fetchAssociative(
+            "SELECT gloss_nl, array_to_string(gloss_alt, E'\x1F') AS gloss_alt, note, source, reviewed
+             FROM lemma_gloss WHERE lemma = :lemma",
+            ['lemma' => $lemma]
+        );
+        if ($row === false) {
+            return null;
+        }
+        return [
+            'gloss_nl'  => $row['gloss_nl'],
+            'gloss_alt' => $row['gloss_alt'] !== null && $row['gloss_alt'] !== ''
+                ? explode("\x1F", $row['gloss_alt']) : [],
+            'note'      => $row['note'],
+            'source'    => $row['source'],
+            'reviewed'  => (bool) $row['reviewed'],
+        ];
+    }
+
+    /**
+     * Every occurrence of one lemma in the corpus, most recent (by reading
+     * order) not implied -- paginated, since a common lemma can run into
+     * the thousands (e.g. 'sum' occurs 16,816 times). Each occurrence
+     * includes a KWIC-style context window (plain character slicing around
+     * the token, not sentence-aware) so the lemma detail page can show the
+     * word in situ without linking out for every single one.
+     *
+     * @return array<int, array{
+     *   ref: string, book: ?int, chapter: ?int, section: ?int,
+     *   context_before: string, context_word: string, context_after: string,
+     *   truncated_before: bool, truncated_after: bool
+     * }>
+     */
+    public function getLemmaOccurrences(string $lemma, int $limit, int $offset): array
+    {
+        $workId = $this->getWorkId();
+        if ($workId === null) {
+            return [];
+        }
+
+        $rows = $this->connection->fetchAllAssociative(
+            'SELECT s.ref, s.book, s.chapter, s.section, s.text_la, t.char_start, t.char_end
+             FROM token t
+             JOIN segment s ON s.id = t.segment_id
+             WHERE s.work_id = :work_id AND t.is_word AND t.lemma = :lemma
+             ORDER BY s.seq, t.position
+             LIMIT :limit OFFSET :offset',
+            ['work_id' => $workId, 'lemma' => $lemma, 'limit' => $limit, 'offset' => $offset],
+            ['limit' => ParameterType::INTEGER, 'offset' => ParameterType::INTEGER]
+        );
+
+        $window = 45;
+        return array_map(function ($r) use ($window) {
+            $start = (int) $r['char_start'];
+            $end = (int) $r['char_end'];
+            $beforeStart = max(0, $start - $window);
+            return [
+                'ref'              => $r['ref'],
+                'book'             => $r['book'] !== null ? (int) $r['book'] : null,
+                'chapter'          => $r['chapter'] !== null ? (int) $r['chapter'] : null,
+                'section'          => $r['section'] !== null ? (int) $r['section'] : null,
+                'context_before'   => mb_substr($r['text_la'], $beforeStart, $start - $beforeStart),
+                'context_word'     => mb_substr($r['text_la'], $start, $end - $start),
+                'context_after'    => mb_substr($r['text_la'], $end, $window),
+                'truncated_before' => $beforeStart > 0,
+                'truncated_after'  => $end + $window < mb_strlen($r['text_la']),
+            ];
+        }, $rows);
+    }
+
+    /**
      * Herziene Statenvertaling verse text, for the "click a Scripture
      * citation" popup -- reuses the main Bible corpus's translations/
      * translation_verses/books tables (not institutio-specific), so this

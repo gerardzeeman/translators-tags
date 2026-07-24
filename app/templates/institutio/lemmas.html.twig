@@ -35,7 +35,7 @@
                 <td>{{ offset + loop.index }}</td>
                 <td class="lemma-word">
                     <details{% if l.variants|length <= 1 %} class="lemma-variants-single"{% endif %}>
-                        <summary>{{ l.lemma }}<span class="lemma-variant-count">{{ l.variants|length }} vorm{{ l.variants|length != 1 ? 'en' : '' }}</span></summary>
+                        <summary><a href="{{ path('app_institutio_lemma_detail', {lemma: l.lemma}) }}" class="lemma-word-link">{{ l.lemma }}</a><span class="lemma-variant-count">{{ l.variants|length }} vorm{{ l.variants|length != 1 ? 'en' : '' }}</span></summary>
                         <table class="lemma-variant-table">
                             <thead>
                                 <tr><th>Vorm</th><th>Morfologie</th><th>Aantal</th></tr>
