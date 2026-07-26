@@ -1,0 +1,343 @@
+import { Controller } from '@hotwired/stimulus'
+
+function csrfToken() {
+    return document.querySelector('meta[name="csrf-token"]')?.content ?? ''
+}
+
+/**
+ * Drag-based sentence-alignment editor (see InstitutioAlignmentController).
+ *
+ * The Latin panel and every translation panel (own "llm" translation, plus
+ * Weijenberg's 1865 translation when the segment has one) are each a flat
+ * sibling list -- no nested per-row wrapper divs. Row membership is purely
+ * positional:
+ *   - Translation panels: word, word, boundary, word, boundary, word, ...
+ *     Everything between two .alignment-boundary elements (or list edges)
+ *     belongs to one row. Dragging a boundary reorders it among its two
+ *     neighbouring rows' word siblings *within that panel only* -- each
+ *     translation's word-to-row split is independent of the others.
+ *   - Latin panel: sentence, gap, sentence, gap, ... where each gap is
+ *     either an active row boundary (⌃, click to merge) or a plain
+ *     splittable gap (✂, click to split).
+ *
+ * Row COUNT and boundary positions (which Latin sentences make up row N)
+ * are shared across every translation panel: toggleGap() inserts/removes a
+ * boundary at the same row index in every panel at once, since "row N"
+ * only means anything if every column agrees on where it starts and ends.
+ * Saving still writes each translation's alignment independently (own
+ * translation_id, own sentence_alignment rows) -- only the row
+ * *boundaries* are locked together, not the words assigned to them.
+ */
+export default class extends Controller {
+    static targets = ['laPanel', 'translationPanel', 'status', 'preview']
+    static values  = { saveUrl: String }
+
+    connect() {
+        this.#recolorAll()
+        this.#renderPreview()
+    }
+
+    // ── Latin-side gap toggling (split / merge) -- affects every translation panel ──
+
+    toggleGap(event) {
+        const gap = event.currentTarget
+        const rowIndex = this.#countActiveBoundariesBefore(gap)
+
+        if (gap.classList.contains('is-boundary')) {
+            this.#mergeAt(gap, rowIndex)
+        } else {
+            this.#splitAt(gap, rowIndex)
+        }
+        this.#recolorAll()
+        this.#renderPreview()
+    }
+
+    #countActiveBoundariesBefore(gapEl) {
+        let count = 0
+        for (const child of this.laPanelTarget.children) {
+            if (child === gapEl) break
+            if (child.matches('.alignment-la-gap.is-boundary')) count++
+        }
+        return count
+    }
+
+    #boundariesIn(panel) {
+        return [...panel.children].filter(c => c.matches('.alignment-boundary'))
+    }
+
+    #mergeAt(gap, rowIndex) {
+        for (const panel of this.translationPanelTargets) {
+            this.#boundariesIn(panel)[rowIndex]?.remove()
+        }
+        gap.classList.remove('is-boundary')
+        gap.textContent = '✂'
+        gap.title = 'Splits hier'
+    }
+
+    #splitAt(gap, rowIndex) {
+        for (const panel of this.translationPanelTargets) {
+            const insertBefore = this.#boundariesIn(panel)[rowIndex] ?? null // null => last row, append at end
+
+            const newBoundary = document.createElement('span')
+            newBoundary.className = 'alignment-boundary'
+            newBoundary.title = 'Sleep om grens te verplaatsen'
+            newBoundary.setAttribute('data-action', 'pointerdown->alignment-editor#startDrag')
+
+            if (insertBefore) {
+                panel.insertBefore(newBoundary, insertBefore)
+            } else {
+                panel.appendChild(newBoundary)
+            }
+        }
+
+        gap.classList.add('is-boundary')
+        gap.textContent = '⌃'
+        gap.title = 'Voeg samen met volgende rij'
+    }
+
+    // ── Translation-panel dragging (independent per panel) ──────────────────────
+
+    startDrag(event) {
+        event.preventDefault()
+        const boundaryEl = event.currentTarget
+        const panel = boundaryEl.parentElement
+        const pointerId = event.pointerId
+
+        const words = [
+            ...this.#wordsBeside(boundaryEl, -1),
+            ...this.#wordsBeside(boundaryEl, 1),
+        ]
+        if (words.length === 0) return
+
+        boundaryEl.classList.add('is-dragging')
+        boundaryEl.setPointerCapture(pointerId)
+
+        const onMove = (e) => this.#dragMove(e, boundaryEl, panel, words)
+        const onUp = () => {
+            boundaryEl.classList.remove('is-dragging')
+            try { boundaryEl.releasePointerCapture(pointerId) } catch { /* already released */ }
+            window.removeEventListener('pointermove', onMove)
+            window.removeEventListener('pointerup', onUp)
+            this.#recolor(panel)
+            this.#renderPreview()
+        }
+        window.addEventListener('pointermove', onMove)
+        window.addEventListener('pointerup', onUp)
+    }
+
+    // Words belonging to the row immediately before (-1) or after (+1) a
+    // boundary -- stops at the next boundary in that direction, so a drag
+    // can never reach into a third row.
+    #wordsBeside(boundaryEl, direction) {
+        const words = []
+        let node = direction === -1 ? boundaryEl.previousElementSibling : boundaryEl.nextElementSibling
+        while (node && !node.matches('.alignment-boundary')) {
+            if (node.matches('.alignment-word')) {
+                direction === -1 ? words.unshift(node) : words.push(node)
+            }
+            node = direction === -1 ? node.previousElementSibling : node.nextElementSibling
+        }
+        return words
+    }
+
+    // A translation panel is flowing paragraph text, so a row's words can
+    // span several visual lines. Snap to the visual line closest to the
+    // cursor's Y first, then match horizontally only within that line (see
+    // the multi-line drag fix this was built for: matching by clientX
+    // alone made the boundary jump to word 0 whenever the cursor moved to
+    // a different line, since a wrapped line's first word sits back at the
+    // container's left edge).
+    #dragMove(event, boundaryEl, panel, words) {
+        if (words.length === 0) return
+
+        const lines = new Map()
+        for (const w of words) {
+            const top = Math.round(w.getBoundingClientRect().top)
+            if (!lines.has(top)) lines.set(top, [])
+            lines.get(top).push(w)
+        }
+
+        let closestTop = null
+        let bestDy = Infinity
+        for (const top of lines.keys()) {
+            const dy = Math.abs(event.clientY - top)
+            if (dy < bestDy) { bestDy = dy; closestTop = top }
+        }
+        const lineWords = lines.get(closestTop)
+
+        let target = null
+        for (const w of lineWords) {
+            const rect = w.getBoundingClientRect()
+            if (event.clientX < rect.left + rect.width / 2) {
+                target = w
+                break
+            }
+        }
+
+        let moved = false
+        if (target) {
+            if (boundaryEl.nextElementSibling !== target) {
+                panel.insertBefore(boundaryEl, target)
+                moved = true
+            }
+        } else {
+            const last = lineWords[lineWords.length - 1]
+            if (last.nextElementSibling !== boundaryEl) {
+                last.after(boundaryEl)
+                moved = true
+            }
+        }
+
+        // Only re-render when the boundary actually moved -- dragMove fires
+        // on every pointermove, most of which don't cross a word gap.
+        if (moved) {
+            this.#recolor(panel)
+            this.#renderPreview()
+        }
+    }
+
+    // ── Visual row grouping ───────────────────────────────────────────────────
+
+    #recolorAll() {
+        for (const panel of this.translationPanelTargets) this.#recolor(panel)
+    }
+
+    #recolor(panel) {
+        let rowIndex = 0
+        for (const child of panel.children) {
+            if (child.matches('.alignment-boundary')) {
+                rowIndex++
+                continue
+            }
+            child.classList.toggle('row-odd', rowIndex % 2 === 1)
+        }
+    }
+
+    // ── Save ──────────────────────────────────────────────────────────────────
+
+    async save() {
+        const layers = this.#currentLayers()
+
+        for (const [layer, rows] of Object.entries(layers)) {
+            if (rows.some(r => r.words.length === 0)) {
+                this.#setStatus(`Elke rij moet minstens één woord bevatten (${layer}) — sleep woorden erin voordat je opslaat.`)
+                return
+            }
+        }
+
+        this.#setStatus('Bezig met opslaan…')
+        try {
+            const resp = await fetch(this.saveUrlValue, {
+                method:  'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken() },
+                body: JSON.stringify({
+                    layers: Object.fromEntries(
+                        Object.entries(layers).map(([layer, rows]) => [
+                            layer,
+                            { rows: rows.map(({ la_start, words }) => ({ la_start, words })) },
+                        ])
+                    ),
+                }),
+            })
+            const data = await resp.json()
+            if (!data.success) throw new Error(data.error || 'Opslaan mislukt.')
+
+            this.#setStatus(
+                data.alignment_dropped
+                    ? '✓ Opgeslagen. Let op: de woord-uitlijning (fase 4) is verwijderd en moet opnieuw via align_segments.py.'
+                    : '✓ Opgeslagen.'
+            )
+        } catch (err) {
+            this.#setStatus(`Fout bij opslaan: ${err.message}`)
+        }
+    }
+
+    // Shared Latin row boundaries, read once: one la_start per row, in order.
+    #laStarts() {
+        const starts = []
+        let sawFirstSentence = false
+        for (const child of this.laPanelTarget.children) {
+            if (child.matches('.alignment-la-sentence') && !sawFirstSentence) {
+                starts.push(parseInt(child.dataset.offset, 10))
+                sawFirstSentence = true
+            } else if (child.matches('.alignment-la-gap.is-boundary')) {
+                starts.push(parseInt(child.dataset.offset, 10))
+            }
+        }
+        return starts
+    }
+
+    // One joined Latin text per row, in the same order as #laStarts().
+    #laTextPerRow() {
+        const rows = [{ sentences: [] }]
+        for (const child of this.laPanelTarget.children) {
+            if (child.matches('.alignment-la-sentence')) {
+                rows[rows.length - 1].sentences.push(child.textContent)
+            } else if (child.matches('.alignment-la-gap.is-boundary')) {
+                rows.push({ sentences: [] })
+            }
+        }
+        return rows.map(r => r.sentences.join(' '))
+    }
+
+    // Reads one panel's current word groups -- one array of words per row.
+    #wordsPerRow(panel) {
+        const groups = [[]]
+        for (const child of panel.children) {
+            if (child.matches('.alignment-boundary')) {
+                groups.push([])
+            } else if (child.matches('.alignment-word')) {
+                groups[groups.length - 1].push(child.textContent)
+            }
+        }
+        return groups
+    }
+
+    // { layer: [{la_start, words}, ...] } for every translation panel present
+    // -- used both to build the save payload and to render the live preview.
+    #currentLayers() {
+        const laStarts = this.#laStarts()
+        const layers = {}
+        for (const panel of this.translationPanelTargets) {
+            const wordGroups = this.#wordsPerRow(panel)
+            layers[panel.dataset.layer] = laStarts.map((la_start, i) => ({
+                la_start, words: wordGroups[i] ?? [],
+            }))
+        }
+        return layers
+    }
+
+    // ── Live preview (Latin + every translation, per row) ───────────────────────
+
+    #renderPreview() {
+        const laTexts = this.#laTextPerRow()
+        const layers = this.#currentLayers()
+        const layerNames = this.translationPanelTargets.map(p => p.dataset.layer)
+
+        this.previewTarget.classList.toggle('has-weijenberg', layerNames.length > 1)
+        this.previewTarget.replaceChildren(
+            ...laTexts.map((laText, i) => {
+                const rowEl = document.createElement('div')
+                rowEl.className = 'alignment-preview-row'
+
+                const laEl = document.createElement('p')
+                laEl.className = 'institutio-sentence-la'
+                laEl.textContent = laText
+                rowEl.append(laEl)
+
+                for (const layer of layerNames) {
+                    const nlEl = document.createElement('p')
+                    nlEl.className = 'institutio-sentence-nl'
+                    nlEl.textContent = layers[layer][i].words.join(' ') || '(leeg)'
+                    rowEl.append(nlEl)
+                }
+
+                return rowEl
+            })
+        )
+    }
+
+    #setStatus(msg) {
+        if (this.hasStatusTarget) this.statusTarget.textContent = msg
+    }
+}

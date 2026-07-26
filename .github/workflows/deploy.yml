@@ -18,7 +18,7 @@ jobs:
             set -e
             cd /translatorstags
             git pull
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml build --pull --no-cache
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml build --pull --no-cache app ingest
             docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --remove-orphans
             docker exec bible_app php bin/console cache:clear
             docker exec bible_app php bin/console asset-map:compile

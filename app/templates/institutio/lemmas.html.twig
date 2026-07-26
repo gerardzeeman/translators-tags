@@ -1,0 +1,74 @@
+{% extends 'base.html.twig' %}
+{% block title %}Lemma's – Institutie – Bijbel Vergelijking{% endblock %}
+
+{% block nav_bijbel %}
+{{ include('institutio/_nav_panel.html.twig', {
+    trigger_label: 'Institutie',
+    active_book: null,
+    active_chapter: null,
+    book_chapter_counts: book_chapter_counts,
+    has_front_matter: has_front_matter,
+}) }}
+{% endblock %}
+
+{% block nav_center %}{% endblock %}
+
+{% block body %}
+<div class="container container--wide">
+
+    <div class="admin-page-header">
+        <h1>Lemma's — Institutie christianae religionis</h1>
+        <span class="lemma-total">{{ total }} unieke lemma's</span>
+    </div>
+
+    <table class="admin-table lemma-table">
+        <thead>
+            <tr>
+                <th>Nummer</th>
+                <th>Woord</th>
+                <th>Aantal</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for l in lemmas %}
+            <tr>
+                <td>{{ offset + loop.index }}</td>
+                <td class="lemma-word">
+                    <details{% if l.variants|length <= 1 %} class="lemma-variants-single"{% endif %}>
+                        <summary><a href="{{ path('app_institutio_lemma_detail', {lemma: l.lemma}) }}" class="lemma-word-link">{{ l.lemma }}</a><span class="lemma-variant-count">{{ l.variants|length }} vorm{{ l.variants|length != 1 ? 'en' : '' }}</span></summary>
+                        <table class="lemma-variant-table">
+                            <thead>
+                                <tr><th>Vorm</th><th>Morfologie</th><th>Aantal</th></tr>
+                            </thead>
+                            <tbody>
+                            {% for v in l.variants %}
+                                <tr>
+                                    <td class="lemma-variant-form">{{ v.norm }}</td>
+                                    <td>{{ v.morph_description|default('–') }}</td>
+                                    <td>{{ v.freq }}</td>
+                                </tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    </details>
+                </td>
+                <td>{{ l.freq }}</td>
+            </tr>
+        {% else %}
+            <tr class="empty-row"><td colspan="3">Geen lemma's gevonden.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+    <nav class="lemma-pagination" aria-label="Paginering">
+        {% if page > 1 %}
+        <a href="{{ path('app_institutio_lemmas', {page: page - 1}) }}" class="nav-btn" title="Vorige pagina">‹</a>
+        {% endif %}
+        <span class="lemma-pagination-current">Pagina {{ page }} van {{ last_page }}</span>
+        {% if page < last_page %}
+        <a href="{{ path('app_institutio_lemmas', {page: page + 1}) }}" class="nav-btn" title="Volgende pagina">›</a>
+        {% endif %}
+    </nav>
+
+</div>
+{% endblock %}

@@ -1,0 +1,120 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Vertaling bewerken – {{ segment.ref }} – Bijbel Vergelijking{% endblock %}
+
+{% block nav_center %}{% endblock %}
+
+{% block body %}
+<div class="translate-screen">
+
+    <div class="translate-topbar">
+        <a href="{{ segment.book is not null ? path('app_institutio_chapter', {book: segment.book, chapter: segment.chapter}) : path('app_institutio_front') }}"
+           class="btn-cancel">‹ Terug naar {{ segment.ref }}</a>
+        {% if segment.text_nl %}
+        <a href="{{ path('app_institutio_alignment', {id: segment.id}) }}" class="nav-user-btn">Uitlijning aanpassen</a>
+        <a href="{{ path('app_institutio_wordlink', {id: segment.id}) }}" class="nav-user-btn">Woordkoppeling</a>
+        {% endif %}
+        {% if saved %}
+        <div class="translate-saved-notice">✓ Opgeslagen</div>
+        {% endif %}
+    </div>
+
+    {% for label, messages in app.flashes %}
+        {% for message in messages %}
+        <div class="alert alert-{{ label }}">{{ message }}</div>
+        {% endfor %}
+    {% endfor %}
+
+    <form method="post" action="{{ path('app_institutio_translate_save', {id: segment.id}) }}" class="translate-form">
+
+        {% if segment.heading %}
+        <div class="translate-heading-bar">
+            <span class="translate-field-label">Hoofdstuktitel</span>
+            <div class="translate-field-readonly">{{ segment.heading }}</div>
+        </div>
+        {% endif %}
+
+        {% if segment.rows %}
+        {# Already zin-voor-zin uitgelijnd: per rij bewerken houdt de bestaande
+           uitlijning intact (la_start wordt niet aangeraakt). Weijenberg
+           staat er alleen naast als die zelf ook is uitgelijnd (zelfde
+           rij-aantal, want de uitlijnpagina slaat beide lagen altijd
+           gelijktijdig met dezelfde rijgrenzen op). #}
+        <div class="translate-rows{{ segment.weijenberg_rows ? ' translate-rows--three' : '' }}">
+            {% for row in segment.rows %}
+            <div class="translate-row{{ segment.weijenberg_rows ? ' translate-row--three' : '' }}">
+                <div class="translate-row-la">{{ row.la_text }}</div>
+                <textarea
+                    name="row_nl[{{ row.id }}]"
+                    class="translate-field-textarea translate-row-textarea"
+                    rows="3"
+                >{{ row.nl_text }}</textarea>
+                {% if segment.weijenberg_rows %}
+                <div class="translate-row-weijenberg">{{ (segment.weijenberg_rows[loop.index0].nl_text)|default('') }}</div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        <div class="translate-panel-footer">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token('institutio_translate') }}">
+            <button type="submit" class="btn-primary btn-save">Opslaan</button>
+        </div>
+
+        {% else %}
+        <div class="translate-panels{{ segment.weijenberg_rows ? ' translate-panels--three' : '' }}">
+
+            {# Left: Latin (read-only, for reference) #}
+            <div class="translate-panel">
+                <div class="translate-panel-header">
+                    <span class="translate-panel-lang">Latijn</span>
+                    <span class="translate-panel-id">{{ segment.ref }}</span>
+                </div>
+                <div class="translate-field-group translate-field-group--grow">
+                    <label class="translate-field-label">Tekst</label>
+                    <div class="translate-field-readonly translate-field-readonly--pre">{{ segment.text_la }}</div>
+                </div>
+            </div>
+
+            {# Middle: Dutch (editable) #}
+            <div class="translate-panel translate-panel--nl">
+                <div class="translate-panel-header">
+                    <span class="translate-panel-lang">Nederlands</span>
+                </div>
+
+                <div class="translate-field-group translate-field-group--grow">
+                    <label class="translate-field-label" for="text_nl">Vertaling</label>
+                    <textarea
+                        id="text_nl"
+                        name="text_nl"
+                        class="translate-field-textarea"
+                        rows="20"
+                        placeholder="Nog niet vertaald."
+                    >{{ segment.text_nl ?? '' }}</textarea>
+                </div>
+
+                <div class="translate-panel-footer">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token('institutio_translate') }}">
+                    <button type="submit" class="btn-primary btn-save">Opslaan</button>
+                </div>
+            </div>
+
+            {# Right: Weijenberg (1865), read-only, only if that layer is itself aligned #}
+            {% if segment.weijenberg_rows %}
+            <div class="translate-panel">
+                <div class="translate-panel-header">
+                    <span class="translate-panel-lang">Weijenberg (1865)</span>
+                </div>
+                <div class="translate-field-group translate-field-group--grow">
+                    {% for row in segment.weijenberg_rows %}
+                    <p class="institutio-sentence-nl">{{ row.nl_text }}</p>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+        </div>{# /.translate-panels #}
+        {% endif %}
+    </form>
+
+</div>{# /.translate-screen #}
+{% endblock %}

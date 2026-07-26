@@ -1,0 +1,14 @@
+<turbo-frame id="institutio-verse-panel">
+{% for v in verses %}
+<div class="institutio-verse-entry">
+    <div class="institutio-verse-ref">{{ v.label }} <span class="institutio-verse-trans">HSV</span></div>
+    {% if v.text %}
+    <p class="institutio-verse-text">{{ v.text }}</p>
+    {% else %}
+    <p class="institutio-verse-text institutio-verse-missing">Vers niet gevonden in de HSV.</p>
+    {% endif %}
+</div>
+{% else %}
+<p class="institutio-verse-placeholder">Geen Bijbeltekst gevonden voor deze verwijzing.</p>
+{% endfor %}
+</turbo-frame>

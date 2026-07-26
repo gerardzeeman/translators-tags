@@ -1,0 +1,73 @@
+{# Institutio boek/hoofdstuk navigatiepaneel — zelfde nav-book-btn/nav-panel
+   patroon als de bijbellezer (zie templates/bible/chapter_view.html.twig),
+   hergebruikt via de gegeneraliseerde nav-panel Stimulus controller
+   (data-url-prefix zorgt dat hoofdstukkeuze naar /institutio/{book}/{n} linkt).
+
+   Verwachte variabelen:
+     trigger_label       — tekst op de nav-book-btn knop
+     active_book          — huidig boek (int) of null (voorwoord/geen boek)
+     active_chapter        — huidig hoofdstuk (int) of null
+     book_chapter_counts  — {boek: aantal hoofdstukken}
+     has_front_matter     — bool
+#}
+<div data-controller="nav-panel" data-url-prefix="/institutio">
+    <button class="nav-book-btn"
+            type="button"
+            data-action="click->nav-panel#open"
+            data-nav-panel-target="trigger"
+            data-usfm="{{ active_book }}"
+            data-chapter="{{ active_chapter }}">
+        {{ trigger_label }} ▾
+    </button>
+
+    {# Navigatiepaneel — desktop: 340px slide-in; mobiel: fullscreen overlay #}
+    <div class="nav-panel" data-nav-panel-target="panel" aria-hidden="true">
+        <div class="nav-panel-inner">
+
+            {# Linkerkolom: de vier boeken van de Institutio (+ voorwoord) #}
+            <div class="nav-panel-books" data-nav-panel-target="bookList">
+                <div class="nav-panel-section">Institutie christianae religionis</div>
+                {% if has_front_matter %}
+                <a href="{{ path('app_institutio_front') }}"
+                   class="nav-panel-book-btn{% if active_book is null %} is-active{% endif %}">
+                    <span class="nav-panel-book-name">Voorwoord</span>
+                </a>
+                {% endif %}
+                {% for b, chapters in book_chapter_counts %}
+                <button class="nav-panel-book-btn{% if b == active_book %} is-active{% endif %}"
+                        type="button"
+                        data-action="click->nav-panel#selectBook"
+                        data-usfm="{{ b }}"
+                        data-chapters="{{ chapters }}"
+                        data-name="Boek {{ b }}">
+                    <span class="nav-panel-book-name">Boek {{ b }}</span>
+                    <span class="nav-panel-book-count">{{ chapters }}</span>
+                </button>
+                {% endfor %}
+            </div>
+
+            {# Rechterkolom: hoofdstukraster (dynamisch gevuld door controller) #}
+            <div class="nav-panel-chapters" data-nav-panel-target="chapterGrid">
+                {# Toon direct de huidige staat zodat pagina zonder JS ook werkt #}
+                {% if active_book is not null %}
+                <div class="nav-panel-chapter-book">Boek {{ active_book }}</div>
+                <div class="nav-panel-chapter-grid">
+                    {% for i in 1..book_chapter_counts[active_book] %}
+                    <a href="{{ path('app_institutio_chapter', {book: active_book, chapter: i}) }}"
+                       class="nav-chapter-btn{% if i == active_chapter %} is-active{% endif %}">
+                        {{ i }}
+                    </a>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="nav-panel-chapter-book">Voorwoord</div>
+                {% endif %}
+            </div>
+
+        </div>
+    </div>
+
+    {# Overlay — klik erop sluit het paneel #}
+    <div class="nav-overlay" data-nav-panel-target="overlay"
+         data-action="click->nav-panel#close"></div>
+</div>

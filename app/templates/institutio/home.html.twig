@@ -1,0 +1,58 @@
+{% extends 'base.html.twig' %}
+{% block title %}Institutie christianae religionis – Bijbel Vergelijking{% endblock %}
+
+{% block nav_bijbel %}
+{{ include('institutio/_nav_panel.html.twig', {
+    trigger_label: 'Institutie',
+    active_book: null,
+    active_chapter: null,
+    book_chapter_counts: book_chapter_counts,
+    has_front_matter: has_front_matter,
+}) }}
+{% endblock %}
+
+{% block nav_center %}{% endblock %}
+
+{% block nav_right_extra %}
+<a href="{{ path('app_institutio_lemmas') }}" class="nav-user-btn">Lemma's</a>
+{% endblock %}
+
+{% block body %}
+<div class="page-institutio-home">
+
+    <div class="institutio-home-header">
+        <h1>Institutie christianae religionis</h1>
+        <p class="institutio-home-subtitle">Johannes Calvijn, 1559 — Latijnse tekst met Nederlandse vertaling</p>
+    </div>
+
+    <nav class="institutio-toc" aria-label="Inhoudsopgave">
+
+        {% if front_matter %}
+        <a href="{{ path('app_institutio_front') }}" class="institutio-toc-entry institutio-toc-front">
+            <span class="institutio-toc-num">—</span>
+            <span class="institutio-toc-titles">
+                <span class="institutio-toc-title">Voorwoord</span>
+            </span>
+        </a>
+        {% endif %}
+
+        {% for book, chapters in books %}
+        <div class="institutio-toc-book">
+            <h2 class="institutio-toc-book-title">Boek {{ book }}</h2>
+            {% for c in chapters %}
+            <a href="{{ path('app_institutio_chapter', {book: book, chapter: c.chapter}) }}" class="institutio-toc-entry">
+                <span class="institutio-toc-num">{{ c.chapter }}</span>
+                <span class="institutio-toc-titles">
+                    <span class="institutio-toc-title{{ c.heading_nl ? '' : ' institutio-toc-title-latin' }}">{{ c.heading_nl ?: c.heading }}</span>
+                </span>
+            </a>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="no-verse">Geen inhoudsopgave gevonden.</p>
+        {% endfor %}
+
+    </nav>
+
+</div>
+{% endblock %}

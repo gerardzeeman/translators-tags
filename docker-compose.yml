@@ -66,6 +66,33 @@ services:
       - ingest   # only starts when explicitly requested
     command: python main.py
 
+  institutio:
+    build:
+      context: ./ingest/institutio
+      dockerfile: Dockerfile
+    container_name: bible_institutio
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-bible_compare}
+      DB_USER: ${DB_USER:-bible}
+      DB_PASSWORD: ${DB_PASSWORD:-changeme}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      # SimAlign's multilingual BERT model otherwise downloads on every
+      # `docker compose run --rm` invocation, since the container's home
+      # directory doesn't survive --rm -- point it at the persisted volume.
+      HF_HOME: /data/institutio/hf_cache
+    volumes:
+      - institutio_data:/data/institutio
+    networks:
+      - bible_net
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles:
+      - institutio   # only starts when explicitly requested
+    command: python main.py
+
   adminer:
     image: adminer
     restart: unless-stopped
@@ -97,6 +124,7 @@ services:
 volumes:
   postgres_data:
   source_data:
+  institutio_data:
   backup_data:
 
 networks:

@@ -179,10 +179,15 @@ nano .env.local   # zie §4 voor de waarden
 De productie-overrides (caddy_net, adminer SSH-only) staan in `docker-compose.prod.yml` in de repo.
 Geen handmatige aanpassingen nodig op de server.
 
-Image bouwen en starten:
+Image bouwen en starten. Bouw expliciet alleen `app` en `ingest` — **niet** `institutio`:
+die pipeline (torch/transformers/simalign/LatinCy) hoort alleen op de dev-machine
+gebouwd te worden (zie de probleemstelling in `docs/data-sync.md`). `profiles:
+[institutio]` voorkomt alleen dat de service *vanzelf* meestart bij `up`, niet
+dat iemand met shell-toegang 'm bewust draait — als het image er nooit staat,
+kán dat ook niet.
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.prod.yml build --pull --no-cache
+docker compose -f docker-compose.yml -f docker-compose.prod.yml build --pull --no-cache app ingest
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
 
@@ -264,8 +269,8 @@ cd /translatorstags
 # Nieuwe code ophalen
 git pull
 
-# Image herbouwen
-docker compose -f docker-compose.yml -f docker-compose.prod.yml build --pull --no-cache
+# Image herbouwen -- niet institutio, zie §3.4
+docker compose -f docker-compose.yml -f docker-compose.prod.yml build --pull --no-cache app ingest
 
 # Herstarten (Compose start nieuwe container vóór stop)
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --remove-orphans

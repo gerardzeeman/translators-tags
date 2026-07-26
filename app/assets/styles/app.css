@@ -1680,6 +1680,7 @@ a:hover { text-decoration: underline; }
 .method-border-auto_sequence     { border-color: var(--color-auto-sequence);  border-style: dashed; }
 .method-border-auto_positional   { border-color: var(--color-auto-positional);border-style: dashed; }
 .method-border-propagated        { border-color: var(--color-auto-pivot);     border-style: dashed; }
+.method-border-simalign          { border-color: var(--color-auto-pivot);     border-style: dashed; }
 
 .src-word-propagated { opacity: .85; }
 .propagated-hint {
@@ -1732,6 +1733,7 @@ a:hover { text-decoration: underline; }
 .method-underline-manual_hint  { border-bottom: 2px solid var(--color-manual-hint); }
 .method-underline-proper_noun  { border-bottom: 2px solid var(--color-proper-noun); }
 .method-underline-positional   { border-bottom: 2px dashed var(--color-positional); }
+.method-underline-simalign     { border-bottom: 2px dashed var(--color-auto-pivot); }
 .method-underline-none         {}
 
 .verse-full-text {
@@ -1948,6 +1950,7 @@ a:hover { text-decoration: underline; }
     gap: 1.25rem;
     align-items: start;
 }
+.translate-panels--three { grid-template-columns: 1fr 1fr 1fr; }
 .translate-panel {
     background: var(--bg);
     border: 1px solid var(--color-border);
@@ -2038,6 +2041,55 @@ a:hover { text-decoration: underline; }
     justify-content: flex-end;
 }
 .btn-save { min-width: 110px; }
+.translate-heading-bar {
+    display: flex;
+    align-items: baseline;
+    gap: .75rem;
+    background: var(--bg);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    padding: .75rem 1.25rem;
+    box-shadow: var(--shadow);
+}
+.translate-heading-bar .translate-field-readonly {
+    flex: 1;
+    min-height: 0;
+    border: none;
+    background: none;
+    padding: 0;
+}
+.translate-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+.translate-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.25rem;
+    align-items: start;
+    background: var(--bg);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    box-shadow: var(--shadow);
+    padding: 1.25rem;
+}
+.translate-row-la {
+    font-size: .9rem;
+    color: var(--color-ink-light);
+    line-height: 1.6;
+    padding: .5rem .25rem;
+}
+.translate-row-textarea { min-height: 5.5rem; }
+.translate-row--three { grid-template-columns: 1fr 1fr 1fr; }
+.translate-row-weijenberg {
+    font-size: .9rem;
+    line-height: 1.6;
+    padding: .5rem .25rem;
+}
+@media (max-width: 800px) {
+    .translate-row, .translate-row--three { grid-template-columns: 1fr; }
+}
 .translate-empty {
     text-align: center;
     color: var(--color-ink-muted);
@@ -2163,6 +2215,9 @@ a:hover { text-decoration: underline; }
 .dot.method-auto_source_pivot  { background: var(--color-auto-pivot); }
 .dot.method-auto_sequence      { background: var(--color-auto-sequence); }
 .dot.method-auto_positional    { background: var(--color-auto-positional); }
+.dot.method-manual             { background: var(--color-manual); }
+.dot.method-simalign           { background: var(--color-auto-pivot); }
+.dot.method-none               { background: var(--color-border); }
 
 .page-trans-home {
     max-width: 900px;
@@ -2491,6 +2546,7 @@ a:hover { text-decoration: underline; }
 .alert { padding: .75rem 1rem; border-radius: 4px; margin-bottom: 1.25rem; }
 .alert-error  { background: #fdf0ee; color: #922; border: 1px solid #f0b8b0; }
 .alert-success { background: #edf7ed; color: #2a6a2a; border: 1px solid #b8ddb8; }
+.alert-warning { background: #fdf6e3; color: #8a6414; border: 1px solid #f0dfa0; }
 
 /* ── Profile page ──────────────────────────────────────────────────────────── */
 .profile-page { max-width: 560px; margin: 0 auto; }
@@ -2606,3 +2662,687 @@ a:hover { text-decoration: underline; }
 }
 .btn-danger-inline { background: none; border: none; color: var(--color-error, #922); cursor: pointer; padding: 0; margin-left: .75rem; }
 .form-inline { display: inline; }
+
+/* ── Institutio: hoofdpagina (inhoudsopgave) ────────────────────────────────── */
+.page-institutio-home { max-width: 700px; margin: 0 auto; padding: 2rem 1.25rem 3rem; }
+.institutio-home-header { text-align: center; margin-bottom: 2.5rem; }
+.institutio-home-header h1 {
+    font-family: var(--font-serif);
+    font-size: 1.7rem;
+    font-weight: 600;
+    font-style: italic;
+    color: var(--text);
+    margin: 0 0 .4rem;
+}
+.institutio-home-subtitle {
+    font-family: var(--font-ui);
+    font-size: .85rem;
+    color: var(--col-label);
+    margin: 0;
+}
+
+.institutio-toc { display: flex; flex-direction: column; gap: 2rem; }
+
+.institutio-toc-entry {
+    display: flex;
+    gap: 1rem;
+    align-items: baseline;
+    padding: .55rem 0;
+    border-bottom: 1px solid var(--divider);
+    text-decoration: none;
+    color: inherit;
+    transition: background .1s;
+}
+.institutio-toc-entry:hover { background: var(--hover-warm); }
+.institutio-toc-entry:last-child { border-bottom: none; }
+
+.institutio-toc-front {
+    padding-bottom: 1.1rem;
+    margin-bottom: .3rem;
+    border-bottom: 2px solid var(--divider);
+}
+
+.institutio-toc-num {
+    flex: 0 0 auto;
+    min-width: 1.6rem;
+    text-align: right;
+    font-family: var(--font-mono);
+    font-size: .85rem;
+    color: var(--verse-num);
+}
+.institutio-toc-titles { display: flex; flex-direction: column; gap: .15rem; min-width: 0; }
+.institutio-toc-title {
+    font-family: var(--font-serif);
+    font-size: 1.02rem;
+    color: var(--text);
+    line-height: 1.35;
+}
+.institutio-toc-title-latin {
+    font-style: italic;
+    color: var(--col-label);
+}
+
+.institutio-toc-book-title {
+    font-family: var(--font-ui);
+    font-size: .75rem;
+    font-weight: 600;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin: 0 0 .3rem;
+}
+
+/* ── Institutio: hoofdstukweergave ─────────────────────────────────────────── */
+.page-institutio { max-width: 760px; margin: 0 auto; padding: 0 1.25rem 3rem; }
+.institutio-heading {
+    font-family: var(--font-serif);
+    font-size: 1.4rem;
+    font-weight: 600;
+    font-style: italic;
+    color: var(--text);
+    margin: 1.5rem 0 .3rem;
+    line-height: 1.4;
+}
+.institutio-heading-solo { margin-bottom: 2rem; }
+.institutio-heading-ref {
+    font-style: normal;
+    font-family: var(--font-mono);
+    font-size: 1rem;
+    color: var(--col-label);
+    margin-right: .3rem;
+}
+.institutio-heading-nl {
+    font-family: var(--font-serif);
+    font-size: 1.1rem;
+    font-style: normal;
+    color: var(--col-label);
+    margin: 0 0 2rem;
+    line-height: 1.4;
+}
+.institutio-sections { display: flex; flex-direction: column; gap: 1.4rem; }
+.institutio-section {
+    display: flex;
+    gap: .75rem;
+    align-items: flex-start;
+    padding-bottom: 1.4rem;
+    border-bottom: 1px solid var(--divider);
+}
+.institutio-section:last-child { border-bottom: none; padding-bottom: 0; }
+.institutio-section-num {
+    flex: 0 0 auto;
+    font-family: var(--font-mono);
+    font-size: .8rem;
+    color: var(--verse-num);
+    min-width: 1.4rem;
+    text-align: right;
+    padding-top: .2rem;
+}
+.institutio-sentence-group {
+    display: flex;
+    flex-direction: column;
+    gap: .7rem;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.institutio-sentence-row {
+    position: relative;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    align-items: start;
+}
+.institutio-edit-btn {
+    position: absolute;
+    top: -.15rem;
+    right: -1.6rem;
+    width: 1.3rem;
+    height: 1.3rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: .75rem;
+    line-height: 1;
+    color: var(--col-label);
+    background: var(--card-warm);
+    border: 1px solid var(--divider);
+    border-radius: 3px;
+    text-decoration: none;
+    opacity: 0;
+    transition: opacity .12s, color .12s, border-color .12s;
+}
+.institutio-sentence-row:hover .institutio-edit-btn,
+.institutio-sentence-row:focus-within .institutio-edit-btn,
+.institutio-edit-btn:focus {
+    opacity: 1;
+}
+.institutio-edit-btn:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+}
+
+@media (max-width: 720px) {
+    .institutio-edit-btn { right: 0; top: -1.4rem; }
+}
+.institutio-sentence-la,
+.institutio-sentence-nl {
+    font-family: var(--font-serif);
+    font-size: 1.1rem;
+    line-height: 1.65;
+    color: var(--text);
+    margin: 0;
+}
+.institutio-no-translation {
+    font-family: var(--font-ui);
+    font-size: .85rem;
+    font-style: italic;
+    color: var(--col-label);
+}
+
+@media (max-width: 720px) {
+    .institutio-sentence-row { grid-template-columns: 1fr; gap: .3rem; }
+}
+
+/* ── Institutio: kritisch-apparaat referenties (variant/citaat) ────────────── */
+.institutio-note {
+    position: relative;
+    cursor: help;
+    outline: none;
+}
+.institutio-note-glyph {
+    font-family: var(--font-mono);
+    font-size: .7em;
+    font-weight: 700;
+    padding: 0 .1em;
+}
+.institutio-note-variant .institutio-note-glyph { color: var(--col-label); }
+.institutio-note-citation .institutio-note-glyph { color: var(--color-accent-2); }
+
+.institutio-note-popup {
+    display: none;
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--nav);
+    color: var(--nav-text);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 4px;
+    padding: 6px 10px;
+    font-family: var(--font-ui);
+    font-size: .8rem;
+    font-style: normal;
+    line-height: 1.4;
+    white-space: normal;
+    width: max-content;
+    max-width: min(320px, 80vw);
+    text-align: left;
+    z-index: 200;
+    box-shadow: var(--shadow);
+}
+.institutio-note-popup-kind {
+    display: block;
+    font-size: .68rem;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: var(--gold);
+    margin-bottom: 2px;
+}
+.institutio-note:hover .institutio-note-popup,
+.institutio-note:focus-within .institutio-note-popup {
+    display: block;
+}
+.institutio-note-popup::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 5px solid transparent;
+    border-top-color: var(--nav);
+}
+
+/* ── Institutio: woord-hover (lemma + Nederlandse gloss) ────────────────────── */
+.institutio-word {
+    position: relative;
+    cursor: help;
+    outline: none;
+    border-bottom: 1px dotted transparent;
+    transition: border-color .1s;
+}
+.institutio-word:hover,
+.institutio-word:focus-within {
+    border-bottom-color: var(--col-label);
+}
+.institutio-word-popup {
+    display: none;
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--nav);
+    color: var(--nav-text);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 4px;
+    padding: 6px 10px;
+    font-family: var(--font-ui);
+    font-size: .8rem;
+    font-style: normal;
+    line-height: 1.4;
+    white-space: normal;
+    width: max-content;
+    max-width: min(280px, 80vw);
+    text-align: left;
+    z-index: 200;
+    box-shadow: var(--shadow);
+}
+.institutio-word-lemma {
+    display: block;
+    font-family: var(--font-serif);
+    font-style: italic;
+    color: var(--gold);
+}
+.institutio-word-gloss {
+    display: block;
+    margin-top: 2px;
+}
+.institutio-word:hover .institutio-word-popup,
+.institutio-word:focus-within .institutio-word-popup {
+    display: block;
+}
+.institutio-word-popup::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 5px solid transparent;
+    border-top-color: var(--nav);
+}
+
+/* ── Institutio: verwijzing-marker als link (Schriftplaats aanklikbaar) ─────── */
+.institutio-note-glyph a {
+    color: inherit;
+    text-decoration: none;
+    cursor: pointer;
+}
+.institutio-note-glyph a:hover,
+.institutio-note-glyph a:focus { text-decoration: underline; }
+
+/* ── Institutio: Bijbeltekst-zijpaneel (HSV), zelfde patroon als Strong's ──── */
+.institutio-verse-sidebar {
+    position: fixed;
+    top: var(--nav-height);
+    right: 0;
+    width: 340px;
+    height: calc(100vh - var(--nav-height));
+    background: var(--bg);
+    border-left: 1px solid var(--divider);
+    box-shadow: -4px 0 16px rgba(0, 0, 0, .08);
+    display: none;
+    flex-direction: column;
+    z-index: 150;
+    overflow: hidden;
+}
+.institutio-verse-sidebar.is-open { display: flex; }
+
+.institutio-verse-sidebar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--divider);
+    background: var(--card-warm);
+    flex-shrink: 0;
+}
+.institutio-verse-sidebar-title {
+    font-size: 9px;
+    font-weight: 400;
+    letter-spacing: .26em;
+    text-transform: uppercase;
+    color: var(--col-label);
+    font-family: var(--font-ui);
+}
+.institutio-verse-sidebar-close {
+    background: none;
+    border: none;
+    font-size: 18px;
+    color: var(--verse-num);
+    cursor: pointer;
+    line-height: 1;
+    padding: 0 2px;
+    transition: color .15s;
+}
+.institutio-verse-sidebar-close:hover { color: var(--text); }
+
+.institutio-verse-sidebar turbo-frame {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: block;
+}
+
+.institutio-verse-entry + .institutio-verse-entry { margin-top: 1.2rem; padding-top: 1.2rem; border-top: 1px solid var(--divider); }
+.institutio-verse-ref {
+    font-family: var(--font-ui);
+    font-size: .8rem;
+    font-weight: 600;
+    color: var(--gold);
+    margin-bottom: .3rem;
+}
+.institutio-verse-trans {
+    font-size: .68rem;
+    font-weight: 400;
+    letter-spacing: .04em;
+    color: var(--col-label);
+    margin-left: .3em;
+}
+.institutio-verse-text {
+    font-family: var(--font-serif);
+    font-size: 1rem;
+    line-height: 1.55;
+    color: var(--text);
+}
+.institutio-verse-missing,
+.institutio-verse-placeholder {
+    font-family: var(--font-ui);
+    font-size: .85rem;
+    font-style: italic;
+    color: var(--col-label);
+}
+
+@media (max-width: 768px) {
+    .institutio-verse-sidebar {
+        display: flex;
+        top: auto;
+        bottom: 0;
+        right: 0;
+        left: 0;
+        width: 100%;
+        height: 52vh;
+        border-left: none;
+        border-top: 2px solid var(--accent);
+        border-radius: var(--radius) var(--radius) 0 0;
+        transform: translateY(100%);
+        transition: transform .3s ease;
+        box-shadow: 0 -4px 24px rgba(0, 0, 0, .18);
+        pointer-events: none;
+    }
+    .institutio-verse-sidebar.is-open {
+        transform: translateY(0);
+        pointer-events: auto;
+    }
+}
+
+/* ── Institutio: lemmalijst ─────────────────────────────────────────────────── */
+.lemma-total { color: var(--color-ink-muted); font-size: .9rem; }
+.lemma-table td:first-child, .lemma-table th:first-child { width: 6rem; }
+.lemma-table td:last-child, .lemma-table th:last-child { width: 6rem; }
+.lemma-word { font-family: var(--font-serif); font-style: italic; font-size: 1.05rem; }
+.lemma-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    margin: 1.5rem 0;
+}
+.lemma-pagination-current { color: var(--color-ink-muted); font-size: .9rem; }
+
+.lemma-word details > summary {
+    cursor: pointer;
+    list-style: none;
+    display: flex;
+    align-items: baseline;
+    gap: .5rem;
+}
+.lemma-word summary::-webkit-details-marker { display: none; }
+.lemma-word summary::before {
+    content: '▸';
+    font-style: normal;
+    font-size: .7em;
+    color: var(--color-ink-muted);
+}
+.lemma-word details[open] > summary::before { content: '▾'; }
+.lemma-word details.lemma-variants-single > summary { cursor: default; }
+.lemma-word details.lemma-variants-single > summary::before { content: ''; }
+.lemma-variant-count {
+    font-family: var(--font-ui);
+    font-style: normal;
+    font-size: .72rem;
+    color: var(--color-ink-muted);
+}
+.lemma-variant-table {
+    margin: .5rem 0 .25rem 1.1rem;
+    font-family: var(--font-ui);
+    font-style: normal;
+    font-size: .85rem;
+    border-collapse: collapse;
+}
+.lemma-variant-table th {
+    text-align: left;
+    font-weight: 600;
+    color: var(--color-ink-muted);
+    padding: .15rem .75rem .15rem 0;
+    border-bottom: 1px solid var(--color-border);
+}
+.lemma-variant-table td { padding: .15rem .75rem .15rem 0; }
+.lemma-word-link { color: inherit; text-decoration: none; }
+.lemma-word-link:hover { text-decoration: underline; }
+
+/* ── Institutio: lemma-detailpagina ──────────────────────────────────────────── */
+.lemma-detail-word {
+    font-family: var(--font-serif);
+    font-style: italic;
+}
+.lemma-detail-gloss {
+    background: var(--card-warm);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+}
+.lemma-detail-gloss-row {
+    display: flex;
+    align-items: baseline;
+    gap: .6rem;
+    flex-wrap: wrap;
+}
+.lemma-detail-gloss-row--note { align-items: flex-start; }
+.lemma-detail-gloss-label {
+    font-size: .72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: var(--color-ink-muted);
+    min-width: 6.5rem;
+}
+.lemma-detail-gloss-value { font-size: .95rem; }
+.lemma-detail-gloss-row--note .lemma-detail-gloss-value {
+    margin: 0;
+    color: var(--color-ink-light);
+    line-height: 1.5;
+}
+.lemma-gloss-source {
+    font-size: .68rem;
+    color: var(--color-ink-muted);
+    border: 1px solid var(--divider);
+    border-radius: 3px;
+    padding: 0 .35em;
+    margin-left: auto;
+}
+.lemma-gloss-source-manual { color: var(--color-manual); border-color: var(--color-manual); }
+.lemma-detail-heading {
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 1.75rem 0 .75rem;
+}
+.lemma-variant-table--standalone {
+    margin: 0 0 .5rem 0;
+    font-size: .9rem;
+}
+.lemma-occurrence-list {
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+}
+.lemma-occurrence {
+    display: flex;
+    gap: 1rem;
+    align-items: baseline;
+    padding: .5rem .75rem;
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    text-decoration: none;
+    color: inherit;
+    transition: background .1s;
+}
+.lemma-occurrence:hover { background: var(--hover-warm); }
+.lemma-occurrence-ref {
+    font-family: var(--font-mono);
+    font-size: .78rem;
+    color: var(--color-ink-muted);
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+.lemma-occurrence-context {
+    font-family: var(--font-serif);
+    font-size: .92rem;
+    color: var(--color-ink-light);
+}
+.lemma-occurrence-context mark {
+    background: #fff3b0;
+    color: inherit;
+    font-weight: 600;
+    padding: 0 .1em;
+    border-radius: 2px;
+}
+@media (max-width: 600px) {
+    .lemma-occurrence { flex-direction: column; gap: .2rem; }
+}
+
+/* ── Institutio alignment editor ─────────────────────────────────────────────── */
+.alignment-screen {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 1.5rem 1rem 3rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+.alignment-status {
+    color: var(--color-ink-light);
+    font-size: .9rem;
+}
+.alignment-help {
+    font-size: .88rem;
+    color: var(--color-ink-muted);
+    line-height: 1.6;
+    margin: 0;
+}
+.alignment-boundary-sample, .alignment-gap-sample {
+    display: inline-block;
+    font-weight: 600;
+    padding: 0 .3em;
+    border-radius: 3px;
+    background: var(--card-warm);
+    border: 1px solid var(--color-border);
+}
+.alignment-gap-sample.is-boundary-sample { color: var(--color-accent-2); }
+.alignment-columns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    align-items: start;
+}
+.alignment-columns--three { grid-template-columns: 1fr 1fr 1fr; }
+@media (max-width: 900px) {
+    .alignment-columns, .alignment-columns--three { grid-template-columns: 1fr; }
+}
+.alignment-section {
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+}
+.alignment-panel-label {
+    font-size: .75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--color-ink-muted);
+}
+.alignment-panel {
+    background: var(--bg);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    box-shadow: var(--shadow);
+    padding: 1.25rem 1.5rem;
+    line-height: 2.1;
+}
+.alignment-panel-la { font-size: .92rem; color: var(--color-ink-light); }
+.alignment-la-sentence { }
+.alignment-la-gap {
+    display: inline-block;
+    cursor: pointer;
+    font-weight: 600;
+    padding: 0 .35em;
+    margin: 0 .1em;
+    border-radius: 3px;
+    color: var(--color-ink-muted);
+    background: var(--card-warm);
+    border: 1px solid var(--divider);
+    user-select: none;
+}
+.alignment-la-gap:hover { border-color: var(--color-border); }
+.alignment-la-gap.is-boundary {
+    color: var(--color-accent-2);
+    border-color: var(--color-accent-2);
+}
+.alignment-panel-nl { font-size: .95rem; }
+.alignment-word {
+    display: inline-block;
+    padding: 0 .15em;
+    border-radius: 3px;
+}
+.alignment-word.row-odd { background: var(--card-warm); }
+.alignment-boundary {
+    display: inline-block;
+    cursor: grab;
+    font-weight: 700;
+    color: var(--color-accent-2);
+    padding: 0 .3em;
+    margin: 0 .1em;
+    border-radius: 3px;
+    background: var(--bg);
+    border: 1px solid var(--color-accent-2);
+    user-select: none;
+    touch-action: none;
+}
+.alignment-boundary.is-dragging {
+    cursor: grabbing;
+    background: var(--color-accent-2);
+    color: var(--bg);
+}
+.alignment-preview {
+    background: var(--card-warm);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    padding: 1.25rem 1.5rem;
+}
+.alignment-preview-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    align-items: start;
+}
+.alignment-preview-row + .alignment-preview-row {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--divider);
+}
+.alignment-preview.has-weijenberg .alignment-preview-row { grid-template-columns: 1fr 1fr 1fr; }
+@media (max-width: 900px) {
+    .alignment-preview-row, .alignment-preview.has-weijenberg .alignment-preview-row { grid-template-columns: 1fr; }
+}
+.lemma-variant-form { font-family: var(--font-serif); font-style: italic; }

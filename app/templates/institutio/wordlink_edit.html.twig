@@ -1,0 +1,98 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Woordkoppeling – {{ segment.ref }} – Bijbel Vergelijking{% endblock %}
+{% block head %}<meta name="csrf-token" content="{{ csrf_token('institutio_wordlink') }}">{% endblock %}
+
+{% block nav_center %}{% endblock %}
+
+{% block body %}
+<div class="page-linking" data-controller="word-linker"
+     data-word-linker-save-url-value="{{ path('app_institutio_wordlink_save', {id: segment.id}) }}"
+     data-word-linker-translation-id-value="{{ segment.translation_id }}">
+
+    {# ── Top bar ──────────────────────────────────────────────────────────── #}
+    <div class="linking-topbar">
+        <nav class="breadcrumb">
+            <a href="{{ path('app_institutio_translate', {id: segment.id}) }}">{{ segment.ref }}</a> ›
+            <strong>Woordkoppeling</strong>
+        </nav>
+
+        <div class="linking-legend">
+            <span><span class="dot method-manual"></span> Handmatig</span>
+            <span><span class="dot method-simalign"></span> Automatisch (SimAlign)</span>
+            <span><span class="dot method-none"></span> Geen</span>
+        </div>
+    </div>
+
+    {# ── Status bar ───────────────────────────────────────────────────────── #}
+    <div class="linking-status-bar">
+        <span class="linking-status" data-word-linker-target="status">
+            Klik een Latijns woord om te selecteren, dan klik één of meerdere Nederlandse woorden.
+        </span>
+    </div>
+
+    {# ── Main linking area ────────────────────────────────────────────────── #}
+    <div class="linking-area">
+
+        <section class="link-panel link-panel-source">
+            <h2 class="panel-label">Latijn</h2>
+
+            <div class="source-words-grid">
+                {% for tok in segment.tokens %}
+                {% set linked_tw_ids = tok.links|map(l => l.start)|join(',') %}
+
+                <div class="src-word method-border-{{ tok.best_method }}"
+                     data-source-id="{{ tok.id }}"
+                     data-lang="la"
+                     data-linked-tw-ids="{{ linked_tw_ids }}"
+                     data-action="click->word-linker#selectSource"
+                     data-word-linker-target="sourceWord">
+
+                    <span class="src-text">{{ tok.surface }}</span>
+                    {% if tok.lemma %}<span class="src-translit">{{ tok.lemma }}</span>{% endif %}
+
+                    <div class="src-links">
+                        {% for link in tok.links %}
+                        <span class="link-chip method-{{ link.source }}"
+                              data-tw-id="{{ link.start }}"
+                              title="{{ link.source }} — {{ link.text }}">×</span>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section class="link-panel link-panel-dutch">
+            <h2 class="panel-label">Nederlands</h2>
+
+            <div class="dutch-words-flow">
+                {% for word in segment.nl_words %}
+                <span class="nl-word method-underline-{{ word.best_method }}"
+                      data-tw-id="{{ word.start }}"
+                      data-action="click->word-linker#selectDutch"
+                      data-word-linker-target="dutchWord">{{- word.text -}}</span>{{ ' ' }}
+                {% endfor %}
+            </div>
+        </section>
+
+    </div>
+
+    {# ── Action bar (shown when a Latin word is selected) ──────────────────── #}
+    <div class="action-bar action-bar-inline" data-word-linker-target="actionBar">
+        <div class="action-bar-inner">
+            <span class="action-label">
+                Geselecteerd: <strong data-word-linker-target="selectedLabel">–</strong>
+            </span>
+            <span class="action-hint">
+                Klik Nederlandse woorden om te selecteren/deselecteren
+            </span>
+            <div class="action-buttons">
+                <button class="btn-save" data-action="click->word-linker#saveLinks">✓ Koppeling opslaan</button>
+                <button class="btn-cancel" data-action="click->word-linker#cancel">Annuleren</button>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
