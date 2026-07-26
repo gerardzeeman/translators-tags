@@ -16,13 +16,13 @@
     </div>
 
     <p class="alignment-help">
-        Sleep <span class="alignment-boundary-sample">⟷</span> in de vertaling om woorden naar de vorige of
-        volgende rij te verplaatsen. Klik <span class="alignment-gap-sample">✂</span> op een Latijnse zinsgrens
-        om een rij te splitsen, of <span class="alignment-gap-sample is-boundary-sample">⌃</span> om twee rijen
-        weer samen te voegen.
+        Sleep <span class="alignment-boundary-sample">⟷</span> in een vertaling om woorden naar de vorige of
+        volgende rij te verplaatsen (per vertaling onafhankelijk). Klik <span class="alignment-gap-sample">✂</span>
+        op een Latijnse zinsgrens om een rij te splitsen, of <span class="alignment-gap-sample is-boundary-sample">⌃</span>
+        om twee rijen weer samen te voegen — dit past de rij-indeling van alle vertalingen tegelijk aan.
     </p>
 
-    <div class="alignment-columns">
+    <div class="alignment-columns{{ segment.weijenberg ? ' alignment-columns--three' : '' }}">
         <div class="alignment-section">
             <div class="alignment-panel-label">Latijn</div>
             <div class="alignment-panel alignment-panel-la" data-alignment-editor-target="laPanel">
@@ -43,28 +43,51 @@
         </div>
 
         <div class="alignment-section">
-            <div class="alignment-panel-label">Nederlands</div>
-            <div class="alignment-panel alignment-panel-nl" data-alignment-editor-target="nlPanel">
+            <div class="alignment-panel-label">Eigen vertaling</div>
+            <div class="alignment-panel alignment-panel-nl"
+                 data-alignment-editor-target="translationPanel" data-layer="llm">
                 {% for row in segment.rows %}
                     {%- for word in row.words -%}
-                    <span class="alignment-word" data-alignment-editor-target="word">{{ word }}</span>
+                    <span class="alignment-word">{{ word }}</span>
                     {%- endfor -%}
                     {%- if not loop.last -%}
-                    <span class="alignment-boundary" data-alignment-editor-target="boundary"
+                    <span class="alignment-boundary"
                           data-action="pointerdown->alignment-editor#startDrag" title="Sleep om grens te verplaatsen">⟷</span>
                     {%- endif -%}
                 {% endfor %}
             </div>
         </div>
+
+        {% if segment.weijenberg %}
+        <div class="alignment-section">
+            <div class="alignment-panel-label">Weijenberg (1865)</div>
+            <div class="alignment-panel alignment-panel-nl"
+                 data-alignment-editor-target="translationPanel" data-layer="weijenberg1865">
+                {% for row in segment.weijenberg.rows %}
+                    {%- for word in row.words -%}
+                    <span class="alignment-word">{{ word }}</span>
+                    {%- endfor -%}
+                    {%- if not loop.last -%}
+                    <span class="alignment-boundary"
+                          data-action="pointerdown->alignment-editor#startDrag" title="Sleep om grens te verplaatsen">⟷</span>
+                    {%- endif -%}
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
     </div>
 
     <div class="alignment-section">
-        <div class="alignment-panel-label">Voorbeeld (zoals het op de hoofdstukpagina komt te staan)</div>
-        <div class="institutio-sentence-group alignment-preview" data-alignment-editor-target="preview">
+        <div class="alignment-panel-label">Voorbeeld</div>
+        <div class="institutio-sentence-group alignment-preview{{ segment.weijenberg ? ' has-weijenberg' : '' }}"
+             data-alignment-editor-target="preview">
             {% for row in segment.rows %}
-            <div class="institutio-sentence-row">
+            <div class="alignment-preview-row">
                 <p class="institutio-sentence-la">{{ row.la_text }}</p>
                 <p class="institutio-sentence-nl">{{ row.words|join(' ') }}</p>
+                {% if segment.weijenberg %}
+                <p class="institutio-sentence-nl">{{ (segment.weijenberg.rows[loop.index0].words|default([]))|join(' ') }}</p>
+                {% endif %}
             </div>
             {% endfor %}
         </div>

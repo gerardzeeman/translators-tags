@@ -36,16 +36,22 @@
 
         {% if segment.rows %}
         {# Already zin-voor-zin uitgelijnd: per rij bewerken houdt de bestaande
-           uitlijning intact (la_start wordt niet aangeraakt). #}
-        <div class="translate-rows">
+           uitlijning intact (la_start wordt niet aangeraakt). Weijenberg
+           staat er alleen naast als die zelf ook is uitgelijnd (zelfde
+           rij-aantal, want de uitlijnpagina slaat beide lagen altijd
+           gelijktijdig met dezelfde rijgrenzen op). #}
+        <div class="translate-rows{{ segment.weijenberg_rows ? ' translate-rows--three' : '' }}">
             {% for row in segment.rows %}
-            <div class="translate-row">
+            <div class="translate-row{{ segment.weijenberg_rows ? ' translate-row--three' : '' }}">
                 <div class="translate-row-la">{{ row.la_text }}</div>
                 <textarea
                     name="row_nl[{{ row.id }}]"
                     class="translate-field-textarea translate-row-textarea"
                     rows="3"
                 >{{ row.nl_text }}</textarea>
+                {% if segment.weijenberg_rows %}
+                <div class="translate-row-weijenberg">{{ (segment.weijenberg_rows[loop.index0].nl_text)|default('') }}</div>
+                {% endif %}
             </div>
             {% endfor %}
         </div>
@@ -55,7 +61,7 @@
         </div>
 
         {% else %}
-        <div class="translate-panels">
+        <div class="translate-panels{{ segment.weijenberg_rows ? ' translate-panels--three' : '' }}">
 
             {# Left: Latin (read-only, for reference) #}
             <div class="translate-panel">
@@ -69,7 +75,7 @@
                 </div>
             </div>
 
-            {# Right: Dutch (editable) #}
+            {# Middle: Dutch (editable) #}
             <div class="translate-panel translate-panel--nl">
                 <div class="translate-panel-header">
                     <span class="translate-panel-lang">Nederlands</span>
@@ -91,6 +97,20 @@
                     <button type="submit" class="btn-primary btn-save">Opslaan</button>
                 </div>
             </div>
+
+            {# Right: Weijenberg (1865), read-only, only if that layer is itself aligned #}
+            {% if segment.weijenberg_rows %}
+            <div class="translate-panel">
+                <div class="translate-panel-header">
+                    <span class="translate-panel-lang">Weijenberg (1865)</span>
+                </div>
+                <div class="translate-field-group translate-field-group--grow">
+                    {% for row in segment.weijenberg_rows %}
+                    <p class="institutio-sentence-nl">{{ row.nl_text }}</p>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
 
         </div>{# /.translate-panels #}
         {% endif %}

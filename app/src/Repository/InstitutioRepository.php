@@ -488,6 +488,41 @@ class InstitutioRepository
     }
 
     /**
+     * A translation_id's own sentence_alignment rows, resolved to
+     * {la_text, nl_text} pairs against $textLa -- shared by getSegmentForEdit
+     * (LLM layer, editable) and the read-only Weijenberg preview below. Row
+     * count and boundaries are always that translation's own, independent of
+     * any other layer's row structure.
+     *
+     * @return array<int, array{id: int, la_text: string, nl_text: string}>
+     */
+    private function resolveAlignedRows(int $translationId, string $textLa): array
+    {
+        $alignmentRows = $this->connection->fetchAllAssociative(
+            'SELECT id, la_start, nl_text FROM sentence_alignment
+             WHERE translation_id = :translation_id ORDER BY row_seq',
+            ['translation_id' => $translationId]
+        );
+        $count = count($alignmentRows);
+        if ($count === 0) {
+            return [];
+        }
+
+        $textLength = mb_strlen($textLa);
+        $rows = [];
+        foreach ($alignmentRows as $i => $a) {
+            $start = $a['la_start'];
+            $end = $i + 1 < $count ? $alignmentRows[$i + 1]['la_start'] : $textLength;
+            $rows[] = [
+                'id'      => (int) $a['id'],
+                'la_text' => trim(mb_substr($textLa, $start, $end - $start)),
+                'nl_text' => $a['nl_text'],
+            ];
+        }
+        return $rows;
+    }
+
+    /**
      * One segment plus its current (LLM or manually-edited) Dutch
      * translation, for the manual-edit page. If the segment already has a
      * sentence-level alignment, `rows` holds one entry per aligned row (its
@@ -495,19 +530,32 @@ class InstitutioRepository
      * editor can offer per-row editing that leaves the alignment intact
      * (see saveSegmentRowTranslations) instead of the whole-block editor
      * (saveSegmentTranslation) that has to drop it.
+     *
+     * `weijenberg_rows` is null unless the Weijenberg (1865) translation has
+     * been manually sentence-aligned for this segment (via the drag editor,
+     * InstitutioAlignmentController) -- an unaligned Weijenberg translation
+     * is never shown on this page, since without row boundaries there's no
+     * way to display it next to the right Latin excerpt. When present, it's
+     * read-only here (Weijenberg alignment/wording is only edited via the
+     * drag editor), and its row count/boundaries are its own, independent of
+     * `rows` (the LLM layer's).
+     *
      * @return array{
      *     id: int, ref: string, book: ?int, chapter: ?int, heading: ?string,
      *     text_la: string, text_nl: ?string,
-     *     rows: array<int, array{id: int, la_text: string, nl_text: string}>
+     *     rows: array<int, array{id: int, la_text: string, nl_text: string}>,
+     *     weijenberg_rows: array<int, array{id: int, la_text: string, nl_text: string}>|null
      * }|null
      */
     public function getSegmentForEdit(int $segmentId): ?array
     {
         $row = $this->connection->fetchAssociative(
             "SELECT s.id, s.ref, s.book, s.chapter, s.heading, s.text_la,
-                    tr.id AS translation_id, tr.text_nl
+                    tr.id AS translation_id, tr.text_nl,
+                    wb.id AS weijenberg_translation_id
              FROM segment s
              LEFT JOIN translation tr ON tr.segment_id = s.id AND tr.layer = 'llm'
+             LEFT JOIN translation wb ON wb.segment_id = s.id AND wb.layer = 'weijenberg1865'
              WHERE s.id = :id",
             ['id' => $segmentId]
         );
@@ -515,37 +563,28 @@ class InstitutioRepository
             return null;
         }
 
-        $rows = [];
-        if ($row['translation_id'] !== null) {
-            $alignmentRows = $this->connection->fetchAllAssociative(
-                'SELECT id, la_start, nl_text FROM sentence_alignment
-                 WHERE translation_id = :translation_id ORDER BY row_seq',
-                ['translation_id' => $row['translation_id']]
-            );
-            $count = count($alignmentRows);
-            if ($count > 0) {
-                $textLength = mb_strlen($row['text_la']);
-                foreach ($alignmentRows as $i => $a) {
-                    $start = $a['la_start'];
-                    $end = $i + 1 < $count ? $alignmentRows[$i + 1]['la_start'] : $textLength;
-                    $rows[] = [
-                        'id'      => (int) $a['id'],
-                        'la_text' => trim(mb_substr($row['text_la'], $start, $end - $start)),
-                        'nl_text' => $a['nl_text'],
-                    ];
-                }
+        $rows = $row['translation_id'] !== null
+            ? $this->resolveAlignedRows((int) $row['translation_id'], $row['text_la'])
+            : [];
+
+        $weijenbergRows = null;
+        if ($row['weijenberg_translation_id'] !== null) {
+            $wbRows = $this->resolveAlignedRows((int) $row['weijenberg_translation_id'], $row['text_la']);
+            if ($wbRows) {
+                $weijenbergRows = $wbRows;
             }
         }
 
         return [
-            'id'      => (int) $row['id'],
-            'ref'     => $row['ref'],
-            'book'    => $row['book'] !== null ? (int) $row['book'] : null,
-            'chapter' => $row['chapter'] !== null ? (int) $row['chapter'] : null,
-            'heading' => $row['heading'],
-            'text_la' => $row['text_la'],
-            'text_nl' => $row['text_nl'],
-            'rows'    => $rows,
+            'id'              => (int) $row['id'],
+            'ref'             => $row['ref'],
+            'book'            => $row['book'] !== null ? (int) $row['book'] : null,
+            'chapter'         => $row['chapter'] !== null ? (int) $row['chapter'] : null,
+            'heading'         => $row['heading'],
+            'text_la'         => $row['text_la'],
+            'text_nl'         => $row['text_nl'],
+            'rows'            => $rows,
+            'weijenberg_rows' => $weijenbergRows,
         ];
     }
 
@@ -691,6 +730,9 @@ class InstitutioRepository
         return $sentences;
     }
 
+    private const LLM_LAYER = 'llm';
+    private const WEIJENBERG_LAYER = 'weijenberg1865';
+
     /**
      * Segment + word-level-editable alignment structure for the drag-based
      * alignment editor (InstitutioAlignmentController) -- a separate page
@@ -700,55 +742,68 @@ class InstitutioRepository
      * (deterministic, never re-split by the editor). `boundary_offsets` is
      * the subset of those sentences' offsets (excluding the very first,
      * which is the segment start and not a togglable gap) that currently
-     * start a sentence_alignment row -- i.e. which inter-sentence gaps are
-     * "active" row boundaries versus plain splittable gaps. `rows` holds
-     * each row's Dutch words plus its already-joined Latin text (for the
-     * page's initial preview render, before any JS has run), in the same
-     * order; row count and boundary_offsets count always match by
+     * start a sentence_alignment row for the LLM translation -- this is
+     * the *reference* row structure the editor keeps every translation
+     * panel in lockstep with (see saveSegmentAlignment). `rows` holds the
+     * LLM translation's own words per row plus each row's already-joined
+     * Latin text (for the page's initial preview render, before any JS has
+     * run); row count and boundary_offsets count always match by
      * construction.
      *
-     * If the segment has no sentence_alignment yet, the whole translation
-     * is offered as a single unsplit starting row (no boundaries), which
-     * the editor can then split.
+     * `weijenberg` is null if this segment has no Weijenberg (1865)
+     * translation at all. Otherwise: if Weijenberg already has its own
+     * sentence_alignment (from a previous save in this same editor), its
+     * rows are used as-is, independent of the LLM reference structure --
+     * the two only get *locked* together by future gap-toggles, a
+     * pre-existing mismatch isn't retroactively reconciled. If Weijenberg
+     * has no alignment yet (the normal case right now: it was loaded
+     * straight from the scan, never split), it's initialized to the LLM
+     * reference row count with every word starting out in row 0 -- a
+     * natural "not yet distributed" starting point for the editor's manual
+     * word-dragging, not a computed alignment.
      *
      * @return array{
      *   id: int, ref: string,
      *   la_sentences: array<int, array{offset: int, text: string}>,
      *   boundary_offsets: array<int, int>,
-     *   rows: array<int, array{la_text: string, words: array<int, string>}>
+     *   rows: array<int, array{la_text: string, words: array<int, string>}>,
+     *   weijenberg: array{rows: array<int, array{words: array<int, string>}>}|null
      * }|null
      */
     public function getSegmentAlignmentForEdit(int $segmentId): ?array
     {
         $row = $this->connection->fetchAssociative(
-            "SELECT s.id, s.ref, s.text_la, tr.id AS translation_id, tr.text_nl
+            "SELECT s.id, s.ref, s.text_la,
+                    llm.id AS llm_translation_id, llm.text_nl AS llm_text_nl,
+                    wb.id  AS weijenberg_translation_id, wb.text_nl AS weijenberg_text_nl
              FROM segment s
-             LEFT JOIN translation tr ON tr.segment_id = s.id AND tr.layer = 'llm'
+             LEFT JOIN translation llm ON llm.segment_id = s.id AND llm.layer = :llm_layer
+             LEFT JOIN translation wb  ON wb.segment_id = s.id AND wb.layer = :weijenberg_layer
              WHERE s.id = :id",
-            ['id' => $segmentId]
+            ['id' => $segmentId, 'llm_layer' => self::LLM_LAYER, 'weijenberg_layer' => self::WEIJENBERG_LAYER]
         );
-        if ($row === false || $row['translation_id'] === null) {
+        if ($row === false || $row['llm_translation_id'] === null) {
             return null;
         }
 
         $allSentences = $this->splitLatinSentences($row['text_la']);
+        $textLength = mb_strlen($row['text_la']);
 
-        $alignmentRows = $this->connection->fetchAllAssociative(
+        $llmAlignmentRows = $this->connection->fetchAllAssociative(
             'SELECT la_start, nl_text FROM sentence_alignment
              WHERE translation_id = :translation_id ORDER BY row_seq',
-            ['translation_id' => $row['translation_id']]
+            ['translation_id' => $row['llm_translation_id']]
         );
-        if (!$alignmentRows) {
-            $alignmentRows = [['la_start' => 0, 'nl_text' => $row['text_nl'] ?? '']];
+        if (!$llmAlignmentRows) {
+            $llmAlignmentRows = [['la_start' => 0, 'nl_text' => $row['llm_text_nl'] ?? '']];
         }
 
-        $laStarts = array_map(static fn($r) => (int) $r['la_start'], $alignmentRows);
+        $laStarts = array_map(static fn($r) => (int) $r['la_start'], $llmAlignmentRows);
         $boundaryOffsets = array_slice($laStarts, 1);
-
         $count = count($laStarts);
-        $textLength = mb_strlen($row['text_la']);
+
         $rows = [];
-        foreach ($alignmentRows as $i => $r) {
+        foreach ($llmAlignmentRows as $i => $r) {
             $start = $laStarts[$i];
             $end = $i + 1 < $count ? $laStarts[$i + 1] : $textLength;
             $rows[] = [
@@ -757,12 +812,35 @@ class InstitutioRepository
             ];
         }
 
+        $weijenberg = null;
+        if ($row['weijenberg_translation_id'] !== null) {
+            $wbAlignmentRows = $this->connection->fetchAllAssociative(
+                'SELECT nl_text FROM sentence_alignment
+                 WHERE translation_id = :translation_id ORDER BY row_seq',
+                ['translation_id' => $row['weijenberg_translation_id']]
+            );
+
+            if ($wbAlignmentRows) {
+                $wbRows = array_map(
+                    static fn($r) => ['words' => preg_split('/\s+/u', trim((string) $r['nl_text']), -1, PREG_SPLIT_NO_EMPTY) ?: []],
+                    $wbAlignmentRows
+                );
+            } else {
+                $words = preg_split('/\s+/u', trim((string) $row['weijenberg_text_nl']), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+                $wbRows = array_fill(0, $count, ['words' => []]);
+                $wbRows[0]['words'] = $words;
+            }
+
+            $weijenberg = ['rows' => $wbRows];
+        }
+
         return [
             'id'               => (int) $row['id'],
             'ref'              => $row['ref'],
             'la_sentences'     => $allSentences,
             'boundary_offsets' => $boundaryOffsets,
             'rows'             => $rows,
+            'weijenberg'       => $weijenberg,
         ];
     }
 
@@ -779,23 +857,27 @@ class InstitutioRepository
      * boundary offsets (or 0), strictly increasing with no duplicates, so a
      * row can never straddle a partial sentence or corrupt the ordering.
      *
+     * $layer selects which translation ('llm' or 'weijenberg1865') this
+     * call applies to; each layer has its own translation_id and its own
+     * independent sentence_alignment/alignment rows, saved separately.
+     *
      * @param array<int, array{la_start: int, words: array<int, string>}> $rows
      * @return bool true if word-level alignment (phase 4) existed and was
      *   dropped as a result, so the caller can warn the editor.
      * @throws \InvalidArgumentException on invalid row data
-     * @throws \RuntimeException if the segment has no translation yet
+     * @throws \RuntimeException if the segment has no translation for this layer yet
      */
-    public function saveSegmentAlignment(int $segmentId, array $rows): bool
+    public function saveSegmentAlignment(int $segmentId, string $layer, array $rows): bool
     {
         $segment = $this->connection->fetchAssociative(
             "SELECT s.text_la, tr.id AS translation_id
              FROM segment s
-             LEFT JOIN translation tr ON tr.segment_id = s.id AND tr.layer = 'llm'
+             LEFT JOIN translation tr ON tr.segment_id = s.id AND tr.layer = :layer
              WHERE s.id = :id",
-            ['id' => $segmentId]
+            ['id' => $segmentId, 'layer' => $layer]
         );
         if ($segment === false || $segment['translation_id'] === null) {
-            throw new \RuntimeException("Segment {$segmentId} heeft nog geen vertaling om uit te lijnen.");
+            throw new \RuntimeException("Segment {$segmentId} heeft nog geen '{$layer}'-vertaling om uit te lijnen.");
         }
         $translationId = (int) $segment['translation_id'];
 

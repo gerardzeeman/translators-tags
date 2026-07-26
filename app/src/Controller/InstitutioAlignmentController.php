@@ -42,7 +42,12 @@ class InstitutioAlignmentController extends AbstractController
     }
 
     /**
-     * Body (JSON): { rows: [{ la_start: int, words: string[] }, ...] }
+     * Body (JSON): { layers: { [layer: string]: { rows: [{ la_start: int, words: string[] }, ...] } } }
+     *
+     * `layer` is 'llm' and/or 'weijenberg1865' -- each present layer is
+     * saved independently via its own translation_id, so a request can
+     * update just one or both together (the editor always sends every
+     * panel currently on the page).
      */
     #[Route('/{id<\d+>}/uitlijning', name: 'app_institutio_alignment_save', methods: ['POST'])]
     public function save(int $id, Request $request): JsonResponse
@@ -52,23 +57,33 @@ class InstitutioAlignmentController extends AbstractController
         }
 
         $data = json_decode($request->getContent(), true);
-        if (!is_array($data) || !isset($data['rows']) || !is_array($data['rows'])) {
+        if (!is_array($data) || !isset($data['layers']) || !is_array($data['layers']) || !$data['layers']) {
             return $this->json(['success' => false, 'error' => 'Ongeldige aanvraag.'], 400);
         }
 
-        $rows = [];
-        foreach ($data['rows'] as $r) {
-            if (!is_array($r) || !isset($r['la_start'], $r['words']) || !is_array($r['words'])) {
-                return $this->json(['success' => false, 'error' => 'Ongeldige rijstructuur.'], 400);
+        $rowsByLayer = [];
+        foreach ($data['layers'] as $layer => $layerData) {
+            if (!is_string($layer) || !is_array($layerData) || !isset($layerData['rows']) || !is_array($layerData['rows'])) {
+                return $this->json(['success' => false, 'error' => 'Ongeldige aanvraag.'], 400);
             }
-            $rows[] = [
-                'la_start' => (int) $r['la_start'],
-                'words'    => array_map('strval', $r['words']),
-            ];
+            $rows = [];
+            foreach ($layerData['rows'] as $r) {
+                if (!is_array($r) || !isset($r['la_start'], $r['words']) || !is_array($r['words'])) {
+                    return $this->json(['success' => false, 'error' => "Ongeldige rijstructuur voor '{$layer}'."], 400);
+                }
+                $rows[] = [
+                    'la_start' => (int) $r['la_start'],
+                    'words'    => array_map('strval', $r['words']),
+                ];
+            }
+            $rowsByLayer[$layer] = $rows;
         }
 
+        $alignmentDropped = false;
         try {
-            $alignmentDropped = $this->institutioRepository->saveSegmentAlignment($id, $rows);
+            foreach ($rowsByLayer as $layer => $rows) {
+                $alignmentDropped = $this->institutioRepository->saveSegmentAlignment($id, $layer, $rows) || $alignmentDropped;
+            }
         } catch (\InvalidArgumentException|\RuntimeException $e) {
             return $this->json(['success' => false, 'error' => $e->getMessage()], 400);
         }
