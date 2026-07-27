@@ -3,6 +3,9 @@
 > Doel: de applicatie draaien op een DigitalOcean droplet naast andere applicaties,
 > bereikbaar via een eigen domein, met automatische TLS via Let's Encrypt.
 
+<!-- dummy-wijziging: test van .github/workflows/deploy.yml na het instellen van
+     DROPLET_IP/DROPLET_USER/SSH_PRIVATE_KEY secrets (2026-07-27) -->
+
 ---
 
 ## Inhoudsopgave
