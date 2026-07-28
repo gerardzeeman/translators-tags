@@ -3399,8 +3399,9 @@ a:hover { text-decoration: underline; }
 
 /* ── Blog: weergave (gerenderde Markdown) ───────────────────────────────── */
 .blog-post-container { max-width: 720px; }
-.blog-post-header { margin-bottom: 1.5rem; }
-.blog-post-header h1 { margin-bottom: .4rem; }
+.blog-post-header { margin-bottom: 1.5rem; position: relative; }
+.blog-post-header h1 { margin-bottom: .4rem; padding-right: 6rem; }
+.blog-post-edit-btn { position: absolute; top: 0; right: 0; padding: .35rem .8rem; font-size: .85rem; }
 .blog-post-meta { display: flex; gap: .5rem; font-size: .9rem; color: var(--color-ink-muted); }
 .blog-post-back { margin-top: 2.5rem; }
 .blog-content { font-size: 1.05rem; line-height: 1.75; }

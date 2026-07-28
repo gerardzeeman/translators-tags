@@ -45,6 +45,17 @@ class BlogController extends AbstractController
         ]);
     }
 
+    #[Route('/blog/mijn/', name: 'app_blog_mine')]
+    #[IsGranted('ROLE_BLOGGER')]
+    public function mine(): Response
+    {
+        $blogs = $this->isGranted('ROLE_ADMIN')
+            ? $this->blogRepository->findAllOrderedByUpdated()
+            : $this->blogRepository->findAllByAuthorOrderedByUpdated($this->getUser()->getId());
+
+        return $this->render('blog/mine.html.twig', ['blogs' => $blogs]);
+    }
+
     #[Route('/blog/maken/', name: 'app_blog_new', methods: ['GET', 'POST'])]
     #[IsGranted('ROLE_BLOGGER')]
     public function new(Request $request, EntityManagerInterface $em): Response
@@ -211,8 +222,9 @@ class BlogController extends AbstractController
         }
 
         return $this->render('blog/show.html.twig', [
-            'blog'      => $blog,
-            'is_draft_preview' => $blog->isDraft(),
+            'blog'              => $blog,
+            'is_draft_preview'  => $blog->isDraft(),
+            'can_edit'          => $isOwnerOrAdmin,
         ]);
     }
 

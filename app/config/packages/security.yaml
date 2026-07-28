@@ -56,6 +56,7 @@ security:
         - { path: ^/api/annotation/word,   roles: ROLE_VIEWER }
         - { path: ^/api/annotation,        roles: ROLE_LINKER }
         - { path: ^/link,                  roles: ROLE_LINKER }
+        - { path: ^/blog/mijn,             roles: ROLE_BLOGGER }
         - { path: ^/blog/maken,            roles: ROLE_BLOGGER }
         - { path: ^/blog/embed-data,       roles: ROLE_BLOGGER }
         - { path: ^/blog/.+/bewerken,      roles: ROLE_BLOGGER }

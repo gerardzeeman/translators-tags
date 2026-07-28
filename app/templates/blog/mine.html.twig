@@ -1,0 +1,52 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Mijn blogs – Alef–Omega{% endblock %}
+
+{% block body %}
+<div class="container container--wide">
+
+    <div class="admin-page-header">
+        <h1>{{ is_granted('ROLE_ADMIN') ? 'Alle blogs' : 'Mijn blogs' }}</h1>
+        <a href="{{ path('app_blog_new') }}" class="btn-primary">+ Nieuwe blog</a>
+    </div>
+
+    {% for label, messages in app.flashes %}
+        {% for message in messages %}
+        <div class="alert alert-{{ label }}">{{ message }}</div>
+        {% endfor %}
+    {% endfor %}
+
+    {% if blogs is empty %}
+    <p class="text-muted">Nog geen blogs.</p>
+    {% else %}
+    <table class="admin-table">
+        <thead>
+            <tr>
+                <th>Titel</th>
+                <th>Auteur</th>
+                <th>Status</th>
+                <th>Zichtbaarheid</th>
+                <th>Laatst bewerkt</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for blog in blogs %}
+            <tr>
+                <td>{{ blog.title }}</td>
+                <td>{{ blog.author.displayName }}</td>
+                <td><span class="badge-status badge-status--{{ blog.status }}">{{ blog.status == 'published' ? 'Gepubliceerd' : 'Concept' }}</span></td>
+                <td>{{ blog.visibility == 'logged_in' ? 'Alleen ingelogd' : 'Publiek' }}</td>
+                <td>{{ blog.updatedAt|date('d-m-Y H:i') }}</td>
+                <td>
+                    <a href="{{ path('app_blog_edit', {slug: blog.slug}) }}">Bewerken</a>
+                    <a href="{{ path('app_blog_show', {slug: blog.slug}) }}">Bekijken</a>
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+
+</div>
+{% endblock %}

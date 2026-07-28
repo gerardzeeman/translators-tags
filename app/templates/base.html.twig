@@ -98,6 +98,7 @@
                     <a href="{{ path('app_strongs_translate_home') }}">Vertalen Strong's</a>
                     {% endif %}
                     {% if is_granted('ROLE_BLOGGER') %}
+                    <a href="{{ path('app_blog_mine') }}">Mijn blogs</a>
                     <a href="{{ path('app_blog_new') }}">Nieuwe blog</a>
                     {% endif %}
                 </div>
