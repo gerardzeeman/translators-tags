@@ -80,8 +80,11 @@
             <a href="{{ path('app_home') }}" class="nav-book-btn">Bijbel</a>
             {% endblock %}
 
+            <div class="nav-sep"></div>
+            <a href="{{ path('app_blog_index') }}" class="nav-book-btn">Blog</a>
+
             {# Editor-dropdown — alleen als gebruiker ten minste één editorrole heeft #}
-            {% if is_granted('ROLE_LINKER') or is_granted('ROLE_EDIT_STRONG_TRNL') %}
+            {% if is_granted('ROLE_LINKER') or is_granted('ROLE_EDIT_STRONG_TRNL') or is_granted('ROLE_BLOGGER') %}
             <div class="nav-sep"></div>
             <div class="nav-dropdown">
                 <button class="nav-dropdown-btn" type="button">Editor ▾</button>
@@ -93,6 +96,10 @@
                     {% endif %}
                     {% if is_granted('ROLE_EDIT_STRONG_TRNL') %}
                     <a href="{{ path('app_strongs_translate_home') }}">Vertalen Strong's</a>
+                    {% endif %}
+                    {% if is_granted('ROLE_BLOGGER') %}
+                    <a href="{{ path('app_blog_mine') }}">Mijn blogs</a>
+                    <a href="{{ path('app_blog_new') }}">Nieuwe blog</a>
                     {% endif %}
                 </div>
             </div>

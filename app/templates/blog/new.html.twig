@@ -1,0 +1,39 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Nieuwe blog – Alef–Omega{% endblock %}
+
+{% block body %}
+<div class="container container--wide">
+
+    <h1 class="page-heading">Nieuwe blog</h1>
+
+    {% if error %}
+    <div class="alert alert-error">{{ error }}</div>
+    {% endif %}
+
+    <form method="post" class="blog-editor-form">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token('blog_new') }}">
+
+        <div class="form-group">
+            <label for="title">Titel</label>
+            <input type="text" id="title" name="title" required minlength="2" class="form-control" autofocus>
+        </div>
+
+        <div class="form-group">
+            <label for="visibility">Zichtbaarheid (na publiceren)</label>
+            <select id="visibility" name="visibility" class="form-control">
+                <option value="public">Publiek (iedereen, ook niet-ingelogd)</option>
+                <option value="logged_in">Alleen ingelogde gebruikers</option>
+            </select>
+        </div>
+
+        {% include 'blog/_markdown_editor.html.twig' with {content_md: ''} %}
+
+        <div class="form-actions">
+            <button type="submit" class="btn-primary">Concept aanmaken</button>
+            <a href="{{ path('app_blog_index') }}" class="btn-secondary">Annuleren</a>
+        </div>
+    </form>
+
+</div>
+{% endblock %}

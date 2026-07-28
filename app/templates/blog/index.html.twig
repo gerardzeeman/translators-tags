@@ -1,0 +1,42 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Blog – Alef–Omega{% endblock %}
+
+{% block body %}
+<div class="container container--wide">
+
+    <div class="admin-page-header">
+        <h1>Blog</h1>
+        {% if is_granted('ROLE_BLOGGER') %}
+        <a href="{{ path('app_blog_new') }}" class="btn-primary">+ Nieuwe blog</a>
+        {% endif %}
+    </div>
+
+    {% for label, messages in app.flashes %}
+        {% for message in messages %}
+        <div class="alert alert-{{ label }}">{{ message }}</div>
+        {% endfor %}
+    {% endfor %}
+
+    {% if blogs is empty %}
+    <p class="text-muted">Er zijn nog geen blogs geplaatst.</p>
+    {% else %}
+    <div class="blog-list">
+        {% for blog in blogs %}
+        <a href="{{ path('app_blog_show', {slug: blog.slug}) }}" class="blog-card">
+            <h2 class="blog-card-title">{{ blog.title }}</h2>
+            <div class="blog-card-meta">
+                <span>{{ blog.author.displayName }}</span>
+                <span>&middot;</span>
+                <span>{{ blog.publishedAt|date('d-m-Y') }}</span>
+                {% if blog.visibility == 'logged_in' %}
+                <span class="badge-visibility">Alleen ingelogd</span>
+                {% endif %}
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+</div>
+{% endblock %}

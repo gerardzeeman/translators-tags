@@ -32,6 +32,11 @@ services:
       APP_SECRET: ${APP_SECRET:-change_me_in_production_32chars}
       REMEMBER_ME_SECRET: ${REMEMBER_ME_SECRET:-change_me_in_production_32chars}
       DATABASE_URL: postgresql://${DB_USER:-bible}:${DB_PASSWORD:-changeme}@postgres:5432/${DB_NAME:-bible_compare}?serverVersion=16&charset=utf8
+    volumes:
+      # Uploaded blog images -- must survive redeploys (the prod image build
+      # has no bind mount, unlike the dev override), so this is a named
+      # volume rather than living inside the ephemeral container filesystem.
+      - blog_uploads:/app/public/uploads
     networks:
       - bible_net
     depends_on:
@@ -126,6 +131,7 @@ volumes:
   source_data:
   institutio_data:
   backup_data:
+  blog_uploads:
 
 networks:
   bible_net:

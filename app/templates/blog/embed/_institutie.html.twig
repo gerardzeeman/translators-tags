@@ -1,0 +1,17 @@
+<div class="embed-institutie embed-layout-{{ layout }}">
+    {% for section in sections %}
+    <div class="embed-verse-block">
+        {% for row in section.rows %}
+        <div class="embed-verse-content embed-institutie-row">
+            {% if taal != 'nederlands' %}
+            <p class="embed-latin">{{ row.la_text }}</p>
+            {% endif %}
+            {% if taal != 'latijn' %}
+            <p class="embed-dutch">{{ row.nl_text|default('') != '' ? row.nl_text : '—' }}</p>
+            {% endif %}
+        </div>
+        {% endfor %}
+        <div class="embed-verse-ref embed-institutie-ref">{{ section.ref }}</div>
+    </div>
+    {% endfor %}
+</div>

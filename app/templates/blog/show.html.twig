@@ -1,0 +1,35 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}{{ blog.title }} – Alef–Omega Blog{% endblock %}
+
+{% block body %}
+<div class="container container--narrow blog-post-container">
+
+    {% if is_draft_preview %}
+    <div class="alert alert-warning">Dit is een concept — alleen jij ziet deze voorbeeldweergave. Deze blog staat nog niet op /blog/.</div>
+    {% endif %}
+
+    <article class="blog-post">
+        <header class="blog-post-header">
+            {% if can_edit %}
+            <a href="{{ path('app_blog_edit', {slug: blog.slug}) }}" class="btn-secondary blog-post-edit-btn">Bewerken</a>
+            {% endif %}
+            <h1>{{ blog.title }}</h1>
+            <div class="blog-post-meta">
+                <span>{{ blog.author.displayName }}</span>
+                {% if blog.publishedAt %}
+                <span>&middot;</span>
+                <span>{{ blog.publishedAt|date('d-m-Y') }}</span>
+                {% endif %}
+            </div>
+        </header>
+
+        <div class="blog-content">
+            {{ blog.contentMd|blog_markdown|raw }}
+        </div>
+    </article>
+
+    <p class="blog-post-back"><a href="{{ path('app_blog_index') }}">&larr; Terug naar het blogoverzicht</a></p>
+
+</div>
+{% endblock %}

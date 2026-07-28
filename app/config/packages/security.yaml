@@ -44,7 +44,8 @@ security:
         ROLE_VIEWER_HSV:            [ROLE_VIEWER]
         ROLE_EDIT_STRONG_TRNL:      [ROLE_VIEWER]
         ROLE_EDIT_INSTITUTIO_TRNL:  [ROLE_VIEWER]
-        ROLE_ADMIN:                 [ROLE_LINKER, ROLE_VIEWER_HSV, ROLE_EDIT_STRONG_TRNL, ROLE_EDIT_INSTITUTIO_TRNL]
+        ROLE_BLOGGER:               [ROLE_VIEWER]
+        ROLE_ADMIN:                 [ROLE_LINKER, ROLE_VIEWER_HSV, ROLE_EDIT_STRONG_TRNL, ROLE_EDIT_INSTITUTIO_TRNL, ROLE_BLOGGER]
 
     access_control:
         - { path: ^/up,                    roles: PUBLIC_ACCESS }
@@ -55,6 +56,13 @@ security:
         - { path: ^/api/annotation/word,   roles: ROLE_VIEWER }
         - { path: ^/api/annotation,        roles: ROLE_LINKER }
         - { path: ^/link,                  roles: ROLE_LINKER }
+        - { path: ^/blog/mijn,             roles: ROLE_BLOGGER }
+        - { path: ^/blog/maken,            roles: ROLE_BLOGGER }
+        - { path: ^/blog/embed-data,       roles: ROLE_BLOGGER }
+        - { path: ^/blog/.+/bewerken,      roles: ROLE_BLOGGER }
+        - { path: ^/blog/.+/publiceren,    roles: ROLE_BLOGGER }
+        - { path: ^/blog/afbeeldingen,     roles: ROLE_BLOGGER }
+        - { path: ^/blog,                  roles: PUBLIC_ACCESS }
         - { path: ^/book,                  roles: ROLE_VIEWER }
         - { path: ^/institutio,            roles: ROLE_VIEWER }
         - { path: ^/,                      roles: ROLE_USER }

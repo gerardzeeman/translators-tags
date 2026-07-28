@@ -39,4 +39,22 @@ class BookRepository extends ServiceEntityRepository
     {
         return $this->findOneBy(['usfmCode' => strtoupper($code)]);
     }
+
+    public function findByNameNl(string $name): ?Book
+    {
+        return $this->createQueryBuilder('b')
+            ->where('LOWER(b.nameNl) = LOWER(:name)')
+            ->setParameter('name', trim($name))
+            ->getQuery()
+            ->getOneOrNullResult();
+    }
+
+    /** @return Book[] ordered by canonical id (OT then NT) */
+    public function findAllOrderedById(): array
+    {
+        return $this->createQueryBuilder('b')
+            ->orderBy('b.id', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
 }

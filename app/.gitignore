@@ -16,6 +16,9 @@
 /assets/vendor/
 ###< symfony/asset-mapper ###
 
+# Uploaded blog images (persisted via the blog_uploads Docker volume, not the repo)
+/public/uploads/
+
 ###> phpunit/phpunit ###
 /phpunit.xml
 /.phpunit.cache/
