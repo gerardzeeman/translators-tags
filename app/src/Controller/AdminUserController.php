@@ -21,6 +21,7 @@ class AdminUserController extends AbstractController
         'ROLE_VIEWER_HSV'      => 'Viewer HSV',
         'ROLE_LINKER'          => 'Linker',
         'ROLE_EDIT_STRONG_TRNL' => 'Strong\'s vertaling bewerken',
+        'ROLE_BLOGGER'         => 'Blogger',
         'ROLE_ADMIN'           => 'Admin',
     ];
 

@@ -169,6 +169,97 @@ class InstitutioRepository
     }
 
     /**
+     * Looks up a single segment by its human-readable reference (e.g.
+     * "Inst. 1.1.1" or "Inst. front.3"), for the blog Institutio-embed
+     * module -- a lighter-weight lookup than getChapter()/getSegmentForEdit(),
+     * since the embed only needs one section's text + sentence alignment,
+     * not the full editing payload.
+     *
+     * @return array{book: ?int, chapter: ?int, section: int, text: string, text_nl: ?string,
+     *     sentence_alignment: array<int, array{la_start: int, nl_text: string}>}|null
+     */
+    public function findSegmentByRef(string $ref): ?array
+    {
+        $ref = trim($ref);
+
+        if (preg_match('/^Inst\.?\s*front\.(\d+)$/i', $ref, $m)) {
+            $book = null;
+            $chapter = null;
+            $section = (int) $m[1];
+            $data = $this->getFrontMatter();
+        } elseif (preg_match('/^Inst\.?\s*(\d+)\.(\d+)\.(\d+)$/i', $ref, $m)) {
+            $book = (int) $m[1];
+            $chapter = (int) $m[2];
+            $section = (int) $m[3];
+            $data = $this->getChapter($book, $chapter);
+        } else {
+            return null;
+        }
+
+        foreach ($data['sections'] as $s) {
+            if ($s['section'] === $section) {
+                return [
+                    'book'               => $book,
+                    'chapter'            => $chapter,
+                    'section'            => $section,
+                    'text'               => $s['text'],
+                    'text_nl'            => $s['text_nl'],
+                    'sentence_alignment' => $s['sentence_alignment'],
+                ];
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * The section immediately following $book/$chapter/$section, rolling over
+     * into the next chapter (same book) when the current chapter is exhausted.
+     * Returns null once past the end of the book. Used by the blog Institutio-
+     * embed to render N consecutive sections.
+     *
+     * @return array{book: ?int, chapter: ?int, section: int, text: string, text_nl: ?string,
+     *     sentence_alignment: array<int, array{la_start: int, nl_text: string}>}|null
+     */
+    public function findNextSegment(?int $book, ?int $chapter, int $section): ?array
+    {
+        if ($book === null || $chapter === null) {
+            $data = $this->getFrontMatter();
+            $sections = array_column($data['sections'], 'section');
+            sort($sections);
+            foreach ($sections as $s) {
+                if ($s > $section) {
+                    return $this->findSegmentByRef("Inst. front.{$s}");
+                }
+            }
+            return null;
+        }
+
+        $chapterData = $this->getChapter($book, $chapter);
+        $sections = array_column($chapterData['sections'], 'section');
+        sort($sections);
+        foreach ($sections as $s) {
+            if ($s > $section) {
+                return $this->findSegmentByRef("Inst. {$book}.{$chapter}.{$s}");
+            }
+        }
+
+        // Chapter exhausted -- try the next chapter in the same book.
+        $bookChapterCounts = $this->getBookChapterCounts();
+        $chapterCount = $bookChapterCounts[$book] ?? 0;
+        if ($chapter < $chapterCount) {
+            $nextChapter = $chapter + 1;
+            $nextChapterData = $this->getChapter($book, $nextChapter);
+            if ($nextChapterData['sections']) {
+                $firstSection = min(array_column($nextChapterData['sections'], 'section'));
+                return $this->findSegmentByRef("Inst. {$book}.{$nextChapter}.{$firstSection}");
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * @param array<string, mixed> $params
      */
     private function fetchSegmentsWithAnnotations(string $whereSql, array $params): array

@@ -1,0 +1,143 @@
+{# Shared Markdown editor: textarea + embed-picker toolbar/dialogs.
+   Included by blog/new.html.twig and blog/edit.html.twig.
+   Expects: content_md (string, current markdown text) #}
+<div class="form-group form-group--last blog-editor-wrap"
+     data-controller="blog-editor"
+     data-blog-editor-boeken-url-value="{{ path('app_blog_embed_data_boeken') }}"
+     data-blog-editor-verzen-url-value="{{ path('app_blog_embed_data_verzen') }}"
+     data-blog-editor-woorden-url-value="{{ path('app_blog_embed_data_woorden') }}"
+     data-blog-editor-vertalingen-url-value="{{ path('app_blog_embed_data_vertalingen') }}"
+     data-blog-editor-institutie-structuur-url-value="{{ path('app_blog_embed_data_institutie_structuur') }}"
+     data-blog-editor-institutie-secties-url-value="{{ path('app_blog_embed_data_institutie_secties') }}"
+     data-blog-editor-institutie-zinnen-url-value="{{ path('app_blog_embed_data_institutie_zinnen') }}"
+     data-blog-editor-image-upload-url-value="{{ path('app_blog_image_upload') }}"
+     data-blog-editor-image-upload-token-value="{{ csrf_token('blog_image_upload') }}">
+
+    <label for="content_md">Inhoud (Markdown)</label>
+
+    <div class="blog-editor-toolbar">
+        <button type="button" class="btn-secondary btn-toolbar" data-action="blog-editor#openBible">+ Bijbelvers</button>
+        <button type="button" class="btn-secondary btn-toolbar" data-action="blog-editor#openInstitutie">+ Institutie-tekst</button>
+        <button type="button" class="btn-secondary btn-toolbar" data-action="blog-editor#openImageUpload">+ Afbeelding</button>
+        <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden
+               data-blog-editor-target="imageInput" data-action="change->blog-editor#onImageFileSelected">
+    </div>
+    <p class="blog-editor-image-status" data-blog-editor-target="imageStatus" hidden></p>
+
+    <textarea id="content_md" name="content_md" class="form-control blog-editor-textarea" rows="20"
+              data-blog-editor-target="textarea"
+              placeholder="# Titel&#10;&#10;Schrijf hier je blog in Markdown...">{{ content_md }}</textarea>
+
+    <dialog data-blog-editor-target="bibleDialog" class="embed-dialog">
+        <h2>Bijbelvers invoegen</h2>
+
+        <div class="form-group">
+            <label>Boek</label>
+            <select data-blog-editor-target="boek" data-action="change->blog-editor#onBoekChange" class="form-control"></select>
+        </div>
+
+        <div class="embed-dialog-row">
+            <div class="form-group">
+                <label>Hoofdstuk</label>
+                <select data-blog-editor-target="hoofdstuk" data-action="change->blog-editor#onHoofdstukChange" class="form-control"></select>
+            </div>
+            <div class="form-group">
+                <label>Vers</label>
+                <select data-blog-editor-target="vers" data-action="change->blog-editor#onVersChange" class="form-control"></select>
+            </div>
+            <div class="form-group">
+                <label>Aantal verzen onder elkaar</label>
+                <input type="number" min="1" max="30" value="1" data-blog-editor-target="aantalVerzen" data-action="input->blog-editor#onAantalVerzenChange" class="form-control">
+            </div>
+        </div>
+
+        <div class="form-group" data-blog-editor-target="woordRangeGroup">
+            <label>Woordbereik <small class="text-muted">(klik het eerste en het laatste woord van het gewenste deel; laat leeg voor het hele vers)</small></label>
+            <div class="embed-word-chips" data-blog-editor-target="woordChips"></div>
+        </div>
+
+        <div class="form-group">
+            <label><input type="checkbox" data-blog-editor-target="toonVertaling" data-action="change->blog-editor#toggleVertalingFields"> Vertaling tonen</label>
+        </div>
+        <div class="form-group" data-blog-editor-target="vertalingGroup" hidden>
+            <label>Vertaling</label>
+            <select data-blog-editor-target="vertaling" class="form-control"></select>
+        </div>
+        <div class="form-group">
+            <label><input type="checkbox" data-blog-editor-target="alleenVertaling" data-action="change->blog-editor#toggleVertalingFields"> Alleen de vertaling tonen (geen grondtekst)</label>
+        </div>
+        <div class="form-group">
+            <label><input type="checkbox" data-blog-editor-target="highlightLinks" checked> Koppelingen highlighten</label>
+        </div>
+        <div class="form-group" data-blog-editor-target="layoutGroup">
+            <label>Weergave</label>
+            <select data-blog-editor-target="layout" class="form-control">
+                <option value="naast-elkaar">Grondtekst en vertaling naast elkaar</option>
+                <option value="onder-elkaar">Grondtekst en vertaling onder elkaar</option>
+            </select>
+        </div>
+
+        <div class="form-actions">
+            <button type="button" class="btn-primary" data-action="blog-editor#confirmBible">Invoegen</button>
+            <button type="button" class="btn-secondary" data-action="blog-editor#closeBible">Annuleren</button>
+        </div>
+    </dialog>
+
+    <dialog data-blog-editor-target="institutieDialog" class="embed-dialog">
+        <h2>Institutie-tekst invoegen</h2>
+
+        <div class="embed-dialog-row">
+            <div class="form-group">
+                <label>Boek</label>
+                <select data-blog-editor-target="instBoek" data-action="change->blog-editor#onInstBoekChange" class="form-control"></select>
+            </div>
+            <div class="form-group" data-blog-editor-target="instHoofdstukGroup">
+                <label>Hoofdstuk</label>
+                <select data-blog-editor-target="instHoofdstuk" data-action="change->blog-editor#onInstHoofdstukChange" class="form-control"></select>
+            </div>
+            <div class="form-group">
+                <label>Aantal secties na elkaar</label>
+                <input type="number" min="1" max="20" value="1" data-blog-editor-target="instAantal" data-action="input->blog-editor#onInstAantalChange" class="form-control">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>Sectie</label>
+            <select data-blog-editor-target="instSectie" data-action="change->blog-editor#onInstSectieChange" class="form-control"></select>
+        </div>
+
+        <div class="form-group" data-blog-editor-target="instZinRangeGroup">
+            <label>Zinsbereik <small class="text-muted">(klik de eerste en de laatste gewenste zin; laat leeg voor de hele sectie)</small></label>
+            <div class="embed-zin-list" data-blog-editor-target="instZinnen"></div>
+        </div>
+
+        <div class="form-group">
+            <label>Taal</label>
+            <select data-blog-editor-target="instTaal" data-action="change->blog-editor#onInstTaalChange" class="form-control">
+                <option value="beide">Latijn en Nederlands</option>
+                <option value="latijn">Alleen Latijn</option>
+                <option value="nederlands">Alleen Nederlands</option>
+            </select>
+        </div>
+
+        <div class="form-group" data-blog-editor-target="instTekenGroup" hidden>
+            <label>Tekenbereik <small class="text-muted">(optioneel: selecteer met de muis een deel van de tekst hieronder)</small></label>
+            <div class="embed-zin-text" data-blog-editor-target="instZinText" data-action="mouseup->blog-editor#onInstTextSelect"></div>
+            <button type="button" class="btn-secondary btn-toolbar" data-action="blog-editor#clearInstTekenRange">Selectie wissen</button>
+        </div>
+
+        <div class="form-group" data-blog-editor-target="instLayoutGroup">
+            <label>Weergave</label>
+            <select data-blog-editor-target="instLayout" class="form-control">
+                <option value="naast-elkaar">Latijn en Nederlands naast elkaar</option>
+                <option value="onder-elkaar">Latijn en Nederlands onder elkaar</option>
+            </select>
+        </div>
+
+        <div class="form-actions">
+            <button type="button" class="btn-primary" data-action="blog-editor#confirmInstitutie">Invoegen</button>
+            <button type="button" class="btn-secondary" data-action="blog-editor#closeInstitutie">Annuleren</button>
+        </div>
+    </dialog>
+
+</div>

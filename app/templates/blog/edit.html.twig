@@ -1,0 +1,70 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}{{ blog.title }} bewerken – Alef–Omega{% endblock %}
+
+{% block body %}
+<div class="container container--wide">
+
+    <div class="admin-page-header">
+        <h1 class="page-heading">Blog bewerken</h1>
+        <span class="badge-status badge-status--{{ blog.status }}">
+            {{ blog.status == 'published' ? 'Gepubliceerd' : 'Concept' }}
+        </span>
+    </div>
+
+    {% for label, messages in app.flashes %}
+        {% for message in messages %}
+        <div class="alert alert-{{ label }}">{{ message }}</div>
+        {% endfor %}
+    {% endfor %}
+
+    {% if error %}
+    <div class="alert alert-error">{{ error }}</div>
+    {% endif %}
+
+    <form method="post" action="{{ path('app_blog_publish', {slug: blog.slug}) }}" class="form-inline blog-publish-form">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token('blog_publish_' ~ blog.id) }}">
+        {% if blog.status == 'published' %}
+        <input type="hidden" name="action" value="unpublish">
+        <button type="submit" class="btn-secondary">Terugzetten naar concept</button>
+        {% else %}
+        <button type="submit" class="btn-primary">Publiceren</button>
+        {% endif %}
+        <a href="{{ path('app_blog_show', {slug: blog.slug}) }}" class="btn-secondary" target="_blank" rel="noopener">Voorbeeld bekijken</a>
+    </form>
+
+    <form method="post" class="blog-editor-form">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token('blog_edit_' ~ blog.id) }}">
+
+        <div class="form-group">
+            <label for="title">Titel</label>
+            <input type="text" id="title" name="title" required minlength="2" class="form-control" value="{{ blog.title }}">
+        </div>
+
+        <div class="form-group">
+            <label for="slug">URL</label>
+            <div class="blog-slug-field">
+                <span class="blog-slug-prefix">/blog/</span>
+                <input type="text" id="slug" name="slug" required pattern="[a-z0-9]+(-[a-z0-9]+)*" class="form-control" value="{{ blog.slug }}">
+                <span class="blog-slug-prefix">/</span>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label for="visibility">Zichtbaarheid</label>
+            <select id="visibility" name="visibility" class="form-control">
+                <option value="public" {{ blog.visibility == 'public' ? 'selected' : '' }}>Publiek (iedereen, ook niet-ingelogd)</option>
+                <option value="logged_in" {{ blog.visibility == 'logged_in' ? 'selected' : '' }}>Alleen ingelogde gebruikers</option>
+            </select>
+        </div>
+
+        {% include 'blog/_markdown_editor.html.twig' with {content_md: blog.contentMd} %}
+
+        <div class="form-actions">
+            <button type="submit" class="btn-primary">Opslaan</button>
+            <a href="{{ path('app_blog_index') }}" class="btn-secondary">Terug naar overzicht</a>
+        </div>
+    </form>
+
+</div>
+{% endblock %}
