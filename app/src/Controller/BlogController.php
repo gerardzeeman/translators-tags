@@ -202,7 +202,11 @@ class BlogController extends AbstractController
         }
 
         if ($blog->isPublished() && !$blog->isPublic() && $this->getUser() === null) {
-            $this->saveTargetPath($request->getSession(), 'main', $request->getUri());
+            // Regenerate the URL server-side (route + params) rather than trusting
+            // $request->getUri(), which is partly built from the client-supplied
+            // Host header -- without framework.trusted_hosts configured, a spoofed
+            // Host could otherwise turn this into a post-login open redirect.
+            $this->saveTargetPath($request->getSession(), 'main', $this->generateUrl('app_blog_show', ['slug' => $slug]));
             return $this->redirectToRoute('app_login');
         }
 

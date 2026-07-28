@@ -419,9 +419,14 @@ export default class extends Controller {
         return arr
     }
 
+    // Safe for both text-node AND attribute-value contexts: the textContent/
+    // innerHTML roundtrip only escapes &, <, > (text-node rules), so quotes are
+    // escaped explicitly too -- needed since some call sites interpolate this
+    // into value="..." (e.g. #loadBooks, #loadTranslations), where an
+    // unescaped `"` would break out of the attribute.
     #esc(s) {
         const div = document.createElement('div')
         div.textContent = s
-        return div.innerHTML
+        return div.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;')
     }
 }
