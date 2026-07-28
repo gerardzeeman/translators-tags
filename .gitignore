@@ -26,6 +26,7 @@ app/.env.dev
 # DB dumps (kunnen wachtwoordhashes/PII bevatten -- nooit committen)
 /bible_compare.dump
 /bible_compare.sql
+/institutio_data.sql
 *.dump
 
 # Lokale bestanden
