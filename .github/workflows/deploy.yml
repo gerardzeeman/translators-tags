@@ -3,6 +3,13 @@ name: Deploy to production
 on:
   push:
     branches: [main]
+    # Documentatie-only pushes hoeven geen productie-deploy te triggeren.
+    # Let op: een wijziging aan dit workflow-bestand zelf staat hier bewust
+    # niet in, anders zou een toekomstige aanpassing aan de deploy-workflow
+    # zelf nooit meer getest worden.
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
 
 jobs:
   deploy:
