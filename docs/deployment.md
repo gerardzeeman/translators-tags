@@ -3,10 +3,11 @@
 > Doel: de applicatie draaien op een DigitalOcean droplet naast andere applicaties,
 > bereikbaar via een eigen domein, met automatische TLS via Let's Encrypt.
 
-<!-- dummy-wijziging: test van .github/workflows/deploy.yml na het instellen van
-     DROPLET_IP/DROPLET_USER/SSH_PRIVATE_KEY secrets (2026-07-27) --><!--
-     tweede test (2026-07-27): vorige run kwam voorbij "missing server host"
-     maar faalde daarna op "private key is passphrase protected" -->
+> **Status (2026-07-28): de automatische deploy-workflow werkt end-to-end.**
+> Na een aantal mislukte testruns (zie [§7.8](#78-storingsgeschiedenis-automatische-deploy-2026-07)
+> voor de volledige geschiedenis en fixes) draaide `.github/workflows/deploy.yml`
+> voor het eerst volledig door: image gebouwd, container herstart, cache/assets
+> vernieuwd. Elke push op `main` triggert vanaf nu een echte productie-deploy.
 
 ---
 
@@ -75,7 +76,7 @@ Legenda: ✅ gereed · ⚠️ deels · ❌ nog te doen
 |---|---|---|---|
 | ✅ | 12 | **Rate limiting op login-endpoint** | Geconfigureerd via `login_throttling` in `security.yaml` (5 pogingen per 15 min) |
 | ⚠️ | 13 | **`APP_ENV` in container** | In `docker-compose.yml` staat `APP_ENV: prod` hardcoded (r.37) — correct. Controleer na deploy via `docker exec bible_app php bin/console about` |
-| ✅ | 14 | **Geen GitHub Actions deploy-workflow** | Aangemaakt in `.github/workflows/deploy.yml` — deploy bij push op `main` |
+| ✅ | 14 | **Geen GitHub Actions deploy-workflow** | Aangemaakt in `.github/workflows/deploy.yml` — deploy bij push op `main`. Sinds 2026-07-28 ook daadwerkelijk end-to-end geverifieerd (zie [§7.8](#78-storingsgeschiedenis-automatische-deploy-2026-07)) |
 
 ---
 
@@ -289,6 +290,21 @@ docker compose ps
 docker compose logs app --tail=20
 ```
 
+### Database-migraties (niet geautomatiseerd)
+
+**`.github/workflows/deploy.yml` draait geen `doctrine:migrations:migrate`.** Een
+deploy die een nieuwe migratie bevat (nieuwe entity, gewijzigde kolom, ...) zet
+de code wel live, maar de bijbehorende routes geven een 500 totdat de migratie
+handmatig gedraaid is:
+
+```bash
+docker exec bible_app php bin/console doctrine:migrations:status
+docker exec bible_app php bin/console doctrine:migrations:migrate --no-interaction
+```
+
+Doe dit na elke deploy die migraties bevat — controleer de PR-diff op nieuwe
+bestanden in `app/migrations/` als je twijfelt.
+
 ### Automatisch deployen via GitHub Actions
 
 De workflow staat al in `.github/workflows/deploy.yml` en deployt automatisch bij elke push op `main`.
@@ -298,7 +314,8 @@ Voeg de volgende secrets toe in de GitHub repository (Settings → Secrets → A
 | Secret | Waarde |
 |---|---|
 | `DROPLET_IP` | IP-adres van de droplet |
-| `SSH_PRIVATE_KEY` | Inhoud van de private SSH-key die toegang heeft tot de droplet |
+| `DROPLET_USER` | Gebruikersnaam waarmee de workflow inlogt — **niet-root**, moet in de `docker`-groep zitten en schrijfrechten hebben op `/translatorstags` (zie [§7.8](#78-storingsgeschiedenis-automatische-deploy-2026-07)) |
+| `SSH_PRIVATE_KEY` | Inhoud van de private SSH-key die toegang heeft tot de droplet, exact zoals die in `authorized_keys` van `DROPLET_USER` op de droplet staat |
 
 ---
 
@@ -499,6 +516,64 @@ security:
 ```
 
 Na 5 mislukte pogingen per 15 minuten wordt het loginformulier geblokkeerd. Geen verdere actie vereist.
+
+---
+
+### 7.8 Storingsgeschiedenis automatische deploy (2026-07)
+
+Van de eerste opzet van `.github/workflows/deploy.yml` (rond 2026-07-01) tot
+2026-07-28 faalde **elke** deploy-run binnen 8-20 seconden — dus altijd al
+vóórdat de eigenlijke build/deploy-commando's ooit uitgevoerd werden. Drie
+onderliggende, opeenvolgende oorzaken, elk pas zichtbaar nadat de vorige was
+opgelost:
+
+**1. SSH-authenticatie faalde.**
+Foutmelding: `ssh: unable to authenticate, attempted methods [none publickey],
+no supported methods remain`. De sleutel in de `SSH_PRIVATE_KEY`-secret werd
+wel aangeboden (`publickey` staat in de lijst), maar de server accepteerde
+'m niet — een mismatch tussen die secret en wat daadwerkelijk in
+`~/.ssh/authorized_keys` van `DROPLET_USER` op de droplet stond (of
+`DROPLET_USER` zelf klopte niet). Gediagnosticeerd via `gh run view <id>
+--log-failed`; opgelost door beide secrets opnieuw te zetten met exact de
+waarden waarmee een handmatige `ssh -i <keyfile> <user>@<droplet-ip> "echo
+werkt"` vanaf de eigen machine al aantoonbaar slaagde.
+
+**2. Git "dubious ownership".**
+Foutmelding: `fatal: detected dubious ownership in repository at
+'/translatorstags'`. De repo was ooit als `root` gekloond (§3.4), maar de
+workflow verbindt met een niet-root `DROPLET_USER` die geen eigenaar is —
+sinds CVE-2022-24765 weigert Git dan te draaien. Fix, als `root` op de
+droplet:
+```bash
+git config --system --add safe.directory /translatorstags
+chown -R <droplet-user>:<droplet-user> /translatorstags
+```
+(`--system` i.p.v. `--global`, zodat het niet afhangt van wiens `HOME` de
+niet-interactieve SSH-sessie van de workflow toevallig leest.)
+
+**3. Docker-socket permission denied.**
+Foutmelding: `permission denied while trying to connect to the docker API at
+unix:///var/run/docker.sock`. `docker compose version` werkte al (praat niet
+met de daemon), maar `build`/`up` niet: `DROPLET_USER` zat niet in de
+`docker`-groep. Fix:
+```bash
+usermod -aG docker <droplet-user>
+```
+Een nieuwe SSH-sessie (zoals de workflow er bij elke run een opzet) pakt de
+groepswijziging automatisch op — geen her-login op de runner nodig.
+
+**Resultaat**: run [30364637116](https://github.com/gerardzeeman/translators-tags/actions/runs/30364637116)
+(2026-07-28) doorliep voor het eerst de volledige pipeline in 3m7s. Geverifieerd
+op productie via `curl -I https://alefomega.nl/up` (200) en het nieuw
+gedeployde `/blog/`-endpoint.
+
+**Extra**: de `Deploy via SSH`-stap heeft sindsdien `debug: true` staan, plus
+een korte `whoami`/`hostname`/`pwd`-echo vóór de eigenlijke deploy-commando's.
+Kanttekening: bij een kale SSH-handshake-afwijzing (zoals oorzaak 1 hierboven)
+voegde dit in de praktijk niets toe — `appleboy/ssh-action` logt de verbose
+details pas ná een geslaagde verbinding. De echo-regels zíjn wel nuttig
+gebleken zodra de connectie eenmaal lukte (bevestigden meteen welke
+gebruiker/directory de volgende storingen betrof).
 
 ---
 
