@@ -2,12 +2,14 @@
 
 namespace App\Service;
 
+use App\Entity\Blog;
 use App\Service\Embed\BibleVerseEmbedRenderer;
 use App\Service\Embed\EmbedConfigParser;
 use App\Service\Embed\EmbedFencedCodeRenderer;
 use App\Service\Embed\InstitutioEmbedRenderer;
 use League\CommonMark\CommonMarkConverter;
 use League\CommonMark\Extension\CommonMark\Node\Block\FencedCode;
+use Symfony\Component\Security\Core\Role\RoleHierarchyInterface;
 
 /**
  * Renders blog Markdown to HTML. Raw HTML in the source is stripped
@@ -24,8 +26,9 @@ class BlogMarkdownRenderer
     private CommonMarkConverter $converter;
 
     public function __construct(
-        BibleVerseEmbedRenderer $bibleVerseEmbedRenderer,
-        InstitutioEmbedRenderer $institutioEmbedRenderer,
+        private readonly BibleVerseEmbedRenderer $bibleVerseEmbedRenderer,
+        InstitutioEmbedRenderer                  $institutioEmbedRenderer,
+        private readonly RoleHierarchyInterface  $roleHierarchy,
     ) {
         $this->converter = new CommonMarkConverter([
             'html_input'         => 'strip',
@@ -34,13 +37,20 @@ class BlogMarkdownRenderer
 
         $this->converter->getEnvironment()->addRenderer(
             FencedCode::class,
-            new EmbedFencedCodeRenderer([$bibleVerseEmbedRenderer, $institutioEmbedRenderer], new EmbedConfigParser()),
+            new EmbedFencedCodeRenderer([$this->bibleVerseEmbedRenderer, $institutioEmbedRenderer], new EmbedConfigParser()),
             100
         );
     }
 
-    public function render(string $markdown): string
+    public function render(Blog $blog): string
     {
-        return (string) $this->converter->convert($markdown);
+        // Resolved against the blog's AUTHOR, not whoever is currently viewing
+        // the page -- see BibleVerseEmbedRenderer::$authorHasHsvAccess for why.
+        // getReachableRoleNames() applies role_hierarchy inheritance (e.g. an
+        // author with ROLE_ADMIN counts, since that implies ROLE_VIEWER_HSV).
+        $authorRoles = $this->roleHierarchy->getReachableRoleNames($blog->getAuthor()->getRoles());
+        $this->bibleVerseEmbedRenderer->setAuthorHasHsvAccess(in_array('ROLE_VIEWER_HSV', $authorRoles, true));
+
+        return (string) $this->converter->convert($blog->getContentMd());
     }
 }
