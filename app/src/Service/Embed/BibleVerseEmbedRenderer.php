@@ -18,6 +18,20 @@ class BibleVerseEmbedRenderer implements BlogEmbedRendererInterface
 {
     private const MAX_VERSES = 30;
 
+    /**
+     * Whether the CURRENT blog's author (not the visitor viewing it) has
+     * ROLE_VIEWER_HSV, resolved with role-hierarchy inheritance and set by
+     * BlogMarkdownRenderer immediately before each render pass. Defaults to
+     * false (fail closed): without this being explicitly set, no non-SV
+     * translation may be embedded. This gates authoring, not viewing --
+     * once a blog embeds HSV text legitimately, published readers (including
+     * anonymous ones) still see it, matching how the rest of the app treats
+     * published content. What it prevents is a ROLE_BLOGGER account that was
+     * never granted ROLE_VIEWER_HSV using their own draft preview as a
+     * side channel to read the full HSV translation despite that.
+     */
+    private bool $authorHasHsvAccess = false;
+
     public function __construct(
         private readonly BookRepository        $bookRepository,
         private readonly TranslationRepository $translationRepository,
@@ -25,6 +39,11 @@ class BibleVerseEmbedRenderer implements BlogEmbedRendererInterface
         private readonly MorphologyParser      $morphologyParser,
         private readonly Environment           $twig,
     ) {}
+
+    public function setAuthorHasHsvAccess(bool $authorHasHsvAccess): void
+    {
+        $this->authorHasHsvAccess = $authorHasHsvAccess;
+    }
 
     public function supports(string $infoString): bool
     {
@@ -58,6 +77,16 @@ class BibleVerseEmbedRenderer implements BlogEmbedRendererInterface
             : $this->translationRepository->findByCode('SV');
         if (!$translation) {
             return $this->renderError(sprintf('Vertaling "%s" niet gevonden.', $translationCode));
+        }
+
+        // Same convention as the rest of the app (e.g. linking/passage.html.twig):
+        // SV is unrestricted, every other translation requires ROLE_VIEWER_HSV --
+        // here, on the blog's author, not the current visitor (see property doc above).
+        if ($translation->getCode() !== 'SV' && !$this->authorHasHsvAccess) {
+            return $this->renderError(sprintf(
+                'Vertaling "%s" is niet beschikbaar voor deze blog.',
+                $translation->getCode()
+            ));
         }
 
         // SV is the authority translation: word_links are entered against it directly, and
