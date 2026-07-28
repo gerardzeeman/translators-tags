@@ -14,9 +14,18 @@ jobs:
           host: ${{ secrets.DROPLET_IP }}
           username: ${{ secrets.DROPLET_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          # Verbose SSH handshake/auth logging -- without this, a connection
+          # failure only surfaces the bare Go ssh-client error (as it did
+          # while diagnosing the earlier "no supported methods remain"
+          # failures), with no detail on which auth method/key was tried.
+          debug: true
           script: |
             set -e
+            echo "== connected as: $(whoami)@$(hostname) =="
+            echo "== working dir before cd: $(pwd) =="
             cd /translatorstags
+            echo "== working dir after cd: $(pwd) =="
+            docker compose version
             git pull
             docker compose -f docker-compose.yml -f docker-compose.prod.yml build --pull --no-cache app ingest
             docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --remove-orphans
