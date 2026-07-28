@@ -35,7 +35,7 @@ Eén globale Caddy-instantie op de droplet vangt al het verkeer op poorten 80/44
 
 ```
 Internet → Caddy (host, :80/:443)
-              ├── translatorstags.nl  → bible_app container (:80 intern)
+              ├── alefomega.nl        → bible_app container (:80 intern)
               └── andere-app.nl       → andere container (:80 intern)
 ```
 
@@ -152,7 +152,7 @@ networks:
 Maak `/srv/caddy/Caddyfile`:
 
 ```caddy
-translatorstags.nl, www.translatorstags.nl {
+alefomega.nl, www.alefomega.nl {
     reverse_proxy bible_app:80
 }
 
@@ -225,7 +225,7 @@ Caddy vraagt automatisch een Let's Encrypt-certificaat aan zodra het eerste verz
 binnenkomt. Controleer:
 
 ```bash
-curl -I https://translatorstags.nl
+curl -I https://alefomega.nl
 # Verwacht: HTTP/2 200
 ```
 
