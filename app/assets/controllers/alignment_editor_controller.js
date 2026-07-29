@@ -40,10 +40,14 @@ function csrfToken() {
  * panel's boundary list.
  *
  * Row collapsing: Weijenberg tends to run noticeably longer per row than
- * the own translation, so once a prefix of leading rows has real content
- * in *every* panel, that prefix is hidden behind one summary banner --
- * purely a display affordance (an `.is-collapsed-row` class toggled on the
- * existing elements, an `.is-collapsed-row`-just-hides-it CSS rule, and a
+ * the own translation, so the rows before each panel's own "open" row --
+ * see #activeRowIndex -- are hidden behind one summary banner. The open
+ * row is deliberately NOT just "the first empty one": while progressively
+ * carving rows out via drag/click-to-assign, it holds the entire not-yet-
+ * distributed remainder (often the longest, non-empty row of all), so
+ * collapsing on plain emptiness would hide exactly the text still waiting
+ * to be aligned. Purely a display affordance (an `.is-collapsed-row` class
+ * toggled on the existing elements, a CSS rule that hides it, and a
  * `.show-collapsed` override class), so it never touches the row/boundary
  * DOM structure the rest of this controller depends on. Recomputed after
  * every mutation (see #refresh); the boundary that *closes* the last
@@ -308,29 +312,39 @@ export default class extends Controller {
 
     // ── Row collapsing (hide a completed leading prefix, see class docblock) ───
 
-    // How many leading rows this panel has already filled in, counting
-    // from row 0 -- stops at the first empty row, so a gap further down
-    // (still unaligned) never counts as "done" just because a later row
-    // happens to have content.
-    #leadingFilledCount(panel) {
-        let count = 0
-        for (const group of this.#wordsPerRow(panel)) {
-            if (group.length === 0) break
-            count++
+    // The row currently "open" for this panel -- the one right before the
+    // earliest boundary that's part of the still-fully-untouched trailing
+    // run (the same notion assignBoundaryHere uses to pick which boundary
+    // a word-click may move). While the user is progressively carving rows
+    // out via drag/click-to-assign, this open row holds *all* the not-yet-
+    // distributed remainder -- non-empty, often the longest row of all,
+    // but definitely not "done": collapsing it would hide exactly the text
+    // still waiting to be aligned. Falls back to the last row if this
+    // panel has no untouched tail left at all (fully split already).
+    #activeRowIndex(panel) {
+        const boundaries = this.#boundariesIn(panel)
+        const totalRows = boundaries.length + 1
+
+        let nextIdx = null
+        for (let i = boundaries.length - 1; i >= 0; i--) {
+            const after = boundaries[i].nextElementSibling
+            const gapIsEmpty = !after || after.matches('.alignment-boundary')
+            if (!gapIsEmpty) break
+            nextIdx = i
         }
-        return count
+        return nextIdx !== null ? nextIdx : totalRows - 1
     }
 
-    // A row is collapsible once every translation panel has it filled in
-    // -- the narrowest (least-progressed) panel decides. Never collapses
-    // the very last row: there's nothing gained from hiding the one row
-    // that's always still open to receive more words.
+    // A row is collapsible only if it's before every panel's own open row
+    // -- the least-progressed panel decides, so the row currently being
+    // worked on (in any translation) always stays visible, however far
+    // the others have already gotten.
     #applyRowCollapsing() {
         const totalRows = this.#laStarts().length
-        const rawCount = Math.min(
-            ...this.translationPanelTargets.map(p => this.#leadingFilledCount(p))
+        const earliestActiveRow = Math.min(
+            ...this.translationPanelTargets.map(p => this.#activeRowIndex(p))
         )
-        const collapsedCount = Math.min(rawCount, Math.max(totalRows - 1, 0))
+        const collapsedCount = Math.min(earliestActiveRow, Math.max(totalRows - 1, 0))
         this.#lastCollapsedCount = collapsedCount
 
         for (const panel of this.translationPanelTargets) {
