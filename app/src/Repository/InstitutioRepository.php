@@ -833,6 +833,87 @@ class InstitutioRepository
         return $sentences;
     }
 
+    /**
+     * Adds a `parts` breakdown to each of $sentences -- the same word/text
+     * splicing chapter.html.twig's word-hover popup relies on
+     * (InstitutioController::splitTextWithTokensAndAnnotations), minus the
+     * annotation handling the alignment editor doesn't render. Kept as its
+     * own copy rather than shared with the controller: that method is also
+     * annotation-aware and controller-coupled (citationVerseHref), and this
+     * call site only ever needs words.
+     *
+     * @param array<int, array{offset: int, text: string}> $sentences
+     * @return array<int, array{offset: int, text: string, parts: array<int, array{type: string, content: string, lemma?: ?string, gloss?: ?string}>}>
+     */
+    private function attachWordParts(array $sentences, string $textLa, int $textLength, int $segmentId): array
+    {
+        $tokenRows = $this->connection->fetchAllAssociative(
+            'SELECT t.char_start, t.char_end, t.lemma, lg.gloss_nl
+             FROM token t
+             LEFT JOIN lemma_gloss lg ON lg.lemma = t.lemma
+             WHERE t.segment_id = :segment_id AND t.is_word
+             ORDER BY t.char_start',
+            ['segment_id' => $segmentId]
+        );
+
+        $count = count($sentences);
+        foreach ($sentences as $i => &$sentence) {
+            $start = $sentence['offset'];
+            $end = $i + 1 < $count ? $sentences[$i + 1]['offset'] : $textLength;
+
+            $sentenceTokens = [];
+            foreach ($tokenRows as $t) {
+                $tokenStart = (int) $t['char_start'];
+                if ($tokenStart >= $start && $tokenStart < $end) {
+                    $sentenceTokens[] = [
+                        'char_start' => $tokenStart - $start,
+                        'char_end'   => min((int) $t['char_end'], $end) - $start,
+                        'lemma'      => $t['lemma'],
+                        'gloss'      => $t['gloss_nl'],
+                    ];
+                }
+            }
+
+            $sentence['parts'] = $this->splitTextIntoWordParts($sentence['text'], $sentenceTokens);
+        }
+        unset($sentence);
+
+        return $sentences;
+    }
+
+    /**
+     * @param array<int, array{char_start: int, char_end: int, lemma: ?string, gloss: ?string}> $tokens
+     *   Must be ordered by char_start ascending.
+     * @return array<int, array{type: string, content: string, lemma?: ?string, gloss?: ?string}>
+     */
+    private function splitTextIntoWordParts(string $text, array $tokens): array
+    {
+        $parts = [];
+        $cursor = 0;
+        foreach ($tokens as $tok) {
+            $start = $tok['char_start'];
+            $end = $tok['char_end'];
+            if ($start < $cursor) {
+                continue; // overlapping/out-of-order token -- shouldn't happen, skip defensively
+            }
+            if ($start > $cursor) {
+                $parts[] = ['type' => 'text', 'content' => mb_substr($text, $cursor, $start - $cursor)];
+            }
+            $parts[] = [
+                'type'    => 'word',
+                'content' => mb_substr($text, $start, $end - $start),
+                'lemma'   => $tok['lemma'],
+                'gloss'   => $tok['gloss'],
+            ];
+            $cursor = $end;
+        }
+        $remaining = mb_substr($text, $cursor);
+        if ($remaining !== '') {
+            $parts[] = ['type' => 'text', 'content' => $remaining];
+        }
+        return $parts;
+    }
+
     private const LLM_LAYER = 'llm';
     private const WEIJENBERG_LAYER = 'weijenberg1865';
     private const HEADING_LA_START = -1;
@@ -859,7 +940,10 @@ class InstitutioRepository
      * from the plain per-row text editor (InstitutioTranslateController).
      *
      * `la_sentences` is the segment's full, fixed Latin sentence list
-     * (deterministic, never re-split by the editor). `boundary_offsets` is
+     * (deterministic, never re-split by the editor); each sentence's `parts`
+     * is the same word/lemma/gloss breakdown the public chapter page's
+     * word-hover popup uses (see attachWordParts), so the Latin panel can
+     * render the identical hover popup per word. `boundary_offsets` is
      * the subset of those sentences' offsets (excluding the very first,
      * which is the segment start and not a togglable gap) that currently
      * start a sentence_alignment row for the LLM translation -- this is
@@ -896,7 +980,7 @@ class InstitutioRepository
      *
      * @return array{
      *   id: int, ref: string,
-     *   la_sentences: array<int, array{offset: int, text: string}>,
+     *   la_sentences: array<int, array{offset: int, text: string, parts: array}>,
      *   boundary_offsets: array<int, int>,
      *   rows: array<int, array{la_text: string, words: array<int, string>}>,
      *   weijenberg: array{rows: array<int, array{words: array<int, string>}>}|null,
@@ -928,6 +1012,7 @@ class InstitutioRepository
 
         $allSentences = $this->splitLatinSentences($row['text_la']);
         $textLength = mb_strlen($row['text_la']);
+        $allSentences = $this->attachWordParts($allSentences, $row['text_la'], $textLength, $segmentId);
 
         $llmAlignmentRows = $this->connection->fetchAllAssociative(
             'SELECT la_start, nl_text FROM sentence_alignment

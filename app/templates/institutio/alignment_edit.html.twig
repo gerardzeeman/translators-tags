@@ -1,4 +1,5 @@
 {% extends 'base.html.twig' %}
+{% import 'institutio/_macros.html.twig' as m %}
 
 {% block title %}Uitlijning bewerken – {{ segment.ref }} – Bijbel Vergelijking{% endblock %}
 {% block head %}<meta name="csrf-token" content="{{ csrf_token('institutio_alignment') }}">{% endblock %}
@@ -41,7 +42,7 @@
                 <span class="alignment-heading-la">{{ segment.heading }}</span><span class="alignment-heading-separator" title="Vaste grens tussen opschrift en hoofdtekst -- niet te versplitsen of samen te voegen">‖</span>
                 {% endif %}
                 {% for sent in segment.la_sentences %}
-                <span class="alignment-la-sentence" data-offset="{{ sent.offset }}">{{ sent.text }}</span>
+                <span class="alignment-la-sentence" data-offset="{{ sent.offset }}" data-text="{{ sent.text }}">{%- for part in sent.parts -%}{%- if part.type == 'word' -%}{{ m.word_hover(part.content, part.lemma, part.gloss) }}{%- else -%}{{ part.content }}{%- endif -%}{%- endfor -%}</span>
                 {%- if not loop.last -%}
                     {%- set next_offset = segment.la_sentences[loop.index].offset -%}
                     {%- if next_offset in segment.boundary_offsets -%}

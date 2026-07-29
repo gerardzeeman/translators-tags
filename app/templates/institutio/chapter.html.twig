@@ -2,9 +2,7 @@
 {% set page_title = book is not null ? 'Institutie ' ~ book ~ '.' ~ chapter : 'Institutie · Voorwoord' %}
 {% block title %}{{ page_title }} – Bijbel Vergelijking{% endblock %}
 
-{% macro note_marker(kind, glyph, note, verse_href) %}<span class="institutio-note institutio-note-{{ kind }}" tabindex="0"><sup class="institutio-note-glyph">{% if verse_href %}<a href="{{ verse_href }}" data-turbo-frame="institutio-verse-panel" title="Bekijk Bijbeltekst">{{ glyph }}</a>{% else %}{{ glyph }}{% endif %}</sup><span class="institutio-note-popup"><span class="institutio-note-popup-kind">{{ kind == 'variant' ? 'Variant lezing' : 'Verwijzing' }}</span>{{ note }}</span></span>{% endmacro %}
-{% macro word_hover(content, lemma, gloss) %}<span class="institutio-word" tabindex="0">{{ content }}<span class="institutio-word-popup"><span class="institutio-word-lemma">{{ lemma ?? content }}</span>{% if gloss %}<span class="institutio-word-gloss">{{ gloss }}</span>{% endif %}</span></span>{% endmacro %}
-{% import _self as m %}
+{% import 'institutio/_macros.html.twig' as m %}
 
 {% block nav_bijbel %}
 {{ include('institutio/_nav_panel.html.twig', {

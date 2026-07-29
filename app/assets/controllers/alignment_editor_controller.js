@@ -475,7 +475,11 @@ export default class extends Controller {
         return starts
     }
 
-    // One joined Latin text per row, in the same order as #laStarts().
+    // One joined Latin text per row, in the same order as #laStarts(). Reads
+    // each sentence's plain text from its `data-text` attribute rather than
+    // `.textContent` -- a sentence now nests word-hover popup markup (lemma
+    // + gloss), whose text `.textContent` would otherwise pull in too,
+    // silently corrupting this and the live preview it feeds.
     #laTextPerRow() {
         const rows = []
         const heading = this.laPanelTarget.querySelector('.alignment-heading-la')
@@ -484,7 +488,7 @@ export default class extends Controller {
 
         for (const child of this.laPanelTarget.children) {
             if (child.matches('.alignment-la-sentence')) {
-                rows[rows.length - 1].sentences.push(child.textContent)
+                rows[rows.length - 1].sentences.push(child.dataset.text)
             } else if (child.matches('.alignment-la-gap.is-boundary')) {
                 rows.push({ sentences: [] })
             }
