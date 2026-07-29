@@ -27,6 +27,17 @@ function csrfToken() {
  * Saving still writes each translation's alignment independently (own
  * translation_id, own sentence_alignment rows) -- only the row
  * *boundaries* are locked together, not the words assigned to them.
+ *
+ * Optional heading row: when the segment has one (chapter/section title,
+ * or the front-matter salutation), the Latin panel gets a fixed leading
+ * `.alignment-heading-la` block plus a permanent separator -- unlike the
+ * la-sentence gaps, this boundary has no toggle control and can never be
+ * removed, only repositioned (drag/click-to-assign), since the heading is
+ * a structurally separate field, never part of text_la. Every translation
+ * panel then has one extra row-0 (its heading translation) ahead of the
+ * normal per-sentence rows, so row indices coming from Latin-gap counting
+ * need a +1 offset (see #headingOffset) when used against a translation
+ * panel's boundary list.
  */
 export default class extends Controller {
     static targets = ['laPanel', 'translationPanel', 'status', 'preview']
@@ -41,7 +52,7 @@ export default class extends Controller {
 
     toggleGap(event) {
         const gap = event.currentTarget
-        const rowIndex = this.#countActiveBoundariesBefore(gap)
+        const rowIndex = this.#countActiveBoundariesBefore(gap) + this.#headingOffset()
 
         if (gap.classList.contains('is-boundary')) {
             this.#mergeAt(gap, rowIndex)
@@ -63,6 +74,12 @@ export default class extends Controller {
 
     #boundariesIn(panel) {
         return [...panel.children].filter(c => c.matches('.alignment-boundary'))
+    }
+
+    // 1 if this segment has the fixed heading row (an extra row-0 ahead of
+    // the per-Latin-sentence rows in every translation panel), else 0.
+    #headingOffset() {
+        return this.laPanelTarget.querySelector('.alignment-heading-la') ? 1 : 0
     }
 
     #mergeAt(gap, rowIndex) {
@@ -297,8 +314,13 @@ export default class extends Controller {
     }
 
     // Shared Latin row boundaries, read once: one la_start per row, in order.
+    // A heading row (if present) always contributes -1 as row 0's la_start
+    // -- a sentinel, never a real text_la offset (see HEADING_LA_START on
+    // the PHP side).
     #laStarts() {
         const starts = []
+        if (this.#headingOffset()) starts.push(-1)
+
         let sawFirstSentence = false
         for (const child of this.laPanelTarget.children) {
             if (child.matches('.alignment-la-sentence') && !sawFirstSentence) {
@@ -313,7 +335,11 @@ export default class extends Controller {
 
     // One joined Latin text per row, in the same order as #laStarts().
     #laTextPerRow() {
-        const rows = [{ sentences: [] }]
+        const rows = []
+        const heading = this.laPanelTarget.querySelector('.alignment-heading-la')
+        if (heading) rows.push({ sentences: [heading.textContent] })
+        rows.push({ sentences: [] })
+
         for (const child of this.laPanelTarget.children) {
             if (child.matches('.alignment-la-sentence')) {
                 rows[rows.length - 1].sentences.push(child.textContent)

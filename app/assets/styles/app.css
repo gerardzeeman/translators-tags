@@ -3281,6 +3281,19 @@ a:hover { text-decoration: underline; }
     line-height: 2.1;
 }
 .alignment-panel-la { font-size: .92rem; color: var(--color-ink-light); }
+.alignment-heading-la {
+    font-weight: 600;
+    font-style: italic;
+    color: var(--color-ink);
+}
+.alignment-heading-separator {
+    display: inline-block;
+    font-weight: 600;
+    padding: 0 .35em;
+    margin: 0 .1em;
+    color: var(--color-accent-2);
+    user-select: none;
+}
 .alignment-la-sentence { }
 .alignment-la-gap {
     display: inline-block;
