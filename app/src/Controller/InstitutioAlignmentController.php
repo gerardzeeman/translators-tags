@@ -36,8 +36,12 @@ class InstitutioAlignmentController extends AbstractController
             );
         }
 
+        $adjacent = $this->institutioRepository->getAdjacentAlignableSegments($id);
+
         return $this->render('institutio/alignment_edit.html.twig', [
-            'segment' => $segment,
+            'segment'      => $segment,
+            'prev_segment' => $adjacent['prev'],
+            'next_segment' => $adjacent['next'],
         ]);
     }
 
