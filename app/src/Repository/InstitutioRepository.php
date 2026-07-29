@@ -321,10 +321,15 @@ class InstitutioRepository
         ));
         $alignmentByTranslation = [];
         if ($translationIds) {
+            // Excludes the heading row (la_start = HEADING_LA_START, -1):
+            // heading/heading_nl are already returned separately above and
+            // shown once at the top of the page -- including it here too
+            // would duplicate it as if it were the section's first body row.
             $alignmentRows = $this->connection->fetchAllAssociative(
                 'SELECT translation_id, row_seq, la_start, nl_text
                  FROM sentence_alignment
                  WHERE translation_id IN (' . implode(',', array_fill(0, count($translationIds), '?')) . ')
+                   AND la_start >= 0
                  ORDER BY translation_id, row_seq',
                 $translationIds
             );
@@ -589,9 +594,13 @@ class InstitutioRepository
      */
     private function resolveAlignedRows(int $translationId, string $textLa): array
     {
+        // Excludes the heading row (la_start = HEADING_LA_START, -1): the
+        // translate page shows segment.heading separately at the top, and
+        // -1 isn't a real text_la offset (mb_substr would treat it as
+        // "from the end", producing garbage la_text for that row anyway).
         $alignmentRows = $this->connection->fetchAllAssociative(
             'SELECT id, la_start, nl_text FROM sentence_alignment
-             WHERE translation_id = :translation_id ORDER BY row_seq',
+             WHERE translation_id = :translation_id AND la_start >= 0 ORDER BY row_seq',
             ['translation_id' => $translationId]
         );
         $count = count($alignmentRows);
@@ -777,9 +786,12 @@ class InstitutioRepository
             );
         }
 
+        // Excludes the heading row (la_start = HEADING_LA_START, -1) --
+        // it's shown/edited separately (segment.heading), never folded
+        // into text_nl.
         $joined = $this->connection->fetchOne(
             "SELECT string_agg(nl_text, ' ' ORDER BY row_seq) FROM sentence_alignment
-             WHERE translation_id = :translation_id",
+             WHERE translation_id = :translation_id AND la_start >= 0",
             ['translation_id' => $translationId]
         );
 
