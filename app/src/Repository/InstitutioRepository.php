@@ -321,10 +321,15 @@ class InstitutioRepository
         ));
         $alignmentByTranslation = [];
         if ($translationIds) {
+            // Excludes the heading row (la_start = HEADING_LA_START, -1):
+            // heading/heading_nl are already returned separately above and
+            // shown once at the top of the page -- including it here too
+            // would duplicate it as if it were the section's first body row.
             $alignmentRows = $this->connection->fetchAllAssociative(
                 'SELECT translation_id, row_seq, la_start, nl_text
                  FROM sentence_alignment
                  WHERE translation_id IN (' . implode(',', array_fill(0, count($translationIds), '?')) . ')
+                   AND la_start >= 0
                  ORDER BY translation_id, row_seq',
                 $translationIds
             );
@@ -589,9 +594,13 @@ class InstitutioRepository
      */
     private function resolveAlignedRows(int $translationId, string $textLa): array
     {
+        // Excludes the heading row (la_start = HEADING_LA_START, -1): the
+        // translate page shows segment.heading separately at the top, and
+        // -1 isn't a real text_la offset (mb_substr would treat it as
+        // "from the end", producing garbage la_text for that row anyway).
         $alignmentRows = $this->connection->fetchAllAssociative(
             'SELECT id, la_start, nl_text FROM sentence_alignment
-             WHERE translation_id = :translation_id ORDER BY row_seq',
+             WHERE translation_id = :translation_id AND la_start >= 0 ORDER BY row_seq',
             ['translation_id' => $translationId]
         );
         $count = count($alignmentRows);
@@ -777,9 +786,12 @@ class InstitutioRepository
             );
         }
 
+        // Excludes the heading row (la_start = HEADING_LA_START, -1) --
+        // it's shown/edited separately (segment.heading), never folded
+        // into text_nl.
         $joined = $this->connection->fetchOne(
             "SELECT string_agg(nl_text, ' ' ORDER BY row_seq) FROM sentence_alignment
-             WHERE translation_id = :translation_id",
+             WHERE translation_id = :translation_id AND la_start >= 0",
             ['translation_id' => $translationId]
         );
 
@@ -823,6 +835,23 @@ class InstitutioRepository
 
     private const LLM_LAYER = 'llm';
     private const WEIJENBERG_LAYER = 'weijenberg1865';
+    private const HEADING_LA_START = -1;
+
+    /**
+     * True if $seq is the lowest seq among segments sharing the same
+     * (work, book, chapter) grouping -- heading/heading_nl are denormalized
+     * onto every segment of a chapter, so aligning the heading only makes
+     * sense once per chapter, on its first segment.
+     */
+    private function isFirstSegmentOfChapter(int $workId, ?int $book, ?int $chapter, int $seq): bool
+    {
+        $minSeq = $this->connection->fetchOne(
+            'SELECT MIN(seq) FROM segment
+             WHERE work_id = :work_id AND book IS NOT DISTINCT FROM :book AND chapter IS NOT DISTINCT FROM :chapter',
+            ['work_id' => $workId, 'book' => $book, 'chapter' => $chapter]
+        );
+        return $minSeq !== false && (int) $minSeq === $seq;
+    }
 
     /**
      * Segment + word-level-editable alignment structure for the drag-based
@@ -853,18 +882,31 @@ class InstitutioRepository
      * natural "not yet distributed" starting point for the editor's manual
      * word-dragging, not a computed alignment.
      *
+     * `heading` is non-null only when this segment actually has a heading
+     * AND is the first segment of its chapter (heading/heading_nl are
+     * denormalized onto every segment sharing a chapter, so aligning it
+     * only makes sense once). When present, it's additionally prepended as
+     * row 0 to `rows` and `weijenberg.rows` -- a HEADING_LA_START (-1)
+     * sentinel `la_start`, never a real text_la offset, marks it as
+     * structurally separate from the body (see saveSegmentAlignment). Its
+     * LLM words default to the already-translated `heading_nl`; Weijenberg
+     * has no equivalent separate field (the ingested text just has the
+     * heading sentence running straight into the body), so its heading row
+     * starts empty until manually carved out of row 1's leading words.
+     *
      * @return array{
      *   id: int, ref: string,
      *   la_sentences: array<int, array{offset: int, text: string}>,
      *   boundary_offsets: array<int, int>,
      *   rows: array<int, array{la_text: string, words: array<int, string>}>,
-     *   weijenberg: array{rows: array<int, array{words: array<int, string>}>}|null
+     *   weijenberg: array{rows: array<int, array{words: array<int, string>}>}|null,
+     *   heading: string|null
      * }|null
      */
     public function getSegmentAlignmentForEdit(int $segmentId): ?array
     {
         $row = $this->connection->fetchAssociative(
-            "SELECT s.id, s.ref, s.text_la,
+            "SELECT s.id, s.ref, s.text_la, s.work_id, s.book, s.chapter, s.seq, s.heading, s.heading_nl,
                     llm.id AS llm_translation_id, llm.text_nl AS llm_text_nl,
                     wb.id  AS weijenberg_translation_id, wb.text_nl AS weijenberg_text_nl
              FROM segment s
@@ -877,6 +919,13 @@ class InstitutioRepository
             return null;
         }
 
+        $hasHeading = trim((string) $row['heading']) !== '' && $this->isFirstSegmentOfChapter(
+            (int) $row['work_id'],
+            $row['book'] !== null ? (int) $row['book'] : null,
+            $row['chapter'] !== null ? (int) $row['chapter'] : null,
+            (int) $row['seq']
+        );
+
         $allSentences = $this->splitLatinSentences($row['text_la']);
         $textLength = mb_strlen($row['text_la']);
 
@@ -885,16 +934,25 @@ class InstitutioRepository
              WHERE translation_id = :translation_id ORDER BY row_seq',
             ['translation_id' => $row['llm_translation_id']]
         );
-        if (!$llmAlignmentRows) {
-            $llmAlignmentRows = [['la_start' => 0, 'nl_text' => $row['llm_text_nl'] ?? '']];
+        $llmHeadingRow = null;
+        $llmBodyRows = [];
+        foreach ($llmAlignmentRows as $r) {
+            if ((int) $r['la_start'] === self::HEADING_LA_START) {
+                $llmHeadingRow = $r;
+            } else {
+                $llmBodyRows[] = $r;
+            }
+        }
+        if (!$llmBodyRows) {
+            $llmBodyRows = [['la_start' => 0, 'nl_text' => $row['llm_text_nl'] ?? '']];
         }
 
-        $laStarts = array_map(static fn($r) => (int) $r['la_start'], $llmAlignmentRows);
+        $laStarts = array_map(static fn($r) => (int) $r['la_start'], $llmBodyRows);
         $boundaryOffsets = array_slice($laStarts, 1);
         $count = count($laStarts);
 
         $rows = [];
-        foreach ($llmAlignmentRows as $i => $r) {
+        foreach ($llmBodyRows as $i => $r) {
             $start = $laStarts[$i];
             $end = $i + 1 < $count ? $laStarts[$i + 1] : $textLength;
             $rows[] = [
@@ -903,23 +961,47 @@ class InstitutioRepository
             ];
         }
 
+        if ($hasHeading) {
+            $headingNl = $llmHeadingRow['nl_text'] ?? ($row['heading_nl'] ?? '');
+            array_unshift($rows, [
+                'la_text' => $row['heading'],
+                'words'   => preg_split('/\s+/u', trim((string) $headingNl), -1, PREG_SPLIT_NO_EMPTY) ?: [],
+            ]);
+        }
+
         $weijenberg = null;
         if ($row['weijenberg_translation_id'] !== null) {
             $wbAlignmentRows = $this->connection->fetchAllAssociative(
-                'SELECT nl_text FROM sentence_alignment
+                'SELECT la_start, nl_text FROM sentence_alignment
                  WHERE translation_id = :translation_id ORDER BY row_seq',
                 ['translation_id' => $row['weijenberg_translation_id']]
             );
+            $wbHeadingRow = null;
+            $wbBodyAlignmentRows = [];
+            foreach ($wbAlignmentRows as $r) {
+                if ((int) $r['la_start'] === self::HEADING_LA_START) {
+                    $wbHeadingRow = $r;
+                } else {
+                    $wbBodyAlignmentRows[] = $r;
+                }
+            }
 
-            if ($wbAlignmentRows) {
+            if ($wbBodyAlignmentRows) {
                 $wbRows = array_map(
                     static fn($r) => ['words' => preg_split('/\s+/u', trim((string) $r['nl_text']), -1, PREG_SPLIT_NO_EMPTY) ?: []],
-                    $wbAlignmentRows
+                    $wbBodyAlignmentRows
                 );
             } else {
                 $words = preg_split('/\s+/u', trim((string) $row['weijenberg_text_nl']), -1, PREG_SPLIT_NO_EMPTY) ?: [];
                 $wbRows = array_fill(0, $count, ['words' => []]);
                 $wbRows[0]['words'] = $words;
+            }
+
+            if ($hasHeading) {
+                $headingWords = $wbHeadingRow !== null
+                    ? (preg_split('/\s+/u', trim((string) $wbHeadingRow['nl_text']), -1, PREG_SPLIT_NO_EMPTY) ?: [])
+                    : [];
+                array_unshift($wbRows, ['words' => $headingWords]);
             }
 
             $weijenberg = ['rows' => $wbRows];
@@ -932,6 +1014,7 @@ class InstitutioRepository
             'boundary_offsets' => $boundaryOffsets,
             'rows'             => $rows,
             'weijenberg'       => $weijenberg,
+            'heading'          => $hasHeading ? $row['heading'] : null,
         ];
     }
 
@@ -947,9 +1030,23 @@ class InstitutioRepository
      * trusted from the client) -- every value must be exactly one of those
      * boundary offsets (or 0), strictly increasing with no duplicates, so a
      * row can never straddle a partial sentence or corrupt the ordering.
+     * HEADING_LA_START (-1) is additionally accepted as row 0's la_start,
+     * but only when this segment actually qualifies for heading alignment
+     * (see getSegmentAlignmentForEdit) -- otherwise it's rejected exactly
+     * like any other bogus offset.
      * Rows may have zero words -- alignment is often done incrementally
      * (e.g. via the click-to-assign shortcut), and a mid-progress save with
      * still-empty trailing rows must not be blocked.
+     *
+     * The heading row (if present) is deliberately excluded from the
+     * text_nl reconstruction below -- it's a structurally separate field
+     * (segment.heading / segment.heading_nl), not part of the body, and
+     * folding it in would duplicate it (LLM already has it in heading_nl)
+     * or wrongly re-merge it into the body once Weijenberg's copy has been
+     * carved out. For the LLM layer specifically, a saved heading row is
+     * also written back to segment.heading_nl, since that column is the
+     * one read elsewhere (e.g. the chapter page); Weijenberg has no such
+     * column, so its heading translation only ever lives in this table.
      *
      * $layer selects which translation ('llm' or 'weijenberg1865') this
      * call applies to; each layer has its own translation_id and its own
@@ -964,7 +1061,7 @@ class InstitutioRepository
     public function saveSegmentAlignment(int $segmentId, string $layer, array $rows): bool
     {
         $segment = $this->connection->fetchAssociative(
-            "SELECT s.text_la, tr.id AS translation_id
+            "SELECT s.text_la, s.work_id, s.book, s.chapter, s.seq, s.heading, tr.id AS translation_id
              FROM segment s
              LEFT JOIN translation tr ON tr.segment_id = s.id AND tr.layer = :layer
              WHERE s.id = :id",
@@ -979,8 +1076,18 @@ class InstitutioRepository
             throw new \InvalidArgumentException('Ten minste één rij is vereist.');
         }
 
+        $hasHeading = trim((string) $segment['heading']) !== '' && $this->isFirstSegmentOfChapter(
+            (int) $segment['work_id'],
+            $segment['book'] !== null ? (int) $segment['book'] : null,
+            $segment['chapter'] !== null ? (int) $segment['chapter'] : null,
+            (int) $segment['seq']
+        );
+
         $validOffsets = array_column($this->splitLatinSentences($segment['text_la']), 'offset');
         $validOffsets[] = 0;
+        if ($hasHeading) {
+            $validOffsets[] = self::HEADING_LA_START;
+        }
         $validOffsets = array_flip($validOffsets);
 
         $starts = array_column($rows, 'la_start');
@@ -1012,11 +1119,24 @@ class InstitutioRepository
             );
         }
 
-        $joined = implode(' ', array_map(static fn($r) => implode(' ', $r['words']), $rows));
+        $bodyRows = array_filter($rows, static fn($r) => $r['la_start'] !== self::HEADING_LA_START);
+        $joined = implode(' ', array_map(static fn($r) => implode(' ', $r['words']), $bodyRows));
         $this->connection->executeStatement(
             "UPDATE translation SET text_nl = :text_nl, model = 'manual' WHERE id = :id",
             ['text_nl' => $joined, 'id' => $translationId]
         );
+
+        if ($layer === self::LLM_LAYER) {
+            foreach ($rows as $r) {
+                if ($r['la_start'] === self::HEADING_LA_START) {
+                    $this->connection->executeStatement(
+                        'UPDATE segment SET heading_nl = :heading_nl WHERE id = :id',
+                        ['heading_nl' => implode(' ', $r['words']), 'id' => $segmentId]
+                    );
+                    break;
+                }
+            }
+        }
 
         return $this->connection->executeStatement(
             'DELETE FROM alignment WHERE translation_id = :translation_id',

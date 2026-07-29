@@ -23,12 +23,19 @@
         Klik op een woord om de eerstvolgende nog niet geplaatste rijgrens direct na dat woord te zetten
         (alleen mogelijk zolang alle resterende rijgrenzen nog helemaal onderaan staan, dus nog geen
         handmatige uitlijning verderop in de tekst is gemaakt).
+        {% if segment.heading %}
+        De hoofdstuktitel staat als vaste eerste rij bovenaan (gescheiden door <span class="alignment-gap-sample">‖</span>) —
+        die grens kan niet verwijderd worden, maar woorden er direct na kunnen wel naar deze rij verschoven worden.
+        {% endif %}
     </p>
 
     <div class="alignment-columns{{ segment.weijenberg ? ' alignment-columns--three' : '' }}">
         <div class="alignment-section">
             <div class="alignment-panel-label">Latijn</div>
             <div class="alignment-panel alignment-panel-la" data-alignment-editor-target="laPanel">
+                {% if segment.heading %}
+                <span class="alignment-heading-la">{{ segment.heading }}</span><span class="alignment-heading-separator" title="Vaste grens tussen opschrift en hoofdtekst -- niet te versplitsen of samen te voegen">‖</span>
+                {% endif %}
                 {% for sent in segment.la_sentences %}
                 <span class="alignment-la-sentence" data-offset="{{ sent.offset }}">{{ sent.text }}</span>
                 {%- if not loop.last -%}
