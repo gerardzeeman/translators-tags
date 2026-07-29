@@ -95,6 +95,57 @@ export default class extends Controller {
         gap.title = 'Voeg samen met volgende rij'
     }
 
+    // ── Click-to-assign (bulk-carving shortcut for a freshly-loaded,
+    // still fully unaligned translation, e.g. Weijenberg right after
+    // ingest -- all its words sit in row 0 and every boundary is
+    // clustered together at the end with nothing between them) ─────────────────
+
+    // Clicking a word moves the *next still-unplaced* boundary in that
+    // panel to right after the clicked word -- i.e. it carves the current
+    // "everything so far" row into a real row + the remainder. Only the
+    // earliest boundary that's part of an unbroken run of empty gaps all
+    // the way to the end of the panel is eligible; if the trailing rows
+    // aren't (or are no longer) all empty -- because some later row was
+    // already manually aligned, via drag or a previous click -- the whole
+    // shortcut is disabled rather than guess which boundary to move.
+    assignBoundaryHere(event) {
+        const wordEl = event.currentTarget
+        const panel = wordEl.parentElement
+        const boundaries = this.#boundariesIn(panel)
+
+        let nextIdx = null
+        for (let i = boundaries.length - 1; i >= 0; i--) {
+            const after = boundaries[i].nextElementSibling
+            const gapIsEmpty = !after || after.matches('.alignment-boundary')
+            if (!gapIsEmpty) break
+            nextIdx = i
+        }
+        if (nextIdx === null) {
+            this.#setStatus('Verderop is al handmatig uitgelijnd -- klik-om-te-plaatsen werkt alleen zolang alle resterende rijgrenzen nog onderaan staan.')
+            return
+        }
+
+        const targetBoundary = boundaries[nextIdx]
+        const prevBoundary = nextIdx > 0 ? boundaries[nextIdx - 1] : null
+
+        let inOpenRow = false
+        let node = prevBoundary ? prevBoundary.nextElementSibling : panel.firstElementChild
+        while (node && node !== targetBoundary) {
+            if (node === wordEl) { inOpenRow = true; break }
+            node = node.nextElementSibling
+        }
+        if (!inOpenRow) {
+            this.#setStatus('Klik een woord in de openstaande rij (na de laatst geplaatste grens) om de volgende grens daarheen te verplaatsen.')
+            return
+        }
+
+        if (targetBoundary.previousElementSibling === wordEl) return // already there
+
+        panel.insertBefore(targetBoundary, wordEl.nextElementSibling)
+        this.#recolor(panel)
+        this.#renderPreview()
+    }
+
     // ── Translation-panel dragging (independent per panel) ──────────────────────
 
     startDrag(event) {
@@ -217,13 +268,6 @@ export default class extends Controller {
 
     async save() {
         const layers = this.#currentLayers()
-
-        for (const [layer, rows] of Object.entries(layers)) {
-            if (rows.some(r => r.words.length === 0)) {
-                this.#setStatus(`Elke rij moet minstens één woord bevatten (${layer}) — sleep woorden erin voordat je opslaat.`)
-                return
-            }
-        }
 
         this.#setStatus('Bezig met opslaan…')
         try {

@@ -3304,8 +3304,10 @@ a:hover { text-decoration: underline; }
     display: inline-block;
     padding: 0 .15em;
     border-radius: 3px;
+    cursor: pointer;
 }
 .alignment-word.row-odd { background: var(--card-warm); }
+.alignment-word:hover { outline: 1px dashed var(--color-accent-2); }
 .alignment-boundary {
     display: inline-block;
     cursor: grab;

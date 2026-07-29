@@ -947,6 +947,9 @@ class InstitutioRepository
      * trusted from the client) -- every value must be exactly one of those
      * boundary offsets (or 0), strictly increasing with no duplicates, so a
      * row can never straddle a partial sentence or corrupt the ordering.
+     * Rows may have zero words -- alignment is often done incrementally
+     * (e.g. via the click-to-assign shortcut), and a mid-progress save with
+     * still-empty trailing rows must not be blocked.
      *
      * $layer selects which translation ('llm' or 'weijenberg1865') this
      * call applies to; each layer has its own translation_id and its own
@@ -984,9 +987,6 @@ class InstitutioRepository
         foreach ($rows as $r) {
             if (!isset($validOffsets[$r['la_start']])) {
                 throw new \InvalidArgumentException("Ongeldige la_start: {$r['la_start']} is geen zinsgrens.");
-            }
-            if (!$r['words']) {
-                throw new \InvalidArgumentException('Elke rij moet minstens één woord bevatten.');
             }
         }
         $sortedStarts = $starts;

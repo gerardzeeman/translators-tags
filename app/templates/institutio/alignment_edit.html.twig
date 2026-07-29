@@ -20,6 +20,9 @@
         volgende rij te verplaatsen (per vertaling onafhankelijk). Klik <span class="alignment-gap-sample">✂</span>
         op een Latijnse zinsgrens om een rij te splitsen, of <span class="alignment-gap-sample is-boundary-sample">⌃</span>
         om twee rijen weer samen te voegen — dit past de rij-indeling van alle vertalingen tegelijk aan.
+        Klik op een woord om de eerstvolgende nog niet geplaatste rijgrens direct na dat woord te zetten
+        (alleen mogelijk zolang alle resterende rijgrenzen nog helemaal onderaan staan, dus nog geen
+        handmatige uitlijning verderop in de tekst is gemaakt).
     </p>
 
     <div class="alignment-columns{{ segment.weijenberg ? ' alignment-columns--three' : '' }}">
@@ -48,7 +51,7 @@
                  data-alignment-editor-target="translationPanel" data-layer="llm">
                 {% for row in segment.rows %}
                     {%- for word in row.words -%}
-                    <span class="alignment-word">{{ word }}</span>
+                    <span class="alignment-word" data-action="click->alignment-editor#assignBoundaryHere">{{ word }}</span>
                     {%- endfor -%}
                     {%- if not loop.last -%}
                     <span class="alignment-boundary"
@@ -65,7 +68,7 @@
                  data-alignment-editor-target="translationPanel" data-layer="weijenberg1865">
                 {% for row in segment.weijenberg.rows %}
                     {%- for word in row.words -%}
-                    <span class="alignment-word">{{ word }}</span>
+                    <span class="alignment-word" data-action="click->alignment-editor#assignBoundaryHere">{{ word }}</span>
                     {%- endfor -%}
                     {%- if not loop.last -%}
                     <span class="alignment-boundary"
