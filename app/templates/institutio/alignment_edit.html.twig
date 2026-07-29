@@ -29,7 +29,11 @@
         {% endif %}
     </p>
 
-    <div class="alignment-columns{{ segment.weijenberg ? ' alignment-columns--three' : '' }}">
+    <button type="button" class="alignment-collapse-banner" hidden
+            data-alignment-editor-target="collapseBanner" data-action="click->alignment-editor#toggleCollapsed"></button>
+
+    <div class="alignment-columns{{ segment.weijenberg ? ' alignment-columns--three' : '' }}"
+         data-alignment-editor-target="columns">
         <div class="alignment-section">
             <div class="alignment-panel-label">Latijn</div>
             <div class="alignment-panel alignment-panel-la" data-alignment-editor-target="laPanel">

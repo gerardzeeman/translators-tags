@@ -38,14 +38,39 @@ function csrfToken() {
  * normal per-sentence rows, so row indices coming from Latin-gap counting
  * need a +1 offset (see #headingOffset) when used against a translation
  * panel's boundary list.
+ *
+ * Row collapsing: Weijenberg tends to run noticeably longer per row than
+ * the own translation, so once a prefix of leading rows has real content
+ * in *every* panel, that prefix is hidden behind one summary banner --
+ * purely a display affordance (an `.is-collapsed-row` class toggled on the
+ * existing elements, an `.is-collapsed-row`-just-hides-it CSS rule, and a
+ * `.show-collapsed` override class), so it never touches the row/boundary
+ * DOM structure the rest of this controller depends on. Recomputed after
+ * every mutation (see #refresh); the boundary that *closes* the last
+ * collapsed row is hidden along with it, so adjusting it requires
+ * expanding first via the banner.
  */
 export default class extends Controller {
-    static targets = ['laPanel', 'translationPanel', 'status', 'preview']
+    static targets = ['laPanel', 'translationPanel', 'status', 'preview', 'columns', 'collapseBanner']
     static values  = { saveUrl: String }
+
+    #lastCollapsedCount = 0
 
     connect() {
         this.#recolorAll()
+        this.#refresh()
+    }
+
+    // Re-renders everything derived from the current DOM state -- called
+    // after every action that can change row contents or boundaries.
+    #refresh() {
         this.#renderPreview()
+        this.#applyRowCollapsing()
+    }
+
+    toggleCollapsed() {
+        this.columnsTarget.classList.toggle('show-collapsed')
+        this.#updateCollapseBanner()
     }
 
     // ── Latin-side gap toggling (split / merge) -- affects every translation panel ──
@@ -60,7 +85,7 @@ export default class extends Controller {
             this.#splitAt(gap, rowIndex)
         }
         this.#recolorAll()
-        this.#renderPreview()
+        this.#refresh()
     }
 
     #countActiveBoundariesBefore(gapEl) {
@@ -160,7 +185,7 @@ export default class extends Controller {
 
         panel.insertBefore(targetBoundary, wordEl.nextElementSibling)
         this.#recolor(panel)
-        this.#renderPreview()
+        this.#refresh()
     }
 
     // ── Translation-panel dragging (independent per panel) ──────────────────────
@@ -187,7 +212,7 @@ export default class extends Controller {
             window.removeEventListener('pointermove', onMove)
             window.removeEventListener('pointerup', onUp)
             this.#recolor(panel)
-            this.#renderPreview()
+            this.#refresh()
         }
         window.addEventListener('pointermove', onMove)
         window.addEventListener('pointerup', onUp)
@@ -260,7 +285,7 @@ export default class extends Controller {
         // on every pointermove, most of which don't cross a word gap.
         if (moved) {
             this.#recolor(panel)
-            this.#renderPreview()
+            this.#refresh()
         }
     }
 
@@ -279,6 +304,109 @@ export default class extends Controller {
             }
             child.classList.toggle('row-odd', rowIndex % 2 === 1)
         }
+    }
+
+    // ── Row collapsing (hide a completed leading prefix, see class docblock) ───
+
+    // How many leading rows this panel has already filled in, counting
+    // from row 0 -- stops at the first empty row, so a gap further down
+    // (still unaligned) never counts as "done" just because a later row
+    // happens to have content.
+    #leadingFilledCount(panel) {
+        let count = 0
+        for (const group of this.#wordsPerRow(panel)) {
+            if (group.length === 0) break
+            count++
+        }
+        return count
+    }
+
+    // A row is collapsible once every translation panel has it filled in
+    // -- the narrowest (least-progressed) panel decides. Never collapses
+    // the very last row: there's nothing gained from hiding the one row
+    // that's always still open to receive more words.
+    #applyRowCollapsing() {
+        const totalRows = this.#laStarts().length
+        const rawCount = Math.min(
+            ...this.translationPanelTargets.map(p => this.#leadingFilledCount(p))
+        )
+        const collapsedCount = Math.min(rawCount, Math.max(totalRows - 1, 0))
+        this.#lastCollapsedCount = collapsedCount
+
+        for (const panel of this.translationPanelTargets) {
+            this.#collapseTranslationPanel(panel, collapsedCount)
+        }
+        this.#collapseLaPanel(collapsedCount)
+        this.#updateCollapseBanner()
+    }
+
+    #collapseTranslationPanel(panel, collapsedCount) {
+        let rowIndex = 0
+        for (const child of panel.children) {
+            if (child.matches('.alignment-boundary')) {
+                child.classList.toggle('is-collapsed-row', rowIndex < collapsedCount)
+                rowIndex++
+            } else if (child.matches('.alignment-word')) {
+                child.classList.toggle('is-collapsed-row', rowIndex < collapsedCount)
+            }
+        }
+    }
+
+    // Groups the Latin panel's own elements into rows the same way
+    // #laTextPerRow does, but keeps element references (not just text) so
+    // they can be individually marked collapsed -- including the gap that
+    // *closes* each row (the heading separator, or an active la-gap),
+    // since that's what visually separates it from the next row.
+    #laRowGroups() {
+        const rows = []
+        let current = { elements: [] }
+
+        const heading = this.laPanelTarget.querySelector('.alignment-heading-la')
+        const separator = this.laPanelTarget.querySelector('.alignment-heading-separator')
+        if (heading) {
+            current.elements.push(heading)
+            if (separator) current.elements.push(separator)
+            rows.push(current)
+            current = { elements: [] }
+        }
+
+        for (const child of this.laPanelTarget.children) {
+            if (child === heading || child === separator) continue
+            if (child.matches('.alignment-la-gap.is-boundary')) {
+                current.elements.push(child)
+                rows.push(current)
+                current = { elements: [] }
+            } else {
+                // .alignment-la-sentence, or a splittable (non-boundary) gap
+                // -- both belong to the row currently being accumulated.
+                current.elements.push(child)
+            }
+        }
+        rows.push(current)
+        return rows
+    }
+
+    #collapseLaPanel(collapsedCount) {
+        this.#laRowGroups().forEach((row, i) => {
+            const collapsed = i < collapsedCount
+            for (const el of row.elements) el.classList.toggle('is-collapsed-row', collapsed)
+        })
+    }
+
+    #updateCollapseBanner() {
+        if (!this.hasCollapseBannerTarget) return
+
+        const count = this.#lastCollapsedCount
+        if (count === 0) {
+            this.collapseBannerTarget.hidden = true
+            return
+        }
+
+        this.collapseBannerTarget.hidden = false
+        const rowWoord = count === 1 ? 'rij' : 'rijen'
+        this.collapseBannerTarget.textContent = this.columnsTarget.classList.contains('show-collapsed')
+            ? `▾ ${count} voltooide ${rowWoord} verbergen`
+            : `▸ ${count} voltooide ${rowWoord} ingeklapt (klik om te tonen)`
     }
 
     // ── Save ──────────────────────────────────────────────────────────────────

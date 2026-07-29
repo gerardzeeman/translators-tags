@@ -3250,6 +3250,20 @@ a:hover { text-decoration: underline; }
     border: 1px solid var(--color-border);
 }
 .alignment-gap-sample.is-boundary-sample { color: var(--color-accent-2); }
+.alignment-collapse-banner {
+    display: block;
+    width: 100%;
+    text-align: left;
+    font-size: .85rem;
+    font-weight: 600;
+    color: var(--color-ink-muted);
+    background: var(--card-warm);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    padding: .6rem .9rem;
+    cursor: pointer;
+}
+.alignment-collapse-banner:hover { border-color: var(--color-accent-2); color: var(--color-accent-2); }
 .alignment-columns {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -3339,6 +3353,18 @@ a:hover { text-decoration: underline; }
     background: var(--color-accent-2);
     color: var(--bg);
 }
+/* Collapsed rows: hidden by default, force-shown while .show-collapsed is
+   active on .alignment-columns (see alignment_editor_controller.js). Each
+   selector restores the element's own normal display value -- a single
+   `display: revert` isn't reliable enough across these mixed inline/
+   inline-block elements to use instead. */
+.is-collapsed-row { display: none !important; }
+.show-collapsed .alignment-word.is-collapsed-row { display: inline-block !important; }
+.show-collapsed .alignment-boundary.is-collapsed-row { display: inline-block !important; }
+.show-collapsed .alignment-la-sentence.is-collapsed-row { display: inline !important; }
+.show-collapsed .alignment-la-gap.is-collapsed-row { display: inline-block !important; }
+.show-collapsed .alignment-heading-la.is-collapsed-row { display: inline-block !important; }
+.show-collapsed .alignment-heading-separator.is-collapsed-row { display: inline-block !important; }
 .alignment-preview {
     background: var(--card-warm);
     border: 1px solid var(--color-border);
