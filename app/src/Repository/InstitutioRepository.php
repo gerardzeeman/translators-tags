@@ -1104,6 +1104,48 @@ class InstitutioRepository
     }
 
     /**
+     * The nearest segments before/after this one, ordered by `seq` within
+     * the same work, that themselves have an LLM translation -- i.e. are
+     * valid targets for this same editor. A segment without one yet (not
+     * translated) is skipped over rather than linked to, so "volgende"/
+     * "vorige" never leads to a 404.
+     *
+     * @return array{prev: array{id: int, ref: string}|null, next: array{id: int, ref: string}|null}
+     */
+    public function getAdjacentAlignableSegments(int $segmentId): array
+    {
+        $current = $this->connection->fetchAssociative(
+            'SELECT work_id, seq FROM segment WHERE id = :id',
+            ['id' => $segmentId]
+        );
+        if ($current === false) {
+            return ['prev' => null, 'next' => null];
+        }
+
+        $prev = $this->connection->fetchAssociative(
+            "SELECT s.id, s.ref
+             FROM segment s
+             JOIN translation tr ON tr.segment_id = s.id AND tr.layer = 'llm'
+             WHERE s.work_id = :work_id AND s.seq < :seq
+             ORDER BY s.seq DESC LIMIT 1",
+            ['work_id' => $current['work_id'], 'seq' => $current['seq']]
+        );
+        $next = $this->connection->fetchAssociative(
+            "SELECT s.id, s.ref
+             FROM segment s
+             JOIN translation tr ON tr.segment_id = s.id AND tr.layer = 'llm'
+             WHERE s.work_id = :work_id AND s.seq > :seq
+             ORDER BY s.seq ASC LIMIT 1",
+            ['work_id' => $current['work_id'], 'seq' => $current['seq']]
+        );
+
+        return [
+            'prev' => $prev !== false ? ['id' => (int) $prev['id'], 'ref' => $prev['ref']] : null,
+            'next' => $next !== false ? ['id' => (int) $next['id'], 'ref' => $next['ref']] : null,
+        ];
+    }
+
+    /**
      * Replaces this segment's entire sentence-level alignment with the
      * given rows, as produced by the drag-based alignment editor. Unlike
      * saveSegmentRowTranslations (fixed row count, wording-only edits), row

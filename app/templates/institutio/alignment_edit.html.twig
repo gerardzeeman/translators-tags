@@ -12,6 +12,18 @@
 
     <div class="translate-topbar">
         <a href="{{ path('app_institutio_translate', {id: segment.id}) }}" class="btn-cancel">‹ Terug naar {{ segment.ref }}</a>
+        <div class="alignment-segment-nav">
+            {% if prev_segment %}
+            <a href="{{ path('app_institutio_alignment', {id: prev_segment.id}) }}" class="nav-btn" title="Vorig segment ({{ prev_segment.ref }})">‹</a>
+            {% else %}
+            <span class="nav-btn nav-btn-disabled" title="Geen vorig segment">‹</span>
+            {% endif %}
+            {% if next_segment %}
+            <a href="{{ path('app_institutio_alignment', {id: next_segment.id}) }}" class="nav-btn" title="Volgend segment ({{ next_segment.ref }})">›</a>
+            {% else %}
+            <span class="nav-btn nav-btn-disabled" title="Geen volgend segment">›</span>
+            {% endif %}
+        </div>
         <div class="alignment-status" data-alignment-editor-target="status"></div>
         <button type="button" class="btn-primary btn-save" data-action="click->alignment-editor#save">Opslaan</button>
     </div>
