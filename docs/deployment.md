@@ -249,10 +249,20 @@ REMEMBER_ME_SECRET=<genereer: openssl rand -hex 32>
 # FrankenPHP — intern; de reverse proxy doet TLS
 SERVER_NAME=:80
 
+# Google Analytics 4 measurement ID (optioneel; leeg = uitgeschakeld)
+# GOOGLE_ANALYTICS_ID=G-XXXXXXXXXX
+
 # Backup-schema (optioneel, standaard @daily)
 # BACKUP_SCHEDULE=@daily
 # BACKUP_KEEP_DAYS=7
 ```
+
+> **Let op:** dit `.env.local` bestand (repo-root) is voor **docker-compose**
+> variabele-substitutie — alleen variabelen die ook expliciet in het
+> `environment:`-blok van de `app`-service in `docker-compose.yml` staan
+> (zoals `GOOGLE_ANALYTICS_ID` hierboven) komen daadwerkelijk in de
+> container terecht. Los hiervan bestaat er óók een `app/.env` met
+> Symfony-eigen standaardwaarden — die twee mag je niet door elkaar halen.
 
 > **Let op:** `SERVER_NAME=:80` zorgt dat FrankenPHP op intern poort 80 luistert
 > zonder zelf TLS te proberen. De centrale Caddy buiten de container beheert TLS.
