@@ -3266,20 +3266,29 @@ a:hover { text-decoration: underline; }
     margin-bottom: 1.25rem;
 }
 .institutio-proposal-date-divider {
+    position: relative;
     display: flex;
     justify-content: center;
-    margin: .2rem 0;
+    margin: .4rem 0;
+}
+.institutio-proposal-date-divider::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: var(--divider);
 }
 .institutio-proposal-date-divider span {
+    position: relative;
     font-size: .7rem;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: .05em;
     color: var(--color-ink-muted);
-    background: var(--card-warm);
-    border: 1px solid var(--color-border);
-    border-radius: 999px;
-    padding: .2rem .7rem;
+    background: var(--bg);
+    padding: 0 .7rem;
 }
 .institutio-proposal-step {
     display: flex;
