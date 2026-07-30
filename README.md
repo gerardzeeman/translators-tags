@@ -74,6 +74,8 @@ DATABASE_URL="postgresql://app:!ChangeMe!@database:5432/app?serverVersion=16&cha
 
 Voor lokaal gebruik zijn de standaardwaarden in `app/.env` voldoende als startpunt.
 
+Optioneel: zet `GOOGLE_ANALYTICS_ID=G-XXXXXXXXXX` in `app/.env.local` om Google Analytics te activeren (leeg = uitgeschakeld, de standaard).
+
 ### 3. PHP-dependencies installeren
 
 ```powershell

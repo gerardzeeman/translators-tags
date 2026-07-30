@@ -15,6 +15,15 @@
     {# Thema vóór render toepassen om FOUC bij dark mode te voorkomen #}
     <script nonce="{{ csp_nonce() }}">var t=localStorage.getItem('theme');if(t)document.documentElement.dataset.theme=t;</script>
     {% block stylesheets %}{% endblock %}
+    {% if google_analytics_id %}
+    <script async nonce="{{ csp_nonce() }}" src="https://www.googletagmanager.com/gtag/js?id={{ google_analytics_id }}"></script>
+    <script nonce="{{ csp_nonce() }}">
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', '{{ google_analytics_id }}');
+    </script>
+    {% endif %}
 </head>
 <body>
 
