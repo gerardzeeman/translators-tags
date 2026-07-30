@@ -65,6 +65,7 @@ security:
         - { path: ^/blog,                  roles: PUBLIC_ACCESS }
         - { path: ^/book,                  roles: ROLE_VIEWER }
         - { path: ^/institutio,            roles: ROLE_VIEWER }
+        - { path: ^/$,                     roles: PUBLIC_ACCESS }
         - { path: ^/,                      roles: ROLE_USER }
 
 when@test:
