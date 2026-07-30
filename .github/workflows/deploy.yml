@@ -14,6 +14,15 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # Voorkomt dat twee snel na elkaar getriggerde runs gelijktijdig dezelfde
+    # `docker compose up -d` op de productieserver uitvoeren (zie incident
+    # 2026-07-30: runs 30530729294 en 30530753329 botsten op een
+    # container-naamconflict). cancel-in-progress: false, want een lopende
+    # deploy halverwege afbreken kan de container in kapotte staat achterlaten;
+    # een tweede trigger moet netjes wachten tot de eerste klaar is.
+    concurrency:
+      group: production-deploy
+      cancel-in-progress: false
     steps:
       - name: Deploy via SSH
         uses: appleboy/ssh-action@55dabf81b49d4120609345970c91507e2d734799  # v1.0.0
