@@ -2,6 +2,8 @@
 
 namespace App\Controller;
 
+use App\Entity\User;
+use App\Repository\InstitutioProposalRepository;
 use App\Repository\InstitutioRepository;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
@@ -14,11 +16,19 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
  * ROLE_EDIT_INSTITUTIO_TRNL (same pattern as StrongsTranslateController for
  * the Bible corpus). Two edit modes, chosen by whether the segment already
  * has a sentence-level alignment (see InstitutioRepository::getSegmentForEdit):
- *   - aligned:     one textarea per aligned row, updating only that row's
- *                  Dutch text (saveSegmentRowTranslations) -- la_start isn't
- *                  touched, so the alignment survives the edit.
- *   - not aligned: a single whole-block textarea (saveSegmentTranslation),
- *                  which is the only option before any alignment exists.
+ *   - aligned:     one textarea per aligned row.
+ *   - not aligned: a single whole-block textarea.
+ *
+ * Submitting no longer writes the translation directly -- it creates one
+ * translation_proposal per changed row (or one for the whole segment, in
+ * the not-aligned case), each carrying the submitted reason. The text is
+ * only actually applied once a reviewer approves it (see
+ * InstitutioProposalController::approve(), which reuses
+ * InstitutioRepository::saveSegmentTranslation()/saveSegmentRowTranslations()
+ * unchanged for that). A row (or the whole segment) that already has an
+ * active proposal renders read-only here -- see
+ * InstitutioProposalRepository::getActiveProposalsForSegment() -- since a
+ * second concurrent proposal for the same target isn't allowed.
  */
 #[Route('/institutie/bewerk')]
 #[IsGranted('ROLE_EDIT_INSTITUTIO_TRNL')]
@@ -26,6 +36,7 @@ class InstitutioTranslateController extends AbstractController
 {
     public function __construct(
         private readonly InstitutioRepository $institutioRepository,
+        private readonly InstitutioProposalRepository $proposalRepository,
     ) {}
 
     #[Route('/{id<\d+>}', name: 'app_institutio_translate', methods: ['GET'])]
@@ -37,8 +48,9 @@ class InstitutioTranslateController extends AbstractController
         }
 
         return $this->render('institutio/translate.html.twig', [
-            'segment' => $segment,
-            'saved'   => false,
+            'segment'          => $segment,
+            'active_proposals' => $this->proposalRepository->getActiveProposalsForSegment($id),
+            'saved'            => false,
         ]);
     }
 
@@ -55,36 +67,55 @@ class InstitutioTranslateController extends AbstractController
             return $this->redirectToRoute('app_institutio_translate', ['id' => $id]);
         }
 
+        $reason = trim((string) $request->request->get('reden', ''));
+        if ($reason === '') {
+            $this->addFlash('error', 'Geef een reden voor de aanpassing op.');
+            return $this->redirectToRoute('app_institutio_translate', ['id' => $id]);
+        }
+
+        $activeProposals = $this->proposalRepository->getActiveProposalsForSegment($id);
+
+        /** @var User $user */
+        $user = $this->getUser();
+        $submittedCount = 0;
+
         if ($segment['rows']) {
-            // Already sentence-aligned: edit each row's Dutch text in place
-            // so the existing alignment (keyed off la_start, untouched here)
-            // survives the edit -- see saveSegmentRowTranslations.
-            $alignmentDropped = $this->institutioRepository->saveSegmentRowTranslations(
-                $id,
-                $request->request->all('row_nl')
+            $submittedRows = $request->request->all('row_nl');
+            foreach ($segment['rows'] as $row) {
+                $rowId = $row['id'];
+                if (!array_key_exists($rowId, $submittedRows) || isset($activeProposals['rows'][$rowId])) {
+                    continue; // not submitted, or already has an active proposal -- skip either way
+                }
+                $newText = (string) $submittedRows[$rowId];
+                if ($newText === $row['nl_text']) {
+                    continue; // unchanged
+                }
+                $this->proposalRepository->createTranslationProposal(
+                    $id, $rowId, $row['nl_text'], $newText, $reason, $user->getId()
+                );
+                $submittedCount++;
+            }
+        } elseif ($activeProposals['whole'] === null) {
+            $newText = (string) $request->request->get('text_nl', '');
+            if ($newText !== (string) $segment['text_nl']) {
+                $this->proposalRepository->createTranslationProposal(
+                    $id, null, (string) $segment['text_nl'], $newText, $reason, $user->getId()
+                );
+                $submittedCount++;
+            }
+        }
+
+        if ($submittedCount > 0) {
+            $this->addFlash(
+                'success',
+                $submittedCount === 1
+                    ? '1 vertaalvoorstel ingediend. Wacht op beoordeling door een andere vertaler.'
+                    : "{$submittedCount} vertaalvoorstellen ingediend. Wacht op beoordeling door een andere vertaler."
             );
         } else {
-            $alignmentDropped = $this->institutioRepository->saveSegmentTranslation(
-                $id,
-                (string) $request->request->get('text_nl', '')
-            );
+            $this->addFlash('error', 'Geen wijzigingen gevonden om als voorstel in te dienen.');
         }
 
-        if ($alignmentDropped) {
-            $this->addFlash(
-                'warning',
-                'De woord-uitlijning (fase 4) voor dit segment is verwijderd omdat de vertaling '
-                . 'is aangepast en de oude uitlijning niet meer bij de nieuwe tekst past. '
-                . 'Voer align_segments.py opnieuw uit voor dit segment om de uitlijning te herstellen.'
-            );
-        }
-
-        // Re-fetch after save so the editor shows the stored value
-        $segment = $this->institutioRepository->getSegmentForEdit($id);
-
-        return $this->render('institutio/translate.html.twig', [
-            'segment' => $segment,
-            'saved'   => true,
-        ]);
+        return $this->redirectToRoute('app_institutio_translate', ['id' => $id]);
     }
 }

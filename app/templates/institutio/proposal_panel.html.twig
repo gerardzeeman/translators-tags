@@ -1,0 +1,100 @@
+<turbo-frame id="institutio-proposal-panel">
+<div class="institutio-proposal">
+
+    {% for label, messages in app.flashes %}
+        {% for message in messages %}
+        <div class="alert alert-{{ label }}">{{ message }}</div>
+        {% endfor %}
+    {% endfor %}
+
+    <div class="institutio-proposal-header">
+        <div class="institutio-proposal-meta">
+            <strong>{{ proposal.created_by.display_name }}</strong> diende dit voorstel in op
+            {{ proposal.created_at|date('d-m-Y H:i') }}
+        </div>
+        <div class="institutio-proposal-reason">
+            <span class="institutio-proposal-field-label">Reden</span>
+            <p>{{ proposal.reason }}</p>
+        </div>
+        <div class="institutio-proposal-diff">
+            <span class="institutio-proposal-field-label">Wijziging</span>
+            <p>
+                {%- for part in proposal.word_diff -%}
+                    {%- if part.op == 'delete' -%}
+                    <del class="institutio-proposal-diff-delete">{{ part.text }}</del>
+                    {%- elseif part.op == 'insert' -%}
+                    <ins class="institutio-proposal-diff-insert">{{ part.text }}</ins>
+                    {%- else -%}
+                    <span>{{ part.text }}</span>
+                    {%- endif %}
+                    {{- ' ' -}}
+                {%- endfor -%}
+            </p>
+        </div>
+    </div>
+
+    <div class="institutio-proposal-status institutio-proposal-status--{{ proposal.status }}">
+        {%- if proposal.status == 'approved' -%}
+            ✓ Definitief goedgekeurd en toegepast
+        {%- elseif proposal.status == 'rejected' -%}
+            ✗ Afgekeurd — nog niet definitief, reactie mogelijk
+        {%- else -%}
+            ⏳ In behandeling
+        {%- endif -%}
+    </div>
+
+    <div class="institutio-proposal-timeline">
+        <div class="institutio-proposal-step institutio-proposal-step--created">
+            <span class="institutio-proposal-step-icon">✎</span>
+            <div class="institutio-proposal-step-body">
+                <div class="institutio-proposal-step-meta">
+                    <strong>{{ proposal.created_by.display_name }}</strong> diende het voorstel in
+                    <time>{{ proposal.created_at|date('d-m-Y H:i') }}</time>
+                </div>
+            </div>
+        </div>
+        {% for event in proposal.events %}
+        <div class="institutio-proposal-step institutio-proposal-step--{{ event.kind }}">
+            <span class="institutio-proposal-step-icon">
+                {%- if event.kind == 'approve' -%}✓{%- elseif event.kind == 'reject' -%}✗{%- else -%}💬{%- endif -%}
+            </span>
+            <div class="institutio-proposal-step-body">
+                <div class="institutio-proposal-step-meta">
+                    <strong>{{ event.user.display_name }}</strong>
+                    {%- if event.kind == 'approve' %} keurde goed{% elseif event.kind == 'reject' %} keurde af{% else %} reageerde{% endif %}
+                    <time>{{ event.created_at|date('d-m-Y H:i') }}</time>
+                </div>
+                {% if event.body %}
+                <div class="institutio-proposal-step-text">{{ event.body }}</div>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    {% if can_comment or can_review %}
+    <div class="institutio-proposal-actions">
+        {% if can_comment %}
+        <form method="post" action="{{ path('app_institutio_proposal_comment', {proposalId: proposal.id}) }}" class="institutio-proposal-form">
+            <textarea name="body" class="institutio-proposal-textarea" rows="2" placeholder="Reageer op dit voorstel…" required></textarea>
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token('institutio_proposal') }}">
+            <button type="submit" class="btn-secondary">Reageren</button>
+        </form>
+        {% endif %}
+
+        {% if can_review %}
+        <form method="post" action="{{ path('app_institutio_proposal_reject', {proposalId: proposal.id}) }}" class="institutio-proposal-form">
+            <textarea name="body" class="institutio-proposal-textarea" rows="2" placeholder="Reden van afkeuring (verplicht)…" required></textarea>
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token('institutio_proposal') }}">
+            <button type="submit" class="btn-danger">✗ Afkeuren</button>
+        </form>
+        <form method="post" action="{{ path('app_institutio_proposal_approve', {proposalId: proposal.id}) }}" class="institutio-proposal-form institutio-proposal-form--inline">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token('institutio_proposal') }}">
+            <button type="submit" class="btn-primary">✓ Goedkeuren</button>
+        </form>
+        {% endif %}
+    </div>
+    {% endif %}
+
+</div>
+</turbo-frame>
