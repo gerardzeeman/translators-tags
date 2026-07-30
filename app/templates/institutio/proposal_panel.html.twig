@@ -78,7 +78,7 @@
         <form method="post" action="{{ path('app_institutio_proposal_comment', {proposalId: proposal.id}) }}" class="institutio-proposal-form">
             <textarea name="body" class="institutio-proposal-textarea" rows="2" placeholder="Reageer op dit voorstel…" required></textarea>
             <input type="hidden" name="_csrf_token" value="{{ csrf_token('institutio_proposal') }}">
-            <button type="submit" class="btn-secondary">Reageren</button>
+            <button type="submit" class="btn-secondary btn-small">Reageren</button>
         </form>
         {% endif %}
 
@@ -86,11 +86,11 @@
         <form method="post" action="{{ path('app_institutio_proposal_reject', {proposalId: proposal.id}) }}" class="institutio-proposal-form">
             <textarea name="body" class="institutio-proposal-textarea" rows="2" placeholder="Reden van afkeuring (verplicht)…" required></textarea>
             <input type="hidden" name="_csrf_token" value="{{ csrf_token('institutio_proposal') }}">
-            <button type="submit" class="btn-danger">✗ Afkeuren</button>
+            <button type="submit" class="btn-danger btn-small">✗ Afkeuren</button>
         </form>
         <form method="post" action="{{ path('app_institutio_proposal_approve', {proposalId: proposal.id}) }}" class="institutio-proposal-form institutio-proposal-form--inline">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token('institutio_proposal') }}">
-            <button type="submit" class="btn-primary">✓ Goedkeuren</button>
+            <button type="submit" class="btn-primary btn-small">✓ Goedkeuren</button>
         </form>
         {% endif %}
     </div>

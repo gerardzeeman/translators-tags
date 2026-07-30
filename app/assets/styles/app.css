@@ -3664,6 +3664,7 @@ a:hover { text-decoration: underline; }
     cursor: pointer;
 }
 .btn-danger:hover { filter: brightness(1.1); }
+.btn-small { padding: .3rem .75rem; font-size: .82rem; }
 .admin-page-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
 
 /* ── Blog: overzicht ─────────────────────────────────────────────────────── */

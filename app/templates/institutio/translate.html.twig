@@ -60,11 +60,11 @@
                 <input type="hidden" name="_csrf_token" value="{{ csrf_token('institutio_translate') }}">
 
                 <div class="translate-row-actions">
-                    <button type="button" class="btn-secondary" data-translate-row-target="editButton"
+                    <button type="button" class="btn-secondary btn-small" data-translate-row-target="editButton"
                             data-action="click->translate-row#edit">Bewerken</button>
-                    <button type="button" class="btn-secondary" data-translate-row-target="cancelButton"
+                    <button type="button" class="btn-secondary btn-small" data-translate-row-target="cancelButton"
                             data-action="click->translate-row#cancelEdit" hidden>Annuleren</button>
-                    <button type="button" class="btn-primary" data-translate-row-target="proposeButton"
+                    <button type="button" class="btn-primary btn-small" data-translate-row-target="proposeButton"
                             data-action="click->translate-row#openPopup" hidden>Vertaalvoorstel indienen</button>
                 </div>
 
@@ -75,8 +75,8 @@
                                   placeholder="Waarom pas je deze zin aan?"
                                   data-translate-row-target="reasonField"></textarea>
                         <div class="translate-row-popup-actions">
-                            <button type="button" class="btn-secondary" data-action="click->translate-row#closePopup">Annuleren</button>
-                            <button type="submit" class="btn-primary">Voorstel indienen</button>
+                            <button type="button" class="btn-secondary btn-small" data-action="click->translate-row#closePopup">Annuleren</button>
+                            <button type="submit" class="btn-primary btn-small">Voorstel indienen</button>
                         </div>
                     </div>
                 </div>
@@ -148,11 +148,11 @@
                 <input type="hidden" name="_csrf_token" value="{{ csrf_token('institutio_translate') }}">
 
                 <div class="translate-panel-footer translate-row-actions">
-                    <button type="button" class="btn-secondary" data-translate-row-target="editButton"
+                    <button type="button" class="btn-secondary btn-small" data-translate-row-target="editButton"
                             data-action="click->translate-row#edit">Bewerken</button>
-                    <button type="button" class="btn-secondary" data-translate-row-target="cancelButton"
+                    <button type="button" class="btn-secondary btn-small" data-translate-row-target="cancelButton"
                             data-action="click->translate-row#cancelEdit" hidden>Annuleren</button>
-                    <button type="button" class="btn-primary" data-translate-row-target="proposeButton"
+                    <button type="button" class="btn-primary btn-small" data-translate-row-target="proposeButton"
                             data-action="click->translate-row#openPopup" hidden>Vertaalvoorstel indienen</button>
                 </div>
 
@@ -163,8 +163,8 @@
                                   placeholder="Waarom pas je deze vertaling aan?"
                                   data-translate-row-target="reasonField"></textarea>
                         <div class="translate-row-popup-actions">
-                            <button type="button" class="btn-secondary" data-action="click->translate-row#closePopup">Annuleren</button>
-                            <button type="submit" class="btn-primary">Voorstel indienen</button>
+                            <button type="button" class="btn-secondary btn-small" data-action="click->translate-row#closePopup">Annuleren</button>
+                            <button type="submit" class="btn-primary btn-small">Voorstel indienen</button>
                         </div>
                     </div>
                 </div>
