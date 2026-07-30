@@ -143,6 +143,15 @@
             margin: 1.5rem 0;
         }
     </style>
+    {% if google_analytics_id %}
+    <script async nonce="{{ csp_nonce() }}" src="https://www.googletagmanager.com/gtag/js?id={{ google_analytics_id }}"></script>
+    <script nonce="{{ csp_nonce() }}">
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', '{{ google_analytics_id }}');
+    </script>
+    {% endif %}
 </head>
 <body>
 
