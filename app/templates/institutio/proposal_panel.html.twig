@@ -44,31 +44,25 @@
     </div>
 
     <div class="institutio-proposal-timeline">
-        <div class="institutio-proposal-step institutio-proposal-step--created{{ proposal.created_by.id == current_user_id ? ' institutio-proposal-step--mine' : '' }}">
-            <span class="institutio-proposal-step-icon">✎</span>
-            <div class="institutio-proposal-step-body">
-                <div class="institutio-proposal-step-meta">
-                    <strong>{{ proposal.created_by.display_name }}</strong> diende het voorstel in
-                    <time>{{ proposal.created_at|date('d-m-Y H:i') }}</time>
+        {% for step in steps %}
+            {% if step.show_date %}
+            <div class="institutio-proposal-date-divider"><span>{{ step.created_at|date('d-m-Y') }}</span></div>
+            {% endif %}
+            <div class="institutio-proposal-step institutio-proposal-step--{{ step.kind }}{{ step.user.id == current_user_id ? ' institutio-proposal-step--mine' : '' }}">
+                <span class="institutio-proposal-step-icon">
+                    {%- if step.kind == 'created' -%}✎{%- elseif step.kind == 'approve' -%}✓{%- elseif step.kind == 'reject' -%}✗{%- else -%}💬{%- endif -%}
+                </span>
+                <div class="institutio-proposal-step-body">
+                    <div class="institutio-proposal-step-meta">
+                        <strong>{{ step.user.display_name }}</strong>
+                        {%- if step.kind == 'created' %} diende het voorstel in{% elseif step.kind == 'approve' %} keurde goed{% elseif step.kind == 'reject' %} keurde af{% else %} reageerde{% endif %}
+                        <time>{{ step.created_at|date('H:i') }}</time>
+                    </div>
+                    {% if step.body %}
+                    <div class="institutio-proposal-step-text">{{ step.body }}</div>
+                    {% endif %}
                 </div>
             </div>
-        </div>
-        {% for event in proposal.events %}
-        <div class="institutio-proposal-step institutio-proposal-step--{{ event.kind }}{{ event.user.id == current_user_id ? ' institutio-proposal-step--mine' : '' }}">
-            <span class="institutio-proposal-step-icon">
-                {%- if event.kind == 'approve' -%}✓{%- elseif event.kind == 'reject' -%}✗{%- else -%}💬{%- endif -%}
-            </span>
-            <div class="institutio-proposal-step-body">
-                <div class="institutio-proposal-step-meta">
-                    <strong>{{ event.user.display_name }}</strong>
-                    {%- if event.kind == 'approve' %} keurde goed{% elseif event.kind == 'reject' %} keurde af{% else %} reageerde{% endif %}
-                    <time>{{ event.created_at|date('d-m-Y H:i') }}</time>
-                </div>
-                {% if event.body %}
-                <div class="institutio-proposal-step-text">{{ event.body }}</div>
-                {% endif %}
-            </div>
-        </div>
         {% endfor %}
     </div>
 

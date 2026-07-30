@@ -48,12 +48,54 @@ class InstitutioProposalController extends AbstractController
 
         return $this->render('institutio/proposal_panel.html.twig', [
             'proposal'        => $proposal,
+            'steps'           => $this->buildTimelineSteps($proposal),
             'current_user_id' => $user->getId(),
             'can_comment'     => $proposal['status'] !== 'approved',
             'can_review'      => $proposal['status'] !== 'approved'
                 && $this->isGranted('ROLE_REVIEW_INSTITUTIO_TRNL')
                 && $proposal['created_by']['id'] !== $user->getId(),
         ]);
+    }
+
+    /**
+     * Merges the proposal's creation into the same ordered list as its
+     * events (a 'created' pseudo-step first, matching the row shape of a
+     * real event so the template can render both with one loop), and marks
+     * each step with `show_date` -- true only for the very first step and
+     * for any step whose calendar date differs from the one right before
+     * it, so the template can show a date divider there and just the time
+     * (not the full date) on every step in between.
+     *
+     * @param array{created_by: array{id: int, display_name: string}, created_at: \DateTimeImmutable,
+     *   events: array<int, array{kind: string, body: ?string, created_at: \DateTimeImmutable, user: array{id: int, display_name: string}}>} $proposal
+     * @return array<int, array{kind: string, user: array{id: int, display_name: string}, created_at: \DateTimeImmutable, body: ?string, show_date: bool}>
+     */
+    private function buildTimelineSteps(array $proposal): array
+    {
+        $steps = [[
+            'kind'       => 'created',
+            'user'       => $proposal['created_by'],
+            'created_at' => $proposal['created_at'],
+            'body'       => null,
+        ]];
+        foreach ($proposal['events'] as $event) {
+            $steps[] = [
+                'kind'       => $event['kind'],
+                'user'       => $event['user'],
+                'created_at' => $event['created_at'],
+                'body'       => $event['body'],
+            ];
+        }
+
+        $previousDate = null;
+        foreach ($steps as &$step) {
+            $date = $step['created_at']->format('Y-m-d');
+            $step['show_date'] = $date !== $previousDate;
+            $previousDate = $date;
+        }
+        unset($step);
+
+        return $steps;
     }
 
     #[Route('/{proposalId<\d+>}/reageren', name: 'app_institutio_proposal_comment', methods: ['POST'])]
