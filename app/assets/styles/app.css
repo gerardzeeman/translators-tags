@@ -1946,7 +1946,6 @@ a:hover { text-decoration: underline; }
     font-size: .95rem;
 }
 
-.translate-form { display: contents; }
 .translate-panels {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -2043,13 +2042,7 @@ a:hover { text-decoration: underline; }
     display: flex;
     justify-content: flex-end;
 }
-.translate-panel-footer--column {
-    flex-direction: column;
-    align-items: stretch;
-    gap: .75rem;
-}
 .btn-save { min-width: 110px; }
-.translate-reden-textarea, #reden.translate-field-textarea { min-height: 4rem; }
 .translate-row--proposed {
     border-color: var(--color-accent-2);
     background: var(--card-warm);
@@ -2067,6 +2060,43 @@ a:hover { text-decoration: underline; }
 }
 .translate-proposal-btn:hover { text-decoration: underline; }
 .translate-proposal-btn.is-rejected { color: #922; }
+
+/* ── Institutio: per-rij bewerk/voorstel-flow (translate_row_controller.js) ─── */
+.translate-row-form {
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+}
+.translate-row-form--grow { flex: 1; }
+.translate-row-actions { display: flex; gap: .5rem; }
+.translate-row-popup {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, .35);
+    z-index: 300;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+}
+.translate-row-popup.is-open { display: flex; }
+.translate-row-popup-content {
+    background: var(--bg);
+    border-radius: 8px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, .25);
+    padding: 1.25rem;
+    width: 100%;
+    max-width: 420px;
+    display: flex;
+    flex-direction: column;
+    gap: .6rem;
+}
+.translate-row-popup-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: .6rem;
+}
+.translate-row-popup-content .translate-field-textarea { min-height: 4rem; }
 .translate-heading-bar {
     display: flex;
     align-items: baseline;
