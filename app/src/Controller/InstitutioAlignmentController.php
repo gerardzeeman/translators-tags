@@ -18,7 +18,7 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
  * purely on align_sentences.py's LLM grouping. Gated by the same role as
  * the rest of the Institutio editing surface.
  */
-#[Route('/institutio/bewerk')]
+#[Route('/institutie/bewerk')]
 #[IsGranted('ROLE_EDIT_INSTITUTIO_TRNL')]
 class InstitutioAlignmentController extends AbstractController
 {

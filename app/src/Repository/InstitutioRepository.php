@@ -81,7 +81,7 @@ class InstitutioRepository
     /**
      * Full table of contents: front matter (if present) plus every book's
      * chapters with their (Latin, and Dutch once translated) titles, in
-     * reading order. Powers the /institutio home page.
+     * reading order. Powers the /institutie home page.
      * @return array{
      *     front_matter: ?array{heading: ?string, heading_nl: ?string},
      *     books: array<int, array<int, array{chapter: int, heading: ?string, heading_nl: ?string}>>

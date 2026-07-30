@@ -101,7 +101,7 @@ class InstitutioEmbedRenderer implements BlogEmbedRendererInterface
     /**
      * Splits a segment's Latin text into {la_text, nl_text} rows using its
      * sentence_alignment boundaries (la_start offsets into the full text) --
-     * the same rows shown sentence-by-sentence on /institutio. Falls back to
+     * the same rows shown sentence-by-sentence on /institutie. Falls back to
      * one whole-section row when no alignment exists yet (not translated).
      *
      * @return array<int, array{la_text: string, nl_text: string}>

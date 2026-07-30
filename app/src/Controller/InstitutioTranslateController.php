@@ -20,7 +20,7 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
  *   - not aligned: a single whole-block textarea (saveSegmentTranslation),
  *                  which is the only option before any alignment exists.
  */
-#[Route('/institutio/bewerk')]
+#[Route('/institutie/bewerk')]
 #[IsGranted('ROLE_EDIT_INSTITUTIO_TRNL')]
 class InstitutioTranslateController extends AbstractController
 {

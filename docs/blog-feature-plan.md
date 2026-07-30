@@ -234,7 +234,7 @@ bouwstenen:
   **Zinsbereik** (`zin_van`/`zin_tot`): hergebruikt de bestaande
   `sentence_alignment`-rijen en de al aanwezige `resolveAlignedRows()`-logica
   in `InstitutioRepository` (nu gebruikt voor de zin-voor-zin-weergave op
-  `/institutio` en de vertaal-editor) — die geeft per zin al een
+  `/institutie` en de vertaal-editor) — die geeft per zin al een
   `{la_text, nl_text}`-paar terug op basis van `la_start`-tekenposities in
   `segment.text_la`. `zin_van`/`zin_tot` selecteert simpelweg een deelbereik
   van die al-berekende rijen; er is dus geen nieuwe zinsherkenning nodig.

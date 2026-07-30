@@ -2,7 +2,7 @@ import { Controller } from '@hotwired/stimulus'
 
 /**
  * Beheert het Bijbeltekst-zijpaneel (desktop) en bottom sheet (mobiel) op
- * /institutio. Geplaatst op .page-institutio. Luistert via event-delegatie
+ * /institutie. Geplaatst op .page-institutio. Luistert via event-delegatie
  * naar klikken op alle elementen met data-turbo-frame="institutio-verse-panel".
  * Turbo zorgt voor het laden van de frame-inhoud; deze controller toont/
  * verbergt het paneel. Zelfde patroon als strongs_panel_controller.js.
