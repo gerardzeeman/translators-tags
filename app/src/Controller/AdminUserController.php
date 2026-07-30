@@ -17,12 +17,14 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 class AdminUserController extends AbstractController
 {
     private const ASSIGNABLE_ROLES = [
-        'ROLE_VIEWER'          => 'Viewer',
-        'ROLE_VIEWER_HSV'      => 'Viewer HSV',
-        'ROLE_LINKER'          => 'Linker',
-        'ROLE_EDIT_STRONG_TRNL' => 'Strong\'s vertaling bewerken',
-        'ROLE_BLOGGER'         => 'Blogger',
-        'ROLE_ADMIN'           => 'Admin',
+        'ROLE_VIEWER'                => 'Viewer',
+        'ROLE_VIEWER_HSV'            => 'Viewer HSV',
+        'ROLE_LINKER'                => 'Linker',
+        'ROLE_EDIT_STRONG_TRNL'      => 'Strong\'s vertaling bewerken',
+        'ROLE_EDIT_INSTITUTIO_TRNL'  => 'Institutie-vertaalvoorstellen indienen',
+        'ROLE_REVIEW_INSTITUTIO_TRNL' => 'Institutie-vertaalvoorstellen beoordelen',
+        'ROLE_BLOGGER'               => 'Blogger',
+        'ROLE_ADMIN'                 => 'Admin',
     ];
 
     #[Route('', name: 'admin_users_index')]
