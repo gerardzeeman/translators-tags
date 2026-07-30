@@ -5,7 +5,7 @@
 {% block nav_center %}{% endblock %}
 
 {% block body %}
-<div class="translate-screen">
+<div class="translate-screen" data-controller="proposal-panel">
 
     <div class="translate-topbar">
         <a href="{{ segment.book is not null ? path('app_institutio_chapter', {book: segment.book, chapter: segment.chapter}) : path('app_institutio_front') }}"
@@ -13,9 +13,6 @@
         {% if segment.text_nl %}
         <a href="{{ path('app_institutio_alignment', {id: segment.id}) }}" class="nav-user-btn">Uitlijning aanpassen</a>
         <a href="{{ path('app_institutio_wordlink', {id: segment.id}) }}" class="nav-user-btn">Woordkoppeling</a>
-        {% endif %}
-        {% if saved %}
-        <div class="translate-saved-notice">✓ Opgeslagen</div>
         {% endif %}
     </div>
 
@@ -25,62 +22,117 @@
         {% endfor %}
     {% endfor %}
 
-    <form method="post" action="{{ path('app_institutio_translate_save', {id: segment.id}) }}" class="translate-form">
+    {% if segment.heading %}
+    <div class="translate-heading-bar">
+        <span class="translate-field-label">Hoofdstuktitel</span>
+        <div class="translate-field-readonly">{{ segment.heading }}</div>
+    </div>
+    {% endif %}
 
-        {% if segment.heading %}
-        <div class="translate-heading-bar">
-            <span class="translate-field-label">Hoofdstuktitel</span>
-            <div class="translate-field-readonly">{{ segment.heading }}</div>
-        </div>
-        {% endif %}
+    {% if segment.rows %}
+    {# Already zin-voor-zin uitgelijnd: per rij bewerken houdt de bestaande
+       uitlijning intact (la_start wordt niet aangeraakt). Elke rij is een
+       eigen &lt;form&gt; (forms kunnen niet nesten, en elke rij dient
+       onafhankelijk een eigen voorstel in) -- start readonly, "Bewerken"
+       zet het tekstvak open, "Annuleren" zet 'm terug, "Vertaalvoorstel
+       indienen" opent een popup met de verplichte reden. Een rij met een
+       actief (nog niet goedgekeurd) vertaalvoorstel heeft geen bewerk-
+       knoppen, alleen een link naar dat voorstel -- er kan maar één actief
+       voorstel per rij zijn. #}
+    <div class="translate-rows{{ segment.weijenberg_rows ? ' translate-rows--three' : '' }}">
+        {% for row in segment.rows %}
+        {% set active = active_proposals.rows[row.id] ?? null %}
+        <div class="translate-row{{ segment.weijenberg_rows ? ' translate-row--three' : '' }}{{ active ? ' translate-row--proposed' : '' }}"
+             {{ active ? '' : 'data-controller="translate-row"' }}>
+            <div class="translate-row-la">{{ row.la_text }}</div>
 
-        {% if segment.rows %}
-        {# Already zin-voor-zin uitgelijnd: per rij bewerken houdt de bestaande
-           uitlijning intact (la_start wordt niet aangeraakt). Weijenberg
-           staat er alleen naast als die zelf ook is uitgelijnd (zelfde
-           rij-aantal, want de uitlijnpagina slaat beide lagen altijd
-           gelijktijdig met dezelfde rijgrenzen op). #}
-        <div class="translate-rows{{ segment.weijenberg_rows ? ' translate-rows--three' : '' }}">
-            {% for row in segment.rows %}
-            <div class="translate-row{{ segment.weijenberg_rows ? ' translate-row--three' : '' }}">
-                <div class="translate-row-la">{{ row.la_text }}</div>
+            {% if active %}
+            <textarea class="translate-field-textarea translate-row-textarea" rows="3" disabled>{{ row.nl_text }}</textarea>
+            {% else %}
+            <form method="post" action="{{ path('app_institutio_translate_save', {id: segment.id}) }}" class="translate-row-form">
                 <textarea
                     name="row_nl[{{ row.id }}]"
                     class="translate-field-textarea translate-row-textarea"
                     rows="3"
+                    readonly
+                    data-translate-row-target="textarea"
                 >{{ row.nl_text }}</textarea>
-                {% if segment.weijenberg_rows %}
-                <div class="translate-row-weijenberg">{{ (segment.weijenberg_rows[loop.index0].nl_text)|default('') }}</div>
-                {% endif %}
-            </div>
-            {% endfor %}
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token('institutio_translate') }}">
+
+                <div class="translate-row-actions">
+                    <button type="button" class="btn-secondary btn-small" data-translate-row-target="editButton"
+                            data-action="click->translate-row#edit">Bewerken</button>
+                    <button type="button" class="btn-secondary btn-small is-hidden" data-translate-row-target="cancelButton"
+                            data-action="click->translate-row#cancelEdit">Annuleren</button>
+                    <button type="button" class="btn-primary btn-small is-hidden" data-translate-row-target="proposeButton"
+                            data-action="click->translate-row#openPopup">Vertaalvoorstel indienen</button>
+                </div>
+
+                <div class="translate-row-popup" data-translate-row-target="popup" data-action="click->translate-row#closeOnBackdrop">
+                    <div class="translate-row-popup-content">
+                        <label class="translate-field-label" for="reden-{{ row.id }}">Reden van aanpassing</label>
+                        <textarea id="reden-{{ row.id }}" name="reden" class="translate-field-textarea" rows="3" required
+                                  placeholder="Waarom pas je deze zin aan?"
+                                  data-translate-row-target="reasonField"></textarea>
+                        <div class="translate-row-popup-actions">
+                            <button type="button" class="btn-secondary btn-small" data-action="click->translate-row#closePopup">Annuleren</button>
+                            <button type="submit" class="btn-primary btn-small">Voorstel indienen</button>
+                        </div>
+                    </div>
+                </div>
+            </form>
+            {% endif %}
+
+            {% if segment.weijenberg_rows %}
+            <div class="translate-row-weijenberg">{{ (segment.weijenberg_rows[loop.index0].nl_text)|default('') }}</div>
+            {% endif %}
+
+            {% if active %}
+            <a class="translate-proposal-btn{{ active.status == 'rejected' ? ' is-rejected' : '' }}"
+               href="{{ path('app_institutio_proposal_panel', {proposalId: active.id}) }}"
+               data-turbo-frame="institutio-proposal-panel">
+                📋 Bekijk voorstel{{ active.status == 'rejected' ? ' (afgekeurd — in overleg)' : '' }}
+            </a>
+            {% endif %}
         </div>
-        <div class="translate-panel-footer">
-            <input type="hidden" name="_csrf_token" value="{{ csrf_token('institutio_translate') }}">
-            <button type="submit" class="btn-primary btn-save">Opslaan</button>
+        {% endfor %}
+    </div>
+
+    {% else %}
+    <div class="translate-panels{{ segment.weijenberg_rows ? ' translate-panels--three' : '' }}">
+
+        {# Left: Latin (read-only, for reference) #}
+        <div class="translate-panel">
+            <div class="translate-panel-header">
+                <span class="translate-panel-lang">Latijn</span>
+                <span class="translate-panel-id">{{ segment.ref }}</span>
+            </div>
+            <div class="translate-field-group translate-field-group--grow">
+                <label class="translate-field-label">Tekst</label>
+                <div class="translate-field-readonly translate-field-readonly--pre">{{ segment.text_la }}</div>
+            </div>
         </div>
 
-        {% else %}
-        <div class="translate-panels{{ segment.weijenberg_rows ? ' translate-panels--three' : '' }}">
-
-            {# Left: Latin (read-only, for reference) #}
-            <div class="translate-panel">
-                <div class="translate-panel-header">
-                    <span class="translate-panel-lang">Latijn</span>
-                    <span class="translate-panel-id">{{ segment.ref }}</span>
-                </div>
-                <div class="translate-field-group translate-field-group--grow">
-                    <label class="translate-field-label">Tekst</label>
-                    <div class="translate-field-readonly translate-field-readonly--pre">{{ segment.text_la }}</div>
-                </div>
+        {# Middle: Dutch -- same edit/cancel/propose-popup pattern as an aligned row #}
+        <div class="translate-panel translate-panel--nl"{{ active_proposals.whole ? '' : ' data-controller="translate-row"' }}>
+            <div class="translate-panel-header">
+                <span class="translate-panel-lang">Nederlands</span>
             </div>
 
-            {# Middle: Dutch (editable) #}
-            <div class="translate-panel translate-panel--nl">
-                <div class="translate-panel-header">
-                    <span class="translate-panel-lang">Nederlands</span>
-                </div>
-
+            {% if active_proposals.whole %}
+            <div class="translate-field-group translate-field-group--grow">
+                <label class="translate-field-label" for="text_nl">Vertaling</label>
+                <textarea id="text_nl" class="translate-field-textarea" rows="20" disabled>{{ segment.text_nl ?? '' }}</textarea>
+            </div>
+            <div class="translate-panel-footer">
+                <a class="translate-proposal-btn{{ active_proposals.whole.status == 'rejected' ? ' is-rejected' : '' }}"
+                   href="{{ path('app_institutio_proposal_panel', {proposalId: active_proposals.whole.id}) }}"
+                   data-turbo-frame="institutio-proposal-panel">
+                    📋 Bekijk voorstel{{ active_proposals.whole.status == 'rejected' ? ' (afgekeurd — in overleg)' : '' }}
+                </a>
+            </div>
+            {% else %}
+            <form method="post" action="{{ path('app_institutio_translate_save', {id: segment.id}) }}" class="translate-row-form translate-row-form--grow">
                 <div class="translate-field-group translate-field-group--grow">
                     <label class="translate-field-label" for="text_nl">Vertaling</label>
                     <textarea
@@ -89,32 +141,66 @@
                         class="translate-field-textarea"
                         rows="20"
                         placeholder="Nog niet vertaald."
+                        readonly
+                        data-translate-row-target="textarea"
                     >{{ segment.text_nl ?? '' }}</textarea>
                 </div>
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token('institutio_translate') }}">
 
-                <div class="translate-panel-footer">
-                    <input type="hidden" name="_csrf_token" value="{{ csrf_token('institutio_translate') }}">
-                    <button type="submit" class="btn-primary btn-save">Opslaan</button>
+                <div class="translate-panel-footer translate-row-actions">
+                    <button type="button" class="btn-secondary btn-small" data-translate-row-target="editButton"
+                            data-action="click->translate-row#edit">Bewerken</button>
+                    <button type="button" class="btn-secondary btn-small is-hidden" data-translate-row-target="cancelButton"
+                            data-action="click->translate-row#cancelEdit">Annuleren</button>
+                    <button type="button" class="btn-primary btn-small is-hidden" data-translate-row-target="proposeButton"
+                            data-action="click->translate-row#openPopup">Vertaalvoorstel indienen</button>
                 </div>
-            </div>
 
-            {# Right: Weijenberg (1865), read-only, only if that layer is itself aligned #}
-            {% if segment.weijenberg_rows %}
-            <div class="translate-panel">
-                <div class="translate-panel-header">
-                    <span class="translate-panel-lang">Weijenberg (1865)</span>
+                <div class="translate-row-popup" data-translate-row-target="popup" data-action="click->translate-row#closeOnBackdrop">
+                    <div class="translate-row-popup-content">
+                        <label class="translate-field-label" for="reden">Reden van aanpassing</label>
+                        <textarea id="reden" name="reden" class="translate-field-textarea" rows="3" required
+                                  placeholder="Waarom pas je deze vertaling aan?"
+                                  data-translate-row-target="reasonField"></textarea>
+                        <div class="translate-row-popup-actions">
+                            <button type="button" class="btn-secondary btn-small" data-action="click->translate-row#closePopup">Annuleren</button>
+                            <button type="submit" class="btn-primary btn-small">Voorstel indienen</button>
+                        </div>
+                    </div>
                 </div>
-                <div class="translate-field-group translate-field-group--grow">
-                    {% for row in segment.weijenberg_rows %}
-                    <p class="institutio-sentence-nl">{{ row.nl_text }}</p>
-                    {% endfor %}
-                </div>
-            </div>
+            </form>
             {% endif %}
+        </div>
 
-        </div>{# /.translate-panels #}
+        {# Right: Weijenberg (1865), read-only, only if that layer is itself aligned #}
+        {% if segment.weijenberg_rows %}
+        <div class="translate-panel">
+            <div class="translate-panel-header">
+                <span class="translate-panel-lang">Weijenberg (1865)</span>
+            </div>
+            <div class="translate-field-group translate-field-group--grow">
+                {% for row in segment.weijenberg_rows %}
+                <p class="institutio-sentence-nl">{{ row.nl_text }}</p>
+                {% endfor %}
+            </div>
+        </div>
         {% endif %}
-    </form>
+
+    </div>{# /.translate-panels #}
+    {% endif %}
+
+    {# Vertaalvoorstel-zijpaneel -- zelfde open/sluit-patroon als het
+       Bijbeltekst-citaatpaneel (institutio-verse-sidebar), los frame-id. #}
+    <aside class="institutio-proposal-sidebar" data-proposal-panel-target="sidebar">
+        <div class="institutio-proposal-sidebar-header">
+            <span class="institutio-proposal-sidebar-title">Vertaalvoorstel</span>
+            <button class="institutio-proposal-sidebar-close" type="button"
+                    data-action="click->proposal-panel#close" aria-label="Sluiten">×</button>
+        </div>
+        <turbo-frame id="institutio-proposal-panel">
+            <p class="institutio-proposal-placeholder">Klik op "Bekijk voorstel" om het proces te tonen.</p>
+        </turbo-frame>
+    </aside>
 
 </div>{# /.translate-screen #}
 {% endblock %}
