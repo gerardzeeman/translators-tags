@@ -3269,6 +3269,12 @@ a:hover { text-decoration: underline; }
     display: flex;
     gap: .6rem;
     align-items: flex-start;
+    max-width: 88%;
+}
+.institutio-proposal-step--mine {
+    align-self: flex-end;
+    flex-direction: row-reverse;
+    text-align: right;
 }
 .institutio-proposal-step-icon {
     flex-shrink: 0;
@@ -3311,6 +3317,9 @@ a:hover { text-decoration: underline; }
 }
 .institutio-proposal-form { display: flex; flex-direction: column; gap: .5rem; }
 .institutio-proposal-form--inline { flex-direction: row; justify-content: flex-end; }
+.institutio-proposal-submit-right { align-self: flex-end; }
+.institutio-proposal-review { display: flex; flex-direction: column; gap: .5rem; }
+.institutio-proposal-review-buttons { display: flex; gap: .5rem; }
 .institutio-proposal-textarea {
     border: 1px solid var(--color-border);
     border-radius: var(--radius);
@@ -3666,6 +3675,17 @@ a:hover { text-decoration: underline; }
     cursor: pointer;
 }
 .btn-danger:hover { filter: brightness(1.1); }
+.btn-success {
+    padding: .55rem 1.25rem;
+    background: var(--color-manual);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius);
+    font-family: inherit;
+    font-size: 1rem;
+    cursor: pointer;
+}
+.btn-success:hover { filter: brightness(1.1); }
 .btn-small { padding: .3rem .75rem; font-size: .82rem; }
 /* .is-hidden alone (display:none) has the same specificity as
    .btn-secondary's explicit display:inline-flex, and .btn-secondary is

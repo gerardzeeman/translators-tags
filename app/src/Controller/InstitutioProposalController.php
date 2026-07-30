@@ -47,9 +47,10 @@ class InstitutioProposalController extends AbstractController
         $user = $this->getUser();
 
         return $this->render('institutio/proposal_panel.html.twig', [
-            'proposal'    => $proposal,
-            'can_comment' => $proposal['status'] !== 'approved',
-            'can_review'  => $proposal['status'] !== 'approved'
+            'proposal'        => $proposal,
+            'current_user_id' => $user->getId(),
+            'can_comment'     => $proposal['status'] !== 'approved',
+            'can_review'      => $proposal['status'] !== 'approved'
                 && $this->isGranted('ROLE_REVIEW_INSTITUTIO_TRNL')
                 && $proposal['created_by']['id'] !== $user->getId(),
         ]);
