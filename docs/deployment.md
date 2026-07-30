@@ -193,15 +193,15 @@ dat iemand met shell-toegang 'm bewust draait — als het image er nooit staat,
 kán dat ook niet.
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.prod.yml build --pull --no-cache app ingest
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+docker compose --env-file .env.local -f docker-compose.yml -f docker-compose.prod.yml build --pull --no-cache app ingest
+docker compose --env-file .env.local -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
 
 Controleer:
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
-docker compose -f docker-compose.yml -f docker-compose.prod.yml logs app --tail=50
+docker compose --env-file .env.local -f docker-compose.yml -f docker-compose.prod.yml ps
+docker compose --env-file .env.local -f docker-compose.yml -f docker-compose.prod.yml logs app --tail=50
 docker exec bible_app php bin/console about   # bevestig APP_ENV=prod
 ```
 
@@ -286,10 +286,10 @@ cd /translatorstags
 git pull
 
 # Image herbouwen -- niet institutio, zie §3.4
-docker compose -f docker-compose.yml -f docker-compose.prod.yml build --pull --no-cache app ingest
+docker compose --env-file .env.local -f docker-compose.yml -f docker-compose.prod.yml build --pull --no-cache app ingest
 
 # Herstarten (Compose start nieuwe container vóór stop)
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --remove-orphans
+docker compose --env-file .env.local -f docker-compose.yml -f docker-compose.prod.yml up -d --remove-orphans
 
 # Cache vernieuwen
 docker exec bible_app php bin/console cache:clear
@@ -388,7 +388,7 @@ cat .env.local
 Herstart de app zodat de nieuwe waarden actief worden:
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d app
+docker compose --env-file .env.local -f docker-compose.yml -f docker-compose.prod.yml up -d app
 ```
 
 ---
@@ -446,7 +446,7 @@ systemctl restart docker
 
 # Herstart de app-containers zodat ze de nieuwe log-driver gebruiken
 cd /translatorstags
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --remove-orphans
+docker compose --env-file .env.local -f docker-compose.yml -f docker-compose.prod.yml up -d --remove-orphans
 ```
 
 ---
@@ -584,6 +584,45 @@ voegde dit in de praktijk niets toe — `appleboy/ssh-action` logt de verbose
 details pas ná een geslaagde verbinding. De echo-regels zíjn wel nuttig
 gebleken zodra de connectie eenmaal lukte (bevestigden meteen welke
 gebruiker/directory de volgende storingen betrof).
+
+---
+
+### 7.9 `.env.local` werd nooit gelezen door `docker compose` (ontdekt 2026-07-30)
+
+**Symptoom**: `GOOGLE_ANALYTICS_ID` (en mogelijk ook `APP_SECRET`, `DB_PASSWORD`,
+`REMEMBER_ME_SECRET`) stonden correct in `/translatorstags/.env.local` op de
+server, maar `docker exec bible_app printenv <VAR>` bleef leeg — of toonde de
+placeholder-waarde uit het getrackte root-`.env`.
+
+**Oorzaak**: Docker Compose leest **niet automatisch** een bestand genaamd
+`.env.local` — alleen een bestand dat letterlijk `.env` heet in de working
+directory, tenzij `--env-file <pad>` expliciet wordt meegegeven. Zowel
+`.github/workflows/deploy.yml` als alle commando's in dit document (§3.4, §5,
+§7.1) misten die vlag. Elke `docker compose ... build`/`up` op de server las
+dus stilzwijgend de placeholder-waarden uit het getrackte root-`.env`
+(`APP_SECRET=changeme`, `DB_PASSWORD=changeme`, ...) in plaats van de echte
+secrets uit `.env.local`. Dit verklaart waarom de ❌-punten in §2/§6
+("`APP_SECRET` uniek", "`DB_PASSWORD` sterk") nooit als opgelost gemarkeerd
+konden worden ondanks dat `.env.local` al was ingevuld volgens §7.1.
+
+**Fix**: `--env-file .env.local` toegevoegd aan alle `docker compose`-aanroepen
+in dit document en in `.github/workflows/deploy.yml`.
+
+**Belangrijk — nog te doen op de server**: controleer na de eerstvolgende
+deploy of de echte secrets nu daadwerkelijk actief zijn, en roteer ze als
+blijkt dat productie tot nu toe op de placeholder-waarden draaide:
+
+```bash
+docker exec bible_app printenv APP_SECRET   # hoort NIET "changeme" of
+                                              # "change_me_in_production_32chars" te zijn
+docker exec bible_app printenv GOOGLE_ANALYTICS_ID
+```
+
+Als `APP_SECRET`/`DB_PASSWORD` inderdaad op de placeholder bleken te staan:
+genereer nieuwe secrets (zie §7.1), zet ze in `.env.local`, herstart de
+containers, en overweeg bestaande sessies/remember-me-cookies als
+gecompromitteerd te beschouwen (ze waren ondertekend met een publiek bekende
+default-waarde).
 
 ---
 
