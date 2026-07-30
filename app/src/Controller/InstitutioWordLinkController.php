@@ -24,7 +24,7 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
  * (align_segments.py) -- this is fase 5 (Annotatie-UI) from the project
  * dossier.
  */
-#[Route('/institutio/bewerk')]
+#[Route('/institutie/bewerk')]
 #[IsGranted('ROLE_EDIT_INSTITUTIO_TRNL')]
 class InstitutioWordLinkController extends AbstractController
 {

@@ -52,7 +52,7 @@ security:
         - { path: ^/login,                 roles: PUBLIC_ACCESS }
         - { path: ^/admin,                 roles: ROLE_ADMIN }
         - { path: ^/strongs/translate,     roles: ROLE_EDIT_STRONG_TRNL }
-        - { path: ^/institutio/bewerk,     roles: ROLE_EDIT_INSTITUTIO_TRNL }
+        - { path: ^/institutie/bewerk,     roles: ROLE_EDIT_INSTITUTIO_TRNL }
         - { path: ^/api/annotation/word,   roles: ROLE_VIEWER }
         - { path: ^/api/annotation,        roles: ROLE_LINKER }
         - { path: ^/link,                  roles: ROLE_LINKER }
@@ -64,7 +64,7 @@ security:
         - { path: ^/blog/afbeeldingen,     roles: ROLE_BLOGGER }
         - { path: ^/blog,                  roles: PUBLIC_ACCESS }
         - { path: ^/book,                  roles: ROLE_VIEWER }
-        - { path: ^/institutio,            roles: ROLE_VIEWER }
+        - { path: ^/institutie,            roles: ROLE_VIEWER }
         - { path: ^/$,                     roles: PUBLIC_ACCESS }
         - { path: ^/,                      roles: ROLE_USER }
 

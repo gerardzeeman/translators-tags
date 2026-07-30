@@ -36,7 +36,7 @@ class InstitutioController extends AbstractController
      * Home page — table of contents: front matter + every book's chapters
      * with their titles, each linking to the corresponding page.
      */
-    #[Route('/institutio', name: 'app_institutio_home')]
+    #[Route('/institutie', name: 'app_institutio_home')]
     public function home(): Response
     {
         $toc = $this->institutioRepository->getTableOfContents();
@@ -52,7 +52,7 @@ class InstitutioController extends AbstractController
     /**
      * Front matter — the dedicatory letter to Francis I (book/chapter are NULL).
      */
-    #[Route('/institutio/voorwoord', name: 'app_institutio_front')]
+    #[Route('/institutie/voorwoord', name: 'app_institutio_front')]
     public function front(): Response
     {
         $data = $this->institutioRepository->getFrontMatter();
@@ -76,7 +76,7 @@ class InstitutioController extends AbstractController
      * One chapter — heading plus its numbered sections (e.g. "1.2: Quid sit
      * Deum cognoscere..." followed by items 1, 2, ...).
      */
-    #[Route('/institutio/{book<\d+>}/{chapter<\d+>}', name: 'app_institutio_chapter')]
+    #[Route('/institutie/{book<\d+>}/{chapter<\d+>}', name: 'app_institutio_chapter')]
     public function chapter(int $book, int $chapter): Response
     {
         $counts = $this->institutioRepository->getBookChapterCounts();
@@ -104,7 +104,7 @@ class InstitutioController extends AbstractController
      * Lemma frequency list — number, word, occurrence count. Most frequent
      * first, paginated (11k+ unique lemmas is too many for one page).
      */
-    #[Route('/institutio/lemmas/{page<\d+>}', name: 'app_institutio_lemmas', defaults: ['page' => 1])]
+    #[Route('/institutie/lemmas/{page<\d+>}', name: 'app_institutio_lemmas', defaults: ['page' => 1])]
     public function lemmas(int $page): Response
     {
         $total = $this->institutioRepository->getLemmaCount();
@@ -150,7 +150,7 @@ class InstitutioController extends AbstractController
      * occurrence in the corpus with a KWIC-style snippet -- everything the
      * database has recorded about this lemma, on one page.
      */
-    #[Route('/institutio/lemma/{lemma}', name: 'app_institutio_lemma_detail')]
+    #[Route('/institutie/lemma/{lemma}', name: 'app_institutio_lemma_detail')]
     public function lemmaDetail(string $lemma, Request $request): Response
     {
         $gloss = $this->institutioRepository->getLemmaGloss($lemma);
@@ -197,7 +197,7 @@ class InstitutioController extends AbstractController
      * verse(s) it refers to, then looks each one up in the Herziene
      * Statenvertaling (already in this app's main Bible corpus).
      */
-    #[Route('/institutio/vers', name: 'app_institutio_verse')]
+    #[Route('/institutie/vers', name: 'app_institutio_verse')]
     public function verse(Request $request): Response
     {
         $note = $request->query->get('note', '');

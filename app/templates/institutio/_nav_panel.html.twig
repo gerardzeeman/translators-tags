@@ -1,7 +1,7 @@
 {# Institutio boek/hoofdstuk navigatiepaneel — zelfde nav-book-btn/nav-panel
    patroon als de bijbellezer (zie templates/bible/chapter_view.html.twig),
    hergebruikt via de gegeneraliseerde nav-panel Stimulus controller
-   (data-url-prefix zorgt dat hoofdstukkeuze naar /institutio/{book}/{n} linkt).
+   (data-url-prefix zorgt dat hoofdstukkeuze naar /institutie/{book}/{n} linkt).
 
    Verwachte variabelen:
      trigger_label       — tekst op de nav-book-btn knop
@@ -10,7 +10,7 @@
      book_chapter_counts  — {boek: aantal hoofdstukken}
      has_front_matter     — bool
 #}
-<div data-controller="nav-panel" data-url-prefix="/institutio">
+<div data-controller="nav-panel" data-url-prefix="/institutie">
     <button class="nav-book-btn"
             type="button"
             data-action="click->nav-panel#open"
