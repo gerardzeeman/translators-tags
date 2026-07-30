@@ -28,8 +28,9 @@ class CspNonceSubscriber implements EventSubscriberInterface
             "default-src 'self'",
             "style-src 'self' https://fonts.googleapis.com 'unsafe-inline'",
             "font-src 'self' https://fonts.gstatic.com",
-            "img-src 'self' data:",
-            "script-src 'self' 'nonce-{$nonce}'",
+            "img-src 'self' data: https://www.google-analytics.com https://www.googletagmanager.com",
+            "script-src 'self' 'nonce-{$nonce}' https://www.googletagmanager.com",
+            "connect-src 'self' https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com https://www.googletagmanager.com",
             "form-action 'self'",
             "frame-ancestors 'none'",
         ]);

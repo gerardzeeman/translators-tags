@@ -78,13 +78,13 @@ class SecurityHeadersSubscriber implements EventSubscriberInterface
             $hash = $this->getImportmapHash();
             $headers->set('Content-Security-Policy',
                 "default-src 'self'; " .
-                "script-src 'self' " .
+                "script-src 'self' https://www.googletagmanager.com " .
                     ($hash ? "{$hash} " : '') .
                     "; " .
                 "style-src 'self' https://fonts.googleapis.com; " .
                 "font-src 'self' https://fonts.gstatic.com; " .
-                "img-src 'self' data:; " .
-                "connect-src 'self'; " .
+                "img-src 'self' data: https://www.google-analytics.com https://www.googletagmanager.com; " .
+                "connect-src 'self' https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com https://www.googletagmanager.com; " .
                 "frame-ancestors 'none'; " .
                 "upgrade-insecure-requests;"
             );
@@ -92,11 +92,11 @@ class SecurityHeadersSubscriber implements EventSubscriberInterface
             // Dev: permissive script-src so the profiler toolbar works.
             $headers->set('Content-Security-Policy',
                 "default-src 'self'; " .
-                "script-src 'self' 'unsafe-inline' data:; " .
+                "script-src 'self' 'unsafe-inline' data: https://www.googletagmanager.com; " .
                 "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " .
                 "font-src 'self' https://fonts.gstatic.com; " .
-                "img-src 'self' data:; " .
-                "connect-src 'self'; " .
+                "img-src 'self' data: https://www.google-analytics.com https://www.googletagmanager.com; " .
+                "connect-src 'self' https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com https://www.googletagmanager.com; " .
                 "frame-ancestors 'none';"
             );
         }
