@@ -21,17 +21,17 @@ export default class extends Controller {
     edit() {
         this.textareaTarget.readOnly = false
         this.textareaTarget.focus()
-        this.editButtonTarget.hidden = true
-        this.cancelButtonTarget.hidden = false
-        this.proposeButtonTarget.hidden = false
+        this.editButtonTarget.classList.add('is-hidden')
+        this.cancelButtonTarget.classList.remove('is-hidden')
+        this.proposeButtonTarget.classList.remove('is-hidden')
     }
 
     cancelEdit() {
         this.textareaTarget.value = this.#originalValue
         this.textareaTarget.readOnly = true
-        this.editButtonTarget.hidden = false
-        this.cancelButtonTarget.hidden = true
-        this.proposeButtonTarget.hidden = true
+        this.editButtonTarget.classList.remove('is-hidden')
+        this.cancelButtonTarget.classList.add('is-hidden')
+        this.proposeButtonTarget.classList.add('is-hidden')
         this.closePopup()
     }
 

@@ -3667,6 +3667,11 @@ a:hover { text-decoration: underline; }
 }
 .btn-danger:hover { filter: brightness(1.1); }
 .btn-small { padding: .3rem .75rem; font-size: .82rem; }
+/* .is-hidden alone (display:none) has the same specificity as
+   .btn-secondary's explicit display:inline-flex, and .btn-secondary is
+   declared later in this file, so it would win the cascade and the button
+   would stay visible. This combined selector outranks it. */
+.btn-small.is-hidden { display: none; }
 .admin-page-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
 
 /* ── Blog: overzicht ─────────────────────────────────────────────────────── */
