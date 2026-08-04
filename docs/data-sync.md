@@ -354,6 +354,13 @@ bijgekomen.
 **Voorwaarden:**
 - Dev-stack draait: `docker compose --env-file .env.local up -d` (zie [README](../README.md))
 - SSH-alias `translatorstags-prod` staat in `~/.ssh/config` (zie hierboven)
+- Op Windows: draai de commando's hieronder in **Git Bash** (onderdeel van de Git-installatie
+  uit de README-vereisten), niet in Command Prompt of PowerShell. De commando's gebruiken
+  bash-syntax (`\`-regelvervolg, `mkdir -p`, enz.) die in `cmd.exe` fouten geeft als
+  `The syntax of the command is incorrect` — commando's die je ná `ssh translatorstags-prod`
+  typt draaien sowieso al in een Linux-shell op de droplet/container en zijn dus geen
+  probleem, maar commando's die je in je eigen lokale terminal typt (zoals `mkdir -p`,
+  `scp`) wel.
 
 Er loopt nooit databaseverkeer tussen dev en prod — elk `bin/console`-commando draait
 lokaal, tegen de database die daar al staat, met de eigen (niet-overschreven)
