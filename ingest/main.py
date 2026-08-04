@@ -8,9 +8,8 @@ Steps:
   2. parse_tahot     – Hebrew OT words → hebrew_words
   3. parse_elzevir   – Greek NT words  → greek_words
   4. parse_statenvertaling – Dutch verses + words → translation_verses / translation_words
-  5. align_pivot     – ESV pivot alignment → word_links (method=pivot)
-  6. align_heuristic – positional + proper-noun fallback → word_links (method=heuristic)
-  7. parse_strongs   – Strong's dictionary → strongs_entries
+  5. align_heuristic – positional + proper-noun fallback → word_links (method=heuristic)
+  6. parse_strongs   – Strong's dictionary → strongs_entries
 """
 import sys
 import time
@@ -39,14 +38,11 @@ def main():
     from parse_statenvertaling import parse_statenvertaling
     step("4/6  Parse Statenvertaling", parse_statenvertaling)
 
-    from align_pivot import align_pivot
-    step("5/6  Pivot alignment (ESV → Dutch)", align_pivot)
-
     from align_heuristic import align_heuristic
-    step("6/7  Heuristic alignment (fallback)", align_heuristic)
+    step("5/6  Heuristic alignment (fallback)", align_heuristic)
 
     from parse_strongs import parse_strongs
-    step("7/7  Strong's dictionary", parse_strongs)
+    step("6/6  Strong's dictionary", parse_strongs)
 
     print("\n" + "═" * 60)
     print("  ✓ Ingest pipeline complete.")
