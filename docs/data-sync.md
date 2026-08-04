@@ -358,6 +358,14 @@ hebben, wordt `DATABASE_URL` per aanroep overschreven zodat die via de tunnel na
 `host.docker.internal:5433` wijst; zonder die override gebruikt de container gewoon
 zijn eigen (lokale dev-)verbinding.
 
+> **Werkmap:** draai elk `docker compose ...`-commando hieronder vanuit de
+> **projectroot** (waar `docker-compose.yml` staat) — niet vanuit `app/` en niet vanuit
+> `docs/`. Vanuit de verkeerde map geeft `docker compose` de foutmelding
+> `no configuration file provided: not found` (er is dan geen `docker-compose.yml` te
+> vinden in de huidige map; Docker Compose zoekt niet in bovenliggende mappen). Let op:
+> `app/` heeft zelf ook een (ongebruikte) `compose.yaml` — die hoort niet bij deze
+> workflow.
+
 ### Fase 1 — Prod → Dev: manuele links ophalen
 
 ```bash
