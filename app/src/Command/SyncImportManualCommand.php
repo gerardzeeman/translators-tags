@@ -94,16 +94,18 @@ class SyncImportManualCommand extends Command
                 }
 
                 if (!$dryRun && $existing) {
+                    // created_by_user_id is intentionally not synced: it's an FK to
+                    // the local users table, and prod/dev user IDs don't correspond
+                    // to the same accounts.
                     $this->connection->executeStatement(
-                        "INSERT INTO link_confidence (link_id, method, score, created_at, created_by, notes)
-                         VALUES (:id, :method, :score, :created_at, :created_by, :notes)
+                        "INSERT INTO link_confidence (link_id, method, score, created_at, notes)
+                         VALUES (:id, :method, :score, :created_at, :notes)
                          ON CONFLICT (link_id, method) DO NOTHING",
                         [
                             'id'         => (int) $existing,
                             'method'     => $row['method'],
                             'score'      => $row['score'] !== '' ? (float) $row['score'] : null,
                             'created_at' => $row['created_at'] ?: null,
-                            'created_by' => $row['created_by'] ?: null,
                             'notes'      => $row['notes'] ?: null,
                         ]
                     );
@@ -135,7 +137,7 @@ class SyncImportManualCommand extends Command
                     $emptyInserted++;
                 }
             }
-            $io->text(sprintf('  empty_links: %d new', $dryRun ? count($rows) . ' (would insert)' : $emptyInserted));
+            $io->text(sprintf('  empty_links: %d new%s', $emptyInserted, $dryRun ? ' (would insert)' : ''));
 
             // ── 3. inter_translation_links ────────────────────────────────────
             $rows = $this->readCsv("{$dir}/manual_itl.csv");
@@ -158,7 +160,7 @@ class SyncImportManualCommand extends Command
                     $itlInserted++;
                 }
             }
-            $io->text(sprintf('  itl_links:   %d new', $dryRun ? count($rows) . ' (would insert)' : $itlInserted));
+            $io->text(sprintf('  itl_links:   %d new%s', $itlInserted, $dryRun ? ' (would insert)' : ''));
 
             if (!$dryRun) {
                 $this->connection->commit();
@@ -176,7 +178,11 @@ class SyncImportManualCommand extends Command
         return Command::SUCCESS;
     }
 
-    private function readCsv(string $path): array
+    /**
+     * Streams the CSV row by row instead of loading it fully into memory —
+     * the equivalent export can hold hundreds of thousands of rows.
+     */
+    private function readCsv(string $path): \Generator
     {
         $fh = fopen($path, 'r');
         if ($fh === false) {
@@ -184,12 +190,9 @@ class SyncImportManualCommand extends Command
         }
 
         $headers = fgetcsv($fh);
-        $rows    = [];
         while (($line = fgetcsv($fh)) !== false) {
-            $rows[] = array_combine($headers, $line);
+            yield array_combine($headers, $line);
         }
         fclose($fh);
-
-        return $rows;
     }
 }
