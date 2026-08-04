@@ -103,7 +103,7 @@
     <div class="alert alert-error">{{ error }}</div>
     {% endif %}
 
-    <form method="post" action="{{ path('app_register') }}">
+    <form method="post" action="{{ path('app_register') }}" data-turbo="false">
         <div class="form-group">
             <label for="display_name">Naam</label>
             <input type="text"
@@ -151,7 +151,7 @@
     <hr class="divider">
 
     <div class="auth-footer">
-        Al een account? <a href="{{ path('app_login') }}">Inloggen</a>
+        Al een account? <a href="{{ path('app_login') }}" data-turbo="false">Inloggen</a>
     </div>
 </div>
 </body>
