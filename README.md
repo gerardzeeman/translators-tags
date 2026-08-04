@@ -63,44 +63,37 @@ cd alef-omega
 
 ### 2. Omgevingsvariabelen instellen
 
-Maak een bestand `app/.env.local` aan (wordt nooit gecommit):
+Maak in de **projectroot** (naast `docker-compose.yml`) een bestand `.env.local` aan (staat in `.gitignore`, wordt nooit gecommit):
 
 ```dotenv
-APP_ENV=dev
+DB_PASSWORD=<genereer: openssl rand -hex 16>
 APP_SECRET=<genereer: openssl rand -hex 32>
 REMEMBER_ME_SECRET=<genereer: openssl rand -hex 32>
-DATABASE_URL="postgresql://app:!ChangeMe!@database:5432/app?serverVersion=16&charset=utf8"
 ```
 
-Voor lokaal gebruik zijn de standaardwaarden in `app/.env` voldoende als startpunt.
+De overige standaardwaarden in `.env` (root) zijn voor lokaal gebruik voldoende als startpunt.
 
-Optioneel: zet `GOOGLE_ANALYTICS_ID=G-XXXXXXXXXX` in `app/.env.local` om Google Analytics te activeren (leeg = uitgeschakeld, de standaard).
+Optioneel: zet `GOOGLE_ANALYTICS_ID=G-XXXXXXXXXX` en/of `ANTHROPIC_API_KEY=...` (voor de Institutio-pijplijn) in dezelfde `.env.local`.
 
-### 3. PHP-dependencies installeren
+### 3. Stack starten
 
 ```powershell
-cd app
-docker compose build app
-docker compose run --rm app composer install
+docker compose --env-file .env.local up -d --build
 ```
 
-### 4. Stack starten
-
-```powershell
-docker compose up -d
-```
-
-Dit start de PostgreSQL-database en de FrankenPHP-webserver. Controleer of beide containers actief zijn:
+Dit bouwt de FrankenPHP-webserver-image (incl. `composer install`) en start die samen met de PostgreSQL-database. Controleer of beide containers actief zijn:
 
 ```powershell
 docker compose ps
 ```
 
-### 5. Applicatie openen
+> **Belangrijk — gebruik altijd `--env-file .env.local`**, ook bij een latere herstart (`docker compose up -d`). Zonder deze vlag leest Docker Compose stilzwijgend het standaard `.env`-bestand, dat alleen een placeholder-wachtwoord (`changeme`) bevat. Als de PostgreSQL-container al eerder met het échte wachtwoord uit `.env.local` is aangemaakt, blijft die het echte wachtwoord verwachten — een herstart zonder `--env-file .env.local` geeft dan op elke pagina een `PDOException` / `SQLSTATE[08006] password authentication failed for user`, ook al lijkt de stack verder gewoon te draaien.
+
+### 4. Applicatie openen
 
 Ga naar **https://localhost** in je browser. FrankenPHP gebruikt een zelf-ondertekend certificaat voor localhost — klik de beveiligingswaarschuwing weg via "Geavanceerd → Toch doorgaan".
 
-### 6. Database vullen (ingest pipeline)
+### 5. Database vullen (ingest pipeline)
 
 ```powershell
 docker compose --profile ingest run --rm ingest
@@ -128,14 +121,14 @@ docker compose exec app php bin/console debug:router
 # Automatische SV↔HSV koppeling uitvoeren
 docker compose exec app php bin/console app:link:translations:auto
 
-# Database bekijken (DBeaver / TablePlus op localhost:5432, db: app, user: app)
-docker compose exec database psql -U app -d app
+# Database bekijken (DBeaver / TablePlus op localhost:5432, db: bible_compare, user: bible)
+docker compose exec postgres psql -U bible -d bible_compare
 
 # Stack stoppen (data blijft bewaard in Docker volume)
 docker compose down
 
 # Stack + data volledig resetten
-docker compose down -v && docker compose up -d
+docker compose down -v && docker compose --env-file .env.local up -d
 ```
 
 ---

@@ -173,7 +173,7 @@
     <div class="alert alert-success">{{ message }}</div>
     {% endfor %}
 
-    <form method="post" action="{{ path('app_login') }}">
+    <form method="post" action="{{ path('app_login') }}" data-turbo="false">
         <div class="form-group">
             <label for="email">E-mailadres</label>
             <input type="email"
