@@ -390,6 +390,17 @@ machines.
 > exec app` vs. `docker exec bible_app` — is bewust: het vertelt je meteen op welke
 > machine een commando hoort te draaien.
 
+> **`--env-file .env.local` bij `run`/`up`, niet nodig bij `exec`.** `docker compose exec
+> app ...` praat met een al-draaiende container, die zijn `DATABASE_URL` al correct heeft
+> (vanuit het moment dat de stack met `--env-file .env.local up -d` gestart is) — geen
+> vlag nodig. Maar `docker compose --profile ingest run --rm ingest ...` (fase 2) maakt
+> **elke keer een nieuwe container**, en herleest daarbij de compose-variabelen opnieuw.
+> Zonder `--env-file .env.local` gebruikt die nieuwe container het placeholder-wachtwoord
+> uit `.env` (`changeme`) in plaats van het echte wachtwoord uit `.env.local`, en geeft
+> `psycopg.OperationalError: ... password authentication failed for user "bible"`. Alle
+> `run`-commando's in dit document hebben daarom al `--env-file .env.local` — laat 'm niet
+> weg als je zelf varianten typt.
+
 > **Werkmap:** draai elk `docker compose ...`-commando hieronder vanuit de
 > **projectroot** (waar `docker-compose.yml` staat) — niet vanuit `app/` en niet vanuit
 > `docs/`. Vanuit de verkeerde map geeft `docker compose` de foutmelding
@@ -436,17 +447,17 @@ zonder de brontekst opnieuw op te halen. Dit produceert de `word_links` met
 `link_confidence.method` = `manual_hint`, `proper_noun` of `positional`:
 
 ```bash
-docker compose --profile ingest run --rm ingest python align_heuristic.py
+docker compose --env-file .env.local --profile ingest run --rm ingest python align_heuristic.py
 
 # Optioneel beperkt tot één boek of vertaling:
-docker compose --profile ingest run --rm ingest python align_heuristic.py --book=GEN
-docker compose --profile ingest run --rm ingest python align_heuristic.py --translation=SV
+docker compose --env-file .env.local --profile ingest run --rm ingest python align_heuristic.py --book=GEN
+docker compose --env-file .env.local --profile ingest run --rm ingest python align_heuristic.py --translation=SV
 ```
 
 **Volledige verse ingest (alleen bij nieuwe brontekst):**
 
 ```bash
-docker compose --profile ingest run --rm ingest
+docker compose --env-file .env.local --profile ingest run --rm ingest
 ```
 
 > ⚠️ **Bekend probleem:** `ingest/main.py` roept in stap 5/6 nog `align_pivot.py` aan,
@@ -455,7 +466,7 @@ docker compose --profile ingest run --rm ingest
 > methode `pivot` bestaat ook niet meer in de `link_confidence`-schemabeperking. Een
 > volledige `python main.py`-run **crasht** daardoor op die stap. Draai tot dit is
 > opgelost de stappen los, in deze volgorde (elk via
-> `docker compose --profile ingest run --rm ingest python <script>.py`):
+> `docker compose --env-file .env.local --profile ingest run --rm ingest python <script>.py`):
 > `fetch_sources.py` → `parse_tahot.py` → `parse_elzevir.py` →
 > `parse_statenvertaling.py` → `align_heuristic.py` → `parse_strongs.py`.
 
