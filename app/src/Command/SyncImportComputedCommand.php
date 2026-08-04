@@ -229,7 +229,12 @@ class SyncImportComputedCommand extends Command
 
     // ── CSV helper ────────────────────────────────────────────────────────────
 
-    private function readCsv(string $path): array
+    /**
+     * Streams the CSV row by row instead of loading it fully into memory —
+     * computed_word_links.csv / computed_itl.csv can hold hundreds of
+     * thousands of rows.
+     */
+    private function readCsv(string $path): \Generator
     {
         $fh = fopen($path, 'r');
         if ($fh === false) {
@@ -237,12 +242,9 @@ class SyncImportComputedCommand extends Command
         }
 
         $headers = fgetcsv($fh);
-        $rows    = [];
         while (($line = fgetcsv($fh)) !== false) {
-            $rows[] = array_combine($headers, $line);
+            yield array_combine($headers, $line);
         }
         fclose($fh);
-
-        return $rows;
     }
 }

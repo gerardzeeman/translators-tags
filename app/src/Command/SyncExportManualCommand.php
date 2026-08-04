@@ -52,7 +52,7 @@ class SyncExportManualCommand extends Command
 
         // ── 1. word_links + link_confidence (method = manual) ────────────────
         $wordLinksFile = "{$dir}/manual_word_links.csv";
-        $rows = $this->connection->fetchAllAssociative(
+        $count = $this->exportQuery(
             "SELECT
                 wl.id,
                 wl.source_language,
@@ -62,56 +62,64 @@ class SyncExportManualCommand extends Command
                 lc.method,
                 lc.score,
                 lc.created_at,
-                lc.created_by,
                 lc.notes
              FROM word_links wl
              JOIN link_confidence lc ON lc.link_id = wl.id
              WHERE lc.method = 'manual'
-             ORDER BY wl.id"
+             ORDER BY wl.id",
+            $wordLinksFile
         );
-        $this->writeCsv($wordLinksFile, $rows);
-        $io->text(sprintf('  word_links:    %d rows → %s', count($rows), $wordLinksFile));
+        $io->text(sprintf('  word_links:    %d rows → %s', $count, $wordLinksFile));
 
         // ── 2. manual_empty_links ─────────────────────────────────────────────
         $emptyFile = "{$dir}/manual_empty_links.csv";
-        $rows = $this->connection->fetchAllAssociative(
+        $count = $this->exportQuery(
             "SELECT id, source_language, hebrew_word_id, greek_word_id,
                     translation_id, created_at, notes
              FROM manual_empty_links
-             ORDER BY id"
+             ORDER BY id",
+            $emptyFile
         );
-        $this->writeCsv($emptyFile, $rows);
-        $io->text(sprintf('  empty_links:   %d rows → %s', count($rows), $emptyFile));
+        $io->text(sprintf('  empty_links:   %d rows → %s', $count, $emptyFile));
 
         // ── 3. inter_translation_links (manual + manual_empty) ────────────────
         $itlFile = "{$dir}/manual_itl.csv";
-        $rows = $this->connection->fetchAllAssociative(
+        $count = $this->exportQuery(
             "SELECT id, word_a_id, word_b_id, method, confidence, created_at
              FROM inter_translation_links
              WHERE method IN ('manual', 'manual_empty')
-             ORDER BY id"
+             ORDER BY id",
+            $itlFile
         );
-        $this->writeCsv($itlFile, $rows);
-        $io->text(sprintf('  itl_links:     %d rows → %s', count($rows), $itlFile));
+        $io->text(sprintf('  itl_links:     %d rows → %s', $count, $itlFile));
 
         $io->success('Export complete.');
         return Command::SUCCESS;
     }
 
-    private function writeCsv(string $path, array $rows): void
+    /**
+     * Streams query results straight to CSV instead of buffering the whole
+     * result set in a PHP array, which exhausts memory on large tables.
+     */
+    private function exportQuery(string $sql, string $path): int
     {
         $fh = fopen($path, 'w');
         if ($fh === false) {
             throw new \RuntimeException("Cannot open file for writing: {$path}");
         }
 
-        if (!empty($rows)) {
-            fputcsv($fh, array_keys($rows[0]));
-            foreach ($rows as $row) {
-                fputcsv($fh, $row);
+        $count      = 0;
+        $headerDone = false;
+        foreach ($this->connection->iterateAssociative($sql) as $row) {
+            if (!$headerDone) {
+                fputcsv($fh, array_keys($row));
+                $headerDone = true;
             }
+            fputcsv($fh, $row);
+            $count++;
         }
 
         fclose($fh);
+        return $count;
     }
 }
