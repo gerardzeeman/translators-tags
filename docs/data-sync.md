@@ -257,7 +257,7 @@ Vanuit die container is de tunnel, die op de hostmachine luistert, bereikbaar vi
 ssh -N -L 5433:localhost:5432 root@<droplet-ip>
 
 # Zolang de tunnel open staat, kan de app-container verbinding maken met prod:
-docker compose exec -e DATABASE_URL="postgresql://bible:<wachtwoord>@host.docker.internal:5433/bible_compare" \
+docker compose exec -e DATABASE_URL="postgresql://bible:<wachtwoord>@host.docker.internal:5433/bible_compare?serverVersion=16&charset=utf8" \
     app php bin/console app:sync:export-manual
 ```
 
@@ -373,7 +373,7 @@ zijn eigen (lokale dev-)verbinding.
 ssh translatorstags-prod
 
 # 2. Manuele links exporteren — leest van prod via de tunnel, schrijft lokaal naar ./sync
-docker compose exec -e DATABASE_URL="postgresql://bible:<prod-wachtwoord>@host.docker.internal:5433/bible_compare" \
+docker compose exec -e DATABASE_URL="postgresql://bible:<prod-wachtwoord>@host.docker.internal:5433/bible_compare?serverVersion=16&charset=utf8" \
     app php bin/console app:sync:export-manual
 
 # 3. Importeren in de lokale dev-database — eerst dry-run, dan echt
@@ -435,9 +435,9 @@ docker compose exec app php bin/console app:sync:export-computed
 ssh translatorstags-prod
 
 # 3. Importeren op prod via de tunnel, met manuele-link-bescherming — eerst dry-run, dan echt
-docker compose exec -e DATABASE_URL="postgresql://bible:<prod-wachtwoord>@host.docker.internal:5433/bible_compare" \
+docker compose exec -e DATABASE_URL="postgresql://bible:<prod-wachtwoord>@host.docker.internal:5433/bible_compare?serverVersion=16&charset=utf8" \
     app php bin/console app:sync:import-computed --dry-run
-docker compose exec -e DATABASE_URL="postgresql://bible:<prod-wachtwoord>@host.docker.internal:5433/bible_compare" \
+docker compose exec -e DATABASE_URL="postgresql://bible:<prod-wachtwoord>@host.docker.internal:5433/bible_compare?serverVersion=16&charset=utf8" \
     app php bin/console app:sync:import-computed
 ```
 
