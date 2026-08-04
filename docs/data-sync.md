@@ -237,70 +237,49 @@ ON CONFLICT (word_a_id, word_b_id) DO NOTHING;
 
 ## Technische verbinding: dev-pc ↔ DigitalOcean
 
-PostgreSQL op prod is niet publiek bereikbaar (poort 5432 is geblokkeerd door UFW
-en niet ge-exposed in docker-compose). De enige toegangspoort is SSH (poort 22).
+PostgreSQL op prod is niet publiek bereikbaar, en zelfs niet bereikbaar op de droplet
+zijn **eigen** `localhost` — de `postgres`-service heeft in `docker-compose.yml`
+(basisbestand) helemaal geen `ports:`-sectie, en `docker-compose.prod.yml` (waarmee
+productie daadwerkelijk draait, zie de [deploy-workflow](../.github/workflows/deploy.yml))
+voegt er ook geen toe. Poort 5432 is dus alleen bereikbaar *binnen* het interne
+`bible_net`-Docker-netwerk, via de containernaam `postgres` — niet van buiten de
+container, ook niet vanaf de droplet zelf. De enige toegangspoort van buitenaf is SSH
+(poort 22).
 
-### Aanbevolen aanpak: SSH-tunnel
+> **Vorige aanpak (SSH-tunnel naar Postgres) werkt hierdoor niet.** Een eerdere versie
+> van dit document adviseerde `ssh -L 5433:localhost:5432 root@<droplet-ip>` en dan
+> vanaf dev met een aangepaste `DATABASE_URL` via `host.docker.internal` verbinden. Dat
+> lijkt logisch, maar `localhost:5432` bestaat simpelweg niet op de droplet zelf — SSH
+> accepteert de lokale kant van de tunnel keurig, maar sluit het kanaal zodra het aan
+> productie-kant probeert te verbinden en dat meteen faalt. Resultaat: `SQLSTATE[08006]
+> ... server closed the connection unexpectedly`, ook al staat de tunnel "gewoon" open.
 
-Een SSH-tunnel forward prod-PostgreSQL tijdelijk naar een lokale poort op de dev-machine.
-De Symfony-commands "zien" dan een gewone lokale database — geen speciale SSH-logica
-nodig in de applicatiecode.
-
-De commands draaien zelf **in de `app`-container** (`docker compose exec app ...`),
-niet los op de hostmachine — er is geen lokale PHP-installatie nodig of aanwezig.
-Vanuit die container is de tunnel, die op de hostmachine luistert, bereikbaar via
-`host.docker.internal`, **niet** via `localhost` (dat zou de container zelf zijn).
-
-> ⚠️ **Belangrijk: bind de tunnel op alle interfaces, niet alleen loopback.** Een tunnel
-> geopend als `ssh -L 5433:localhost:5432 ...` (zonder bind-adres) luistert standaard
-> **alleen** op `127.0.0.1`/`::1`. Docker Desktop's `host.docker.internal`-verkeer komt
-> vanuit de container niet binnen als "echte" loopback-traffic, waardoor zo'n tunnel
-> vanuit de container onbereikbaar is — je krijgt dan `SQLSTATE[08006] ... server closed
-> the connection unexpectedly`, óók als de tunnel zelf gewoon actief is (bevestigd:
-> `netstat` toont de tunnel keurig `LISTENING`, maar een container die er via
-> `host.docker.internal` mee probeert te praten krijgt de verbinding niet voor elkaar).
-> Bind daarom expliciet op alle interfaces met `0.0.0.0:<poort>` vóór de dubbele punt:
-
-```bash
-# Open tunnel: host:5433 → prod-PostgreSQL via SSH — let op de 0.0.0.0: bind-prefix
-# Draai dit commando in een apart terminalvenster, laat het openstaan
-ssh -N -L 0.0.0.0:5433:localhost:5432 root@<droplet-ip>
-
-# Zolang de tunnel open staat, kan de app-container verbinding maken met prod:
-docker compose exec -e DATABASE_URL="postgresql://bible:<wachtwoord>@host.docker.internal:5433/bible_compare?serverVersion=16&charset=utf8" \
-    app php bin/console app:sync:export-manual
-```
-
-Zie het [stappenplan](#stappenplan-volledige-synchronisatie-uitvoeren) hieronder voor de
-volledige, uitvoerbare commandoreeks voor beide richtingen.
-
-### Alternatief: directe pipe over SSH (geen tussenbestanden)
-
-Voor een éénmalige overdracht kan alles ook in één pijplijn:
-
-```bash
-# Prod → Dev: stream manuele links direct in lokale DB
-ssh root@<droplet-ip> \
-  "docker exec bible_postgres psql -U bible bible_compare \
-   -c \"\COPY (SELECT ...) TO STDOUT WITH CSV HEADER\"" \
-  | psql -U bible bible_compare -c "\COPY import_manual FROM STDIN WITH CSV HEADER"
-```
-
-Nadeel: geen dry-run mogelijk, minder logging, fout-afhandeling is lastig.
+**De aanpak die wél werkt:** elk sync-commando draait **lokaal**, op de machine die de
+data al heeft — dev-commando's tegen de dev-database, prod-commando's tegen de
+prod-database (via `docker exec bible_app ...`, met de eigen `DATABASE_URL` van die
+container, die `postgres` intern prima kan resolven). Er hoeft nooit een druppel
+databaseverkeer tussen dev en prod te lopen; alleen de kleine CSV-bestanden reizen mee,
+via `docker cp` (container ↔ hostmachine) en `scp` (hostmachine ↔ hostmachine). Zie het
+[stappenplan](#stappenplan-volledige-synchronisatie-uitvoeren) hieronder voor de
+volledige, uitvoerbare commandoreeks.
 
 ### SSH-config voor gemak
 
-Voeg toe aan `~/.ssh/config` op de dev-machine:
+Voeg toe aan `~/.ssh/config` op de dev-machine (alleen voor het gemak van `ssh
+translatorstags-prod` als login-snelkoppeling — geen `LocalForward` nodig, want er is
+geen Postgres-tunnel meer):
 
 ```
 Host translatorstags-prod
     HostName <droplet-ip>
     User root
     IdentityFile ~/.ssh/id_ed25519_do
-    LocalForward 0.0.0.0:5433 localhost:5432
 ```
 
-Dan volstaat: `ssh translatorstags-prod` om de tunnel automatisch te openen.
+Voor Adminer (web-GUI op de database) bestaat al een aparte, wél werkende tunnel: die
+poort (8081) is op productie gebonden aan `127.0.0.1`, zie het commentaar in
+[`docker-compose.prod.yml`](../docker-compose.prod.yml) — `ssh -L
+8081:localhost:8081 root@<droplet-ip>` en dan `http://localhost:8081` openen.
 
 ---
 
@@ -312,10 +291,10 @@ gewone Symfony-logging en gebruik makend van de bestaande database-verbinding.
 
 | Command | Beschrijving | Opties |
 |---|---|---|
-| `app:sync:export-manual` | Exporteert manuele links naar CSV (draait op prod, via de tunnel of ssh) | `--output-dir` (default `./sync`) |
-| `app:sync:import-manual` | Importeert manuele links van prod naar dev (draait op dev) | `--input-dir` (default `./sync`), `--dry-run` |
-| `app:sync:export-computed` | Exporteert berekende links naar CSV (draait op dev) | `--output-dir` (default `./sync`) |
-| `app:sync:import-computed` | Importeert berekende links op prod, met manuele-link-bescherming | `--input-dir` (default `./sync`), `--dry-run` |
+| `app:sync:export-manual` | Exporteert manuele links naar CSV (draait lokaal op prod, via ssh) | `--output-dir` (default `./sync`) |
+| `app:sync:import-manual` | Importeert manuele links van prod naar dev (draait lokaal op dev) | `--input-dir` (default `./sync`), `--dry-run` |
+| `app:sync:export-computed` | Exporteert berekende links naar CSV (draait lokaal op dev) | `--output-dir` (default `./sync`) |
+| `app:sync:import-computed` | Importeert berekende links op prod, met manuele-link-bescherming (draait lokaal op prod, via ssh) | `--input-dir` (default `./sync`), `--dry-run` |
 
 Beide export-commands en beide import-commands streamen rij voor rij (Doctrine's
 `iterateAssociative()` bij export, een generator bij het inlezen van CSV bij import) —
@@ -326,29 +305,36 @@ standaard PHP-geheugenlimiet (128MB) overschrijdt als je alles in één array la
 
 ## Werkstroom in de praktijk
 
-Prod → Dev (klein datavolume) loopt via de SSH-tunnel, rechtstreeks vanaf de
-dev-machine — geen SCP nodig. Dev → Prod (800k+ rijen) gaat wél via SCP + `docker cp`,
-en het *import*-commando draait daar lokaal op productie zelf — een getunnelde
-verbinding zou bij dat volume onpraktisch traag zijn (zie de toelichting bij fase 3
-hieronder).
+Beide richtingen draaien lokaal tegen de database die de data al heeft — nooit via een
+tunnel (Postgres is op productie niet eens op de droplet's eigen `localhost` bereikbaar,
+zie [Technische verbinding](#technische-verbinding-dev-pc--digitalocean) hierboven).
+Alleen de CSV-bestanden reizen mee, via `docker cp` (container ↔ hostmachine) en `scp`
+(hostmachine ↔ hostmachine).
 
 ```
 ┌─────────────────────────────────────────────────────┐
+│                 PRODUCTIE-DROPLET                    │
+│                                                      │
+│  1. app:sync:export-manual (lokaal, leest prod)      │
+│  2. docker cp csv's → droplet-bestandssysteem        │
+└──────────────────────────┬──────────────────────────┘
+                           │ scp manual_*.csv → dev
+                           ▼
+┌─────────────────────────────────────────────────────┐
 │                    DEV-MACHINE                       │
 │                                                      │
-│  1. app:sync:export-manual  (via tunnel, leest prod) │
-│  2. app:sync:import-manual  (lokaal, schrijft dev)   │
-│  3. align_heuristic.py      (lokaal, alignment)      │
-│  4. app:link:translations:auto  (lokaal, SV↔HSV)     │
-│  5. app:sync:export-computed (lokaal, leest dev)     │
-│  6. scp computed_*.csv → productie                   │
+│  3. app:sync:import-manual  (lokaal, schrijft dev)   │
+│  4. align_heuristic.py      (lokaal, alignment)      │
+│  5. app:link:translations:auto  (lokaal, SV↔HSV)     │
+│  6. app:sync:export-computed (lokaal, leest dev)     │
+│  7. scp computed_*.csv → productie                   │
 └──────────────────────────┬──────────────────────────┘
                            ▼
 ┌─────────────────────────────────────────────────────┐
 │                 PRODUCTIE-DROPLET                    │
 │                                                      │
-│  7. docker cp csv's → bible_app-container            │
-│  8. app:sync:import-computed (lokaal, met guard op   │
+│  8. docker cp csv's → bible_app-container            │
+│  9. app:sync:import-computed (lokaal, met guard op   │
 │     manuele links)                                    │
 └─────────────────────────────────────────────────────┘
 ```
@@ -367,23 +353,19 @@ bijgekomen.
 
 **Voorwaarden:**
 - Dev-stack draait: `docker compose --env-file .env.local up -d` (zie [README](../README.md))
-- SSH-tunnel-alias `translatorstags-prod` staat in `~/.ssh/config` (zie hierboven)
+- SSH-alias `translatorstags-prod` staat in `~/.ssh/config` (zie hierboven)
 
-Alle commando's gaan via `docker compose exec app ...` — de commands draaien in de
-container, niet los op de hostmachine. Voor commando's die de prod-database nodig
-hebben, wordt `DATABASE_URL` per aanroep overschreven zodat die via de tunnel naar
-`host.docker.internal:5433` wijst; zonder die override gebruikt de container gewoon
-zijn eigen (lokale dev-)verbinding.
+Er loopt nooit databaseverkeer tussen dev en prod — elk `bin/console`-commando draait
+lokaal, tegen de database die daar al staat, met de eigen (niet-overschreven)
+`DATABASE_URL` van die machine. Alleen de kleine CSV-bestanden reizen mee tussen de
+machines.
 
-> **Waar draait wat?** Overal waar `host.docker.internal` in een commando staat, draai
-> je dat commando **op de dev-machine** — nooit door in te loggen op de
-> productieserver. `ssh translatorstags-prod` opent alleen een tunnel in een apart
-> venster; je werkt daarna gewoon verder in je eigen terminal op dev.
-> `host.docker.internal` verwijst naar "de machine die deze container host", dus als je
-> het per ongeluk wél op productie zelf uitvoert (`docker exec bible_app getent hosts
-> host.docker.internal`), levert dat niets bruikbaars op — logisch, want daar luistert
-> geen tunnel op. Fase 3 hieronder is de enige stap waar je daadwerkelijk op productie
-> inlogt én daar blijft om een commando uit te voeren; dat staat er expliciet bij.
+> **Waar draai je wat?** Commando's met `docker compose exec app ...` draaien **op de
+> dev-machine**, in je eigen terminal. Commando's met `docker exec bible_app ...`
+> (zonder `compose`) draaien **op productie**, ná `ssh translatorstags-prod` — en dan
+> blijf je in die sessie totdat de stap het aangeeft. Dat onderscheid — `docker compose
+> exec app` vs. `docker exec bible_app` — is bewust: het vertelt je meteen op welke
+> machine een commando hoort te draaien.
 
 > **Werkmap:** draai elk `docker compose ...`-commando hieronder vanuit de
 > **projectroot** (waar `docker-compose.yml` staat) — niet vanuit `app/` en niet vanuit
@@ -395,21 +377,31 @@ zijn eigen (lokale dev-)verbinding.
 
 ### Fase 1 — Prod → Dev: manuele links ophalen
 
-Manuele links zijn een klein datavolume (op deze database: 1713 + 38 + 62 rijen), dus
-hier is de tunnel prima — geen prestatieprobleem zoals bij fase 3. Stap 2 en 3 hieronder
-draaien allebei **op de dev-machine**, in je eigen terminal — niet in de SSH-sessie van
-stap 1.
+Manuele links zijn een klein datavolume (op deze database: 1713 + 38 + 62 rijen) — geen
+reden om iets anders te doen dan wat fase 3 ook doet: lokaal exporteren, klein
+bestandje overzetten.
 
 ```bash
-# 1. Tunnel openen in een apart terminalvenster, laat die openstaan (niet verder in
-#    deze sessie werken — ga terug naar je normale dev-terminal voor stap 2 en 3)
+# 1. Inloggen op productie — en hierna WEL op productie blijven werken
 ssh translatorstags-prod
 
-# 2. Manuele links exporteren (draait op dev) — leest van prod via de tunnel, schrijft lokaal naar ./sync
-docker compose exec -e DATABASE_URL="postgresql://bible:<prod-wachtwoord>@host.docker.internal:5433/bible_compare?serverVersion=16&charset=utf8" \
-    app php bin/console app:sync:export-manual
+# 2. (op productie) Manuele links exporteren — gebruikt de eigen DATABASE_URL van de
+#    prod-container, geen tunnel of override nodig
+docker exec bible_app php bin/console app:sync:export-manual
 
-# 3. Importeren in de lokale dev-database — eerst dry-run, dan echt
+# 3. (op productie) CSV's uit de container halen naar de droplet zelf
+#    (docker cp maakt de doelmap aan als die nog niet bestaat)
+docker cp bible_app:/app/sync /tmp/sync
+
+# 4. Terug op dev (nieuw terminalvenster, of exit de ssh-sessie): CSV's ophalen
+#    (doelmap bestaat hier meestal nog niet, in tegenstelling tot fase 3 — eerst aanmaken)
+mkdir -p app/sync
+scp translatorstags-prod:/tmp/sync/manual_word_links.csv \
+    translatorstags-prod:/tmp/sync/manual_empty_links.csv \
+    translatorstags-prod:/tmp/sync/manual_itl.csv \
+    app/sync/
+
+# 5. Importeren in de lokale dev-database — eerst dry-run, dan echt
 docker compose exec app php bin/console app:sync:import-manual --dry-run
 docker compose exec app php bin/console app:sync:import-manual
 ```
@@ -503,5 +495,5 @@ docker exec bible_app php bin/console app:sync:import-computed --input-dir=/tmp/
 | Word-IDs kunnen verschillen tussen dev en prod als tabellen opnieuw zijn geladen | Exporteer op basis van `(hebrew_word_id, greek_word_id, translation_word_id)`, niet op basis van `word_links.id` |
 | Manuele link op prod die op dev nog niet bestaat → wordt gerespecteerd | De `NOT EXISTS (manual)`-guard in import-computed dekt dit af |
 | Conflict: zelfde bronwoord heeft berekende link op prod én manuele link op prod | Manuele wint altijd — berekende wordt niet overschreven |
-| CSV-bestanden bevatten gevoelige data (linkanotaties) | Blijven lokaal op dev / gaan via de SSH-tunnel, nooit via een publieke URL |
+| CSV-bestanden bevatten gevoelige data (linkanotaties) | Gaan alleen via `scp`/`docker cp` over SSH, nooit via een publieke URL |
 | `link_confidence.created_by_user_id` verwijst naar een user-ID dat op prod iets anders kan betekenen dan op dev | Wordt bewust niet gesynchroniseerd (zie `import-manual`) |

@@ -19,6 +19,9 @@
 # Uploaded blog images (persisted via the blog_uploads Docker volume, not the repo)
 /public/uploads/
 
+# CSV export/import scratch files from the app:sync:* commands (docs/data-sync.md)
+/sync/
+
 ###> phpunit/phpunit ###
 /phpunit.xml
 /.phpunit.cache/
