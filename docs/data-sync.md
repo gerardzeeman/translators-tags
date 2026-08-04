@@ -251,10 +251,20 @@ niet los op de hostmachine — er is geen lokale PHP-installatie nodig of aanwez
 Vanuit die container is de tunnel, die op de hostmachine luistert, bereikbaar via
 `host.docker.internal`, **niet** via `localhost` (dat zou de container zelf zijn).
 
+> ⚠️ **Belangrijk: bind de tunnel op alle interfaces, niet alleen loopback.** Een tunnel
+> geopend als `ssh -L 5433:localhost:5432 ...` (zonder bind-adres) luistert standaard
+> **alleen** op `127.0.0.1`/`::1`. Docker Desktop's `host.docker.internal`-verkeer komt
+> vanuit de container niet binnen als "echte" loopback-traffic, waardoor zo'n tunnel
+> vanuit de container onbereikbaar is — je krijgt dan `SQLSTATE[08006] ... server closed
+> the connection unexpectedly`, óók als de tunnel zelf gewoon actief is (bevestigd:
+> `netstat` toont de tunnel keurig `LISTENING`, maar een container die er via
+> `host.docker.internal` mee probeert te praten krijgt de verbinding niet voor elkaar).
+> Bind daarom expliciet op alle interfaces met `0.0.0.0:<poort>` vóór de dubbele punt:
+
 ```bash
-# Open tunnel: host:5433 → prod-PostgreSQL via SSH
+# Open tunnel: host:5433 → prod-PostgreSQL via SSH — let op de 0.0.0.0: bind-prefix
 # Draai dit commando in een apart terminalvenster, laat het openstaan
-ssh -N -L 5433:localhost:5432 root@<droplet-ip>
+ssh -N -L 0.0.0.0:5433:localhost:5432 root@<droplet-ip>
 
 # Zolang de tunnel open staat, kan de app-container verbinding maken met prod:
 docker compose exec -e DATABASE_URL="postgresql://bible:<wachtwoord>@host.docker.internal:5433/bible_compare?serverVersion=16&charset=utf8" \
@@ -287,7 +297,7 @@ Host translatorstags-prod
     HostName <droplet-ip>
     User root
     IdentityFile ~/.ssh/id_ed25519_do
-    LocalForward 5433 localhost:5432
+    LocalForward 0.0.0.0:5433 localhost:5432
 ```
 
 Dan volstaat: `ssh translatorstags-prod` om de tunnel automatisch te openen.
