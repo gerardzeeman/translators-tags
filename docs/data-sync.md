@@ -243,49 +243,26 @@ en niet ge-exposed in docker-compose). De enige toegangspoort is SSH (poort 22).
 ### Aanbevolen aanpak: SSH-tunnel
 
 Een SSH-tunnel forward prod-PostgreSQL tijdelijk naar een lokale poort op de dev-machine.
-De Symfony-commands en psql-scripts "zien" dan een gewone lokale database — geen
-speciale SSH-logica nodig in de applicatiecode.
+De Symfony-commands "zien" dan een gewone lokale database — geen speciale SSH-logica
+nodig in de applicatiecode.
+
+De commands draaien zelf **in de `app`-container** (`docker compose exec app ...`),
+niet los op de hostmachine — er is geen lokale PHP-installatie nodig of aanwezig.
+Vanuit die container is de tunnel, die op de hostmachine luistert, bereikbaar via
+`host.docker.internal`, **niet** via `localhost` (dat zou de container zelf zijn).
 
 ```bash
-# Open tunnel: localhost:5433 → prod-PostgreSQL via SSH
-# Draai dit commando in een apart terminalvenster
+# Open tunnel: host:5433 → prod-PostgreSQL via SSH
+# Draai dit commando in een apart terminalvenster, laat het openstaan
 ssh -N -L 5433:localhost:5432 root@<droplet-ip>
 
-# Zolang de tunnel open staat, kun je lokaal verbinding maken met prod:
-psql -h localhost -p 5433 -U bible bible_compare
-
-# Of via DATABASE_URL:
-DATABASE_URL="postgresql://bible:<wachtwoord>@localhost:5433/bible_compare" \
-    php bin/console app:sync:export-manual
+# Zolang de tunnel open staat, kan de app-container verbinding maken met prod:
+docker compose exec -e DATABASE_URL="postgresql://bible:<wachtwoord>@host.docker.internal:5433/bible_compare" \
+    app php bin/console app:sync:export-manual
 ```
 
-**Prod → Dev (manuele links ophalen):**
-```bash
-# 1. Open SSH-tunnel naar prod (zie boven)
-# 2. Exporteer manuele links van prod naar lokaal CSV
-DATABASE_URL="postgresql://bible:<pw>@localhost:5433/bible_compare" \
-    php bin/console app:sync:export-manual --output-dir=./sync/
-
-# 3. Importeer in lokale dev-database
-php bin/console app:sync:import-manual --input-dir=./sync/
-```
-
-**Dev → Prod (berekende links uploaden):**
-```bash
-# 1. Ingest en align draaien op dev (lokale DB)
-python ingest/main.py
-php bin/console app:link:translations:auto
-
-# 2. Exporteer berekende links van dev
-php bin/console app:sync:export-computed --output-dir=./sync/
-
-# 3. Open SSH-tunnel naar prod
-ssh -N -L 5433:localhost:5432 root@<droplet-ip>
-
-# 4. Importeer op prod via tunnel (met manuele-link-bescherming)
-DATABASE_URL="postgresql://bible:<pw>@localhost:5433/bible_compare" \
-    php bin/console app:sync:import-computed --input-dir=./sync/
-```
+Zie het [stappenplan](#stappenplan-volledige-synchronisatie-uitvoeren) hieronder voor de
+volledige, uitvoerbare commandoreeks voor beide richtingen.
 
 ### Alternatief: directe pipe over SSH (geen tussenbestanden)
 
@@ -319,43 +296,142 @@ Dan volstaat: `ssh translatorstags-prod` om de tunnel automatisch te openen.
 
 ## Implementatie als Symfony-commands
 
-De SQL-logica hierboven is het best te verpakken in twee Symfony-console-commands,
-zodat ze traceerbaar zijn, gebruik kunnen maken van de bestaande database-verbinding,
-en eenvoudig te cron-en zijn.
+**Status: geïmplementeerd.** De SQL-logica hierboven is verpakt in vier
+Symfony-console-commands ([`app/src/Command/`](../app/src/Command)), traceerbaar via de
+gewone Symfony-logging en gebruik makend van de bestaande database-verbinding.
 
-| Command | Beschrijving |
-|---|---|
-| `app:sync:export-manual` | Exporteert manuele links naar CSV (draait op prod of dev) |
-| `app:sync:import-manual` | Importeert manuele links van prod naar dev (draait op dev) |
-| `app:sync:export-computed` | Exporteert berekende links naar CSV (draait op dev) |
-| `app:sync:import-computed` | Importeert berekende links op prod, met manuele-link-bescherming |
+| Command | Beschrijving | Opties |
+|---|---|---|
+| `app:sync:export-manual` | Exporteert manuele links naar CSV (draait op prod, via de tunnel of ssh) | `--output-dir` (default `./sync`) |
+| `app:sync:import-manual` | Importeert manuele links van prod naar dev (draait op dev) | `--input-dir` (default `./sync`), `--dry-run` |
+| `app:sync:export-computed` | Exporteert berekende links naar CSV (draait op dev) | `--output-dir` (default `./sync`) |
+| `app:sync:import-computed` | Importeert berekende links op prod, met manuele-link-bescherming | `--input-dir` (default `./sync`), `--dry-run` |
 
-Elk command krijgt opties `--output-dir` / `--input-file` en `--dry-run`.
+Beide export-commands en beide import-commands streamen rij voor rij (Doctrine's
+`iterateAssociative()` bij export, een generator bij het inlezen van CSV bij import) —
+nodig omdat `inter_translation_links` alleen al 700k+ berekende rijen bevat, wat het
+standaard PHP-geheugenlimiet (128MB) overschrijdt als je alles in één array laadt.
 
 ---
 
 ## Werkstroom in de praktijk
 
+Beide richtingen lopen via de SSH-tunnel, rechtstreeks vanaf de dev-machine — er is geen
+handmatige SCP/SFTP-overdracht van CSV-bestanden nodig (zie
+[Technische verbinding](#technische-verbinding-dev-pc--digitalocean) hierboven). De
+CSV's blijven lokaal op dev staan; alleen de databaseverbinding wisselt tussen lokaal
+en getunneld naar prod.
+
 ```
 ┌─────────────────────────────────────────────────────┐
 │                    DEV-MACHINE                       │
 │                                                      │
-│  1. app:sync:import-manual ← manual_*.csv (van prod)│
-│  2. python ingest/main.py  (ingest + align)          │
-│  3. php bin/console app:link:translations:auto       │
-│  4. app:sync:export-computed → computed_*.csv        │
-└──────────────────────────┬──────────────────────────┘
-                           │ computed_*.csv via SCP/SFTP
-                           ▼
-┌─────────────────────────────────────────────────────┐
-│                 PRODUCTIE-DROPLET                    │
-│                                                      │
-│  0. app:sync:export-manual → manual_*.csv (stap 1)  │
-│  5. app:sync:import-computed (met guard op manual)   │
+│  1. app:sync:export-manual  (via tunnel, leest prod) │
+│  2. app:sync:import-manual  (lokaal, schrijft dev)   │
+│  3. align_heuristic.py      (lokaal, alignment)      │
+│  4. app:link:translations:auto  (lokaal, SV↔HSV)     │
+│  5. app:sync:export-computed (lokaal, leest dev)     │
+│  6. app:sync:import-computed (via tunnel, schrijft   │
+│     prod — met guard op manuele links)               │
 └─────────────────────────────────────────────────────┘
 ```
 
 **Frequentie:** typisch na elke ingest-run (wekelijks/maandelijks).
+
+Het volledige, uitvoerbare stappenplan staat hieronder.
+
+---
+
+## Stappenplan: volledige synchronisatie uitvoeren
+
+Ga in deze volgorde te werk — begin altijd met **Prod → Dev**, anders overschrijft een
+berekende dev-link straks een manuele link die na de laatste sync op prod is
+bijgekomen.
+
+**Voorwaarden:**
+- Dev-stack draait: `docker compose --env-file .env.local up -d` (zie [README](../README.md))
+- SSH-tunnel-alias `translatorstags-prod` staat in `~/.ssh/config` (zie hierboven)
+
+Alle commando's gaan via `docker compose exec app ...` — de commands draaien in de
+container, niet los op de hostmachine. Voor commando's die de prod-database nodig
+hebben, wordt `DATABASE_URL` per aanroep overschreven zodat die via de tunnel naar
+`host.docker.internal:5433` wijst; zonder die override gebruikt de container gewoon
+zijn eigen (lokale dev-)verbinding.
+
+### Fase 1 — Prod → Dev: manuele links ophalen
+
+```bash
+# 1. Tunnel openen in een apart terminalvenster, laat die openstaan
+ssh translatorstags-prod
+
+# 2. Manuele links exporteren — leest van prod via de tunnel, schrijft lokaal naar ./sync
+docker compose exec -e DATABASE_URL="postgresql://bible:<prod-wachtwoord>@host.docker.internal:5433/bible_compare" \
+    app php bin/console app:sync:export-manual
+
+# 3. Importeren in de lokale dev-database — eerst dry-run, dan echt
+docker compose exec app php bin/console app:sync:import-manual --dry-run
+docker compose exec app php bin/console app:sync:import-manual
+```
+
+### Fase 2 — Dev: alignment draaien
+
+**Routinematig (meest voorkomend):** alleen de heuristische alignment opnieuw draaien,
+zonder de brontekst opnieuw op te halen. Dit produceert de `word_links` met
+`link_confidence.method` = `manual_hint`, `proper_noun` of `positional`:
+
+```bash
+docker compose --profile ingest run --rm ingest python align_heuristic.py
+
+# Optioneel beperkt tot één boek of vertaling:
+docker compose --profile ingest run --rm ingest python align_heuristic.py --book=GEN
+docker compose --profile ingest run --rm ingest python align_heuristic.py --translation=SV
+```
+
+**Volledige verse ingest (alleen bij nieuwe brontekst):**
+
+```bash
+docker compose --profile ingest run --rm ingest
+```
+
+> ⚠️ **Bekend probleem:** `ingest/main.py` roept in stap 5/6 nog `align_pivot.py` aan,
+> een script dat is uitgefaseerd (het bestand doet nu niets anders dan
+> `raise SystemExit(...)` — zie [`ingest/align_pivot.py`](../ingest/align_pivot.py)). De
+> methode `pivot` bestaat ook niet meer in de `link_confidence`-schemabeperking. Een
+> volledige `python main.py`-run **crasht** daardoor op die stap. Draai tot dit is
+> opgelost de stappen los, in deze volgorde (elk via
+> `docker compose --profile ingest run --rm ingest python <script>.py`):
+> `fetch_sources.py` → `parse_tahot.py` → `parse_elzevir.py` →
+> `parse_statenvertaling.py` → `align_heuristic.py` → `parse_strongs.py`.
+
+Daarna de vertaling-naar-vertaling koppeling (SV↔HSV, los van de ingest-pipeline
+hierboven):
+
+```bash
+docker compose exec app php bin/console app:link:translations:auto --dry-run
+docker compose exec app php bin/console app:link:translations:auto
+
+# Optioneel beperkt tot één familie of boek:
+docker compose exec app php bin/console app:link:translations:auto --family=SV --book=GEN
+
+# Om bestaande auto-links eerst te wissen en volledig opnieuw te berekenen:
+docker compose exec app php bin/console app:link:translations:auto --reset
+```
+
+### Fase 3 — Dev → Prod: berekende links uploaden
+
+```bash
+# 1. Exporteren vanuit de lokale dev-database
+docker compose exec app php bin/console app:sync:export-computed
+
+# 2. Tunnel openen (indien nog niet open)
+ssh translatorstags-prod
+
+# 3. Importeren op prod via de tunnel, met manuele-link-bescherming — eerst dry-run, dan echt
+docker compose exec -e DATABASE_URL="postgresql://bible:<prod-wachtwoord>@host.docker.internal:5433/bible_compare" \
+    app php bin/console app:sync:import-computed --dry-run
+docker compose exec -e DATABASE_URL="postgresql://bible:<prod-wachtwoord>@host.docker.internal:5433/bible_compare" \
+    app php bin/console app:sync:import-computed
+```
 
 ---
 
@@ -366,11 +442,5 @@ Elk command krijgt opties `--output-dir` / `--input-file` en `--dry-run`.
 | Word-IDs kunnen verschillen tussen dev en prod als tabellen opnieuw zijn geladen | Exporteer op basis van `(hebrew_word_id, greek_word_id, translation_word_id)`, niet op basis van `word_links.id` |
 | Manuele link op prod die op dev nog niet bestaat → wordt gerespecteerd | De `NOT EXISTS (manual)`-guard in import-computed dekt dit af |
 | Conflict: zelfde bronwoord heeft berekende link op prod én manuele link op prod | Manuele wint altijd — berekende wordt niet overschreven |
-| CSV-bestanden bevatten gevoelige data (linkanotaties) | Overdracht via SCP met SSH-key, niet via publieke URL |
-
----
-
-## Volgende stap
-
-Wil je dat ik de vier Symfony-commands implementeer, of eerst een van de twee
-richtingen uitwerken?
+| CSV-bestanden bevatten gevoelige data (linkanotaties) | Blijven lokaal op dev / gaan via de SSH-tunnel, nooit via een publieke URL |
+| `link_confidence.created_by_user_id` verwijst naar een user-ID dat op prod iets anders kan betekenen dan op dev | Wordt bewust niet gesynchroniseerd (zie `import-manual`) |
