@@ -273,8 +273,17 @@ geen Postgres-tunnel meer):
 Host translatorstags-prod
     HostName <droplet-ip>
     User root
-    IdentityFile ~/.ssh/id_ed25519_do
+    IdentityFile ~/.ssh/<jouw-sleutelbestand>
 ```
+
+> `IdentityFile` moet naar een sleutel wijzen die daadwerkelijk op de droplet
+> geautoriseerd staat — een niet-bestaand of onjuist pad geeft `no such identity: ...
+> No such file or directory` gevolgd door `Permission denied (publickey)`. De
+> deploy-key die de [GitHub Actions-workflow](../.github/workflows/deploy.yml) gebruikt
+> (herkenbaar aan de comment `github-actions-deploy` in het `.pub`-bestand) werkt in elk
+> geval gegarandeerd, want die staat al aantoonbaar geautoriseerd. Controleer met `ls
+> ~/.ssh/*.pub` en `cat ~/.ssh/<naam>.pub` welke sleutels je hebt vóór je een naam
+> invult.
 
 Voor Adminer (web-GUI op de database) bestaat al een aparte, wél werkende tunnel: die
 poort (8081) is op productie gebonden aan `127.0.0.1`, zie het commentaar in
