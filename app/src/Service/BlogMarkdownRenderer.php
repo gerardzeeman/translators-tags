@@ -9,6 +9,7 @@ use App\Service\Embed\EmbedFencedCodeRenderer;
 use App\Service\Embed\InstitutioEmbedRenderer;
 use League\CommonMark\CommonMarkConverter;
 use League\CommonMark\Extension\CommonMark\Node\Block\FencedCode;
+use League\CommonMark\Extension\Table\TableExtension;
 use Symfony\Component\Security\Core\Role\RoleHierarchyInterface;
 
 /**
@@ -34,6 +35,11 @@ class BlogMarkdownRenderer
             'html_input'         => 'strip',
             'allow_unsafe_links' => false,
         ]);
+
+        // CommonMarkConverter only wires up the core spec extension -- pipe
+        // tables are a GFM extension, not core CommonMark, so `| a | b |`
+        // rendered as a literal paragraph without this.
+        $this->converter->getEnvironment()->addExtension(new TableExtension());
 
         $this->converter->getEnvironment()->addRenderer(
             FencedCode::class,
