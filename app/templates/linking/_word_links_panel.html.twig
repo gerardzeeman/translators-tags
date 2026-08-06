@@ -23,6 +23,8 @@
                     <th>Notities</th>
                     <th>Aangemaakt</th>
                     <th>Door</th>
+                    <th>Link ID</th>
+                    <th>TW ID</th>
                 </tr>
             </thead>
             <tbody>
@@ -39,16 +41,19 @@
                             automatisch
                         {% endif %}
                     </td>
+                    <td class="word-links-id-cell">{{ link.link_id }}</td>
+                    <td class="word-links-id-cell">{{ link.tw_id }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
         </div>
         {% else %}
-        <p class="word-links-no-confidence">Geen confidence-gegevens voor deze koppeling.</p>
+        <p class="word-links-no-confidence">
+            Geen confidence-gegevens voor deze koppeling.
+            (link_id: {{ link.link_id }} · translation_word_id: {{ link.tw_id }})
+        </p>
         {% endif %}
-
-        <p class="word-links-ids">link_id: {{ link.link_id }} · translation_word_id: {{ link.tw_id }}</p>
     </div>
     {% endfor %}
 </div>
