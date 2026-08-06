@@ -1619,6 +1619,13 @@ a:hover { text-decoration: underline; }
 }
 @media (max-width: 900px) { .linking-area { grid-template-columns: 1fr; } }
 
+/* Its confidence table (method/score/notes/date/who — "who" can be a full
+   name + email) needs more room than a single equal-width grid track once
+   two or more panels share a row, so claim a second track when there's one
+   to claim. On a single-column layout (mobile, or a narrow window with only
+   one track) this simply clamps to span 1 — no separate override needed. */
+.link-panel-word-links { grid-column: span 2; }
+
 .link-panel {
     background: var(--bg);
     border: 1px solid var(--color-border);
@@ -2266,6 +2273,7 @@ a:hover { text-decoration: underline; }
     font-style: italic;
     color: var(--color-ink-muted);
 }
+.word-links-confidence-table-wrap { overflow-x: auto; }
 .word-links-confidence-table {
     width: 100%;
     border-collapse: collapse;
@@ -2283,6 +2291,7 @@ a:hover { text-decoration: underline; }
     padding: .3rem .5rem .3rem 0;
     border-bottom: 1px solid var(--divider);
     vertical-align: top;
+    overflow-wrap: anywhere;
 }
 .word-links-confidence-table tr:last-child td { border-bottom: none; }
 .word-links-no-confidence {

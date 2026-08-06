@@ -14,6 +14,7 @@
         </div>
 
         {% if link.confidences|length > 0 %}
+        <div class="word-links-confidence-table-wrap">
         <table class="word-links-confidence-table">
             <thead>
                 <tr>
@@ -42,6 +43,7 @@
                 {% endfor %}
             </tbody>
         </table>
+        </div>
         {% else %}
         <p class="word-links-no-confidence">Geen confidence-gegevens voor deze koppeling.</p>
         {% endif %}
