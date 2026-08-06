@@ -2,6 +2,7 @@
 
 namespace App\Controller;
 
+use App\Entity\User;
 use App\Repository\BookRepository;
 use App\Repository\LinkingRepository;
 use App\Repository\PassageRepository;
@@ -169,7 +170,9 @@ class LinkingController extends AbstractController
             return $this->json(['error' => 'Invalid parameters.'], 400);
         }
 
-        $this->linkingRepo->saveManualLinks($lang, $sourceWordId, $twIds, $translationId);
+        /** @var User $user */
+        $user = $this->getUser();
+        $this->linkingRepo->saveManualLinks($lang, $sourceWordId, $twIds, $translationId, $user->getId());
 
         return $this->json(['success' => true, 'linked' => count($twIds), 'empty' => empty($twIds)]);
     }
