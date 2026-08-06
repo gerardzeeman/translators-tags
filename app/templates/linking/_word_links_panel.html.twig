@@ -1,0 +1,56 @@
+<turbo-frame id="word-links-panel">
+{% if links|length > 0 %}
+<div class="word-links-list">
+    {% for link in links %}
+    <div class="word-links-entry">
+        <div class="word-links-entry-head">
+            <span class="trans-badge">{{ link.translation_code }}</span>
+            <span class="word-links-ref">
+                {{ link.book_name }} {{ link.chapter }}:{{ link.verse }}
+            </span>
+            <span class="word-links-tw">
+                “{{ link.word_text }}”{% if link.is_filler %} <span class="word-filler-tag" title="Cursief woord zonder directe brontaalbasis">toegevoegd</span>{% endif %}
+            </span>
+        </div>
+
+        {% if link.confidences|length > 0 %}
+        <table class="word-links-confidence-table">
+            <thead>
+                <tr>
+                    <th>Methode</th>
+                    <th>Score</th>
+                    <th>Notities</th>
+                    <th>Aangemaakt</th>
+                    <th>Door</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for c in link.confidences %}
+                <tr>
+                    <td><span class="dot method-{{ c.method }}"></span> {{ c.method }}</td>
+                    <td>{{ c.score is not null ? (c.score * 100)|round ~ '%' : '–' }}</td>
+                    <td>{{ c.notes ?: '–' }}</td>
+                    <td>{{ c.created_at ? c.created_at|date('d-m-Y H:i') : '–' }}</td>
+                    <td>
+                        {% if c.created_by_name %}
+                            {{ c.created_by_name }}{% if c.created_by_email %} <span class="word-links-email">({{ c.created_by_email }})</span>{% endif %}
+                        {% else %}
+                            automatisch
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="word-links-no-confidence">Geen confidence-gegevens voor deze koppeling.</p>
+        {% endif %}
+
+        <p class="word-links-ids">link_id: {{ link.link_id }} · translation_word_id: {{ link.tw_id }}</p>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<p class="strongs-placeholder">Dit woord heeft nog geen koppelingen.</p>
+{% endif %}
+</turbo-frame>

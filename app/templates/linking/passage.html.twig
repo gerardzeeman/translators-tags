@@ -105,6 +105,11 @@
                         <a href="{{ path('app_strongs', {number: word.strongs}) }}"
                            class="src-strongs"
                            data-turbo-frame="strongs-panel">{{ word.strongs }}</a>
+                        {% if is_granted('ROLE_LINKER') %}
+                        <a href="{{ path('api_linking_word_links', {lang: lang, sourceId: word.id}) }}"
+                           class="src-links-detail"
+                           data-turbo-frame="word-links-panel">alle links</a>
+                        {% endif %}
                     </div>
                     {% endif %}
 
@@ -165,6 +170,16 @@
                 <p class="strongs-placeholder">Selecteer een bronwoord om details te zien.</p>
             </turbo-frame>
         </section>
+
+        {# All links for a word — review data, linkers only #}
+        {% if is_granted('ROLE_LINKER') %}
+        <section class="link-panel link-panel-word-links">
+            <h2 class="panel-label">Alle links</h2>
+            <turbo-frame id="word-links-panel">
+                <p class="strongs-placeholder">Selecteer een bronwoord om alle koppelingen te zien.</p>
+            </turbo-frame>
+        </section>
+        {% endif %}
 
     </div>
 

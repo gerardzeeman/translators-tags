@@ -1614,7 +1614,7 @@ a:hover { text-decoration: underline; }
 
 .linking-area {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
     gap: 1.5rem;
 }
 @media (max-width: 900px) { .linking-area { grid-template-columns: 1fr; } }
@@ -1697,6 +1697,7 @@ a:hover { text-decoration: underline; }
 .src-translit { font-size: .65rem; color: var(--color-ink-muted); font-style: italic; }
 /* src-strongs zit in .word-popup; stijl zichtbaar in popup */
 .src-strongs  { font-family: var(--font-mono); font-size: .7rem; color: #ecc07a; text-decoration: none; }
+.src-links-detail { font-size: .65rem; color: var(--color-ink-muted); text-decoration: underline; }
 .strongs-highlight { color: #ecc07a; font-weight: 600; }
 /* Popup activeren voor .src-word (zelfde mechanisme als .source-word) */
 .src-word:hover .word-popup,
@@ -2245,6 +2246,58 @@ a:hover { text-decoration: underline; }
     font-family: var(--font-mono);
     margin-top: .5rem;
 }
+
+.word-links-list { display: flex; flex-direction: column; gap: 1rem; }
+.word-links-entry {
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    padding: .75rem 1rem;
+}
+.word-links-entry-head {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: .5rem;
+    margin-bottom: .5rem;
+}
+.word-links-ref { font-size: .85rem; color: var(--color-ink-light); }
+.word-links-tw  { font-size: .95rem; }
+.word-filler-tag {
+    font-size: .7rem;
+    font-style: italic;
+    color: var(--color-ink-muted);
+}
+.word-links-confidence-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: .82rem;
+}
+.word-links-confidence-table th {
+    text-align: left;
+    font-weight: 600;
+    color: var(--color-ink-muted);
+    font-size: .75rem;
+    padding: .25rem .5rem .25rem 0;
+    border-bottom: 1px solid var(--divider);
+}
+.word-links-confidence-table td {
+    padding: .3rem .5rem .3rem 0;
+    border-bottom: 1px solid var(--divider);
+    vertical-align: top;
+}
+.word-links-confidence-table tr:last-child td { border-bottom: none; }
+.word-links-no-confidence {
+    font-size: .82rem;
+    font-style: italic;
+    color: var(--color-ink-muted);
+}
+.word-links-ids {
+    font-size: .7rem;
+    font-family: var(--font-mono);
+    color: var(--color-ink-muted);
+    margin-top: .5rem;
+}
+.word-links-email { color: var(--color-ink-muted); }
 
 .word-filler {
     font-style: italic;
