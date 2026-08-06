@@ -1697,7 +1697,6 @@ a:hover { text-decoration: underline; }
 .src-translit { font-size: .65rem; color: var(--color-ink-muted); font-style: italic; }
 /* src-strongs zit in .word-popup; stijl zichtbaar in popup */
 .src-strongs  { font-family: var(--font-mono); font-size: .7rem; color: #ecc07a; text-decoration: none; }
-.src-links-detail { font-size: .65rem; color: var(--color-ink-muted); text-decoration: underline; }
 .strongs-highlight { color: #ecc07a; font-weight: 600; }
 /* Popup activeren voor .src-word (zelfde mechanisme als .source-word) */
 .src-word:hover .word-popup,
