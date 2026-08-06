@@ -124,18 +124,23 @@ def insert_word_link(source_language: str, source_word_id: int,
 
 
 def insert_link_confidence(link_id: int, method: str, score: float,
-                            created_by: str | None = None,
+                            created_by_user_id: int | None = None,
                             notes: str | None = None) -> None:
+    # created_by_user_id is an FK to users(id); automated links (the only
+    # kind this ingest pipeline creates) leave it NULL — matches the column
+    # name added by a later Doctrine migration on the app side (the schema
+    # used to call this `created_by TEXT`; see git history if that's
+    # confusing).
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
                 INSERT INTO link_confidence
-                    (link_id, method, score, created_by, notes)
+                    (link_id, method, score, created_by_user_id, notes)
                 VALUES (%s, %s, %s, %s, %s)
                 ON CONFLICT (link_id, method) DO UPDATE
                     SET score = EXCLUDED.score,
                         notes = EXCLUDED.notes
                 """,
-                (link_id, method, score, created_by, notes),
+                (link_id, method, score, created_by_user_id, notes),
             )
