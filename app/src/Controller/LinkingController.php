@@ -263,10 +263,10 @@ class LinkingController extends AbstractController
             throw $this->createNotFoundException('Source word not found.');
         }
 
-        $links = $this->linkingRepo->fetchWordLinksDetail($lang, $sourceId);
+        $translations = $this->linkingRepo->fetchWordLinksDetail($lang, $sourceId);
 
         return $this->render('linking/_word_links_panel.html.twig', [
-            'links' => $links,
+            'translations' => $translations,
         ]);
     }
 

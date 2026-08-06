@@ -1,23 +1,20 @@
 <turbo-frame id="word-links-panel">
-{% if links|length > 0 %}
+{% if translations|length > 0 %}
 <div class="word-links-list">
-    {% for link in links %}
+    {% for t in translations %}
     <div class="word-links-entry">
         <div class="word-links-entry-head">
-            <span class="trans-badge">{{ link.translation_code }}</span>
+            <span class="trans-badge">{{ t.translation_code }}</span>
             <span class="word-links-ref">
-                {{ link.book_name }} {{ link.chapter }}:{{ link.verse }}
-            </span>
-            <span class="word-links-tw">
-                “{{ link.word_text }}”{% if link.is_filler %} <span class="word-filler-tag" title="Cursief woord zonder directe brontaalbasis">toegevoegd</span>{% endif %}
+                {{ t.book_name }} {{ t.chapter }}:{{ t.verse }}
             </span>
         </div>
 
-        {% if link.confidences|length > 0 %}
         <div class="word-links-confidence-table-wrap">
         <table class="word-links-confidence-table">
             <thead>
                 <tr>
+                    <th>Woord</th>
                     <th>Methode</th>
                     <th>Score</th>
                     <th>Notities</th>
@@ -28,32 +25,41 @@
                 </tr>
             </thead>
             <tbody>
-                {% for c in link.confidences %}
-                <tr>
-                    <td><span class="dot method-{{ c.method }}"></span> {{ c.method }}</td>
-                    <td>{{ c.score is not null ? (c.score * 100)|round ~ '%' : '–' }}</td>
-                    <td>{{ c.notes ?: '–' }}</td>
-                    <td>{{ c.created_at ? c.created_at|date('d-m-Y H:i') : '–' }}</td>
-                    <td>
-                        {% if c.created_by_name %}
-                            {{ c.created_by_name }}{% if c.created_by_email %} <span class="word-links-email">({{ c.created_by_email }})</span>{% endif %}
-                        {% else %}
-                            automatisch
-                        {% endif %}
-                    </td>
-                    <td class="word-links-id-cell">{{ link.link_id }}</td>
-                    <td class="word-links-id-cell">{{ link.tw_id }}</td>
-                </tr>
+                {% for link in t.links %}
+                {% set word_cell %}
+                    “{{ link.word_text }}”{% if link.is_filler %} <span class="word-filler-tag" title="Cursief woord zonder directe brontaalbasis">toegevoegd</span>{% endif %}
+                {% endset %}
+                {% if link.confidences|length > 0 %}
+                    {% for c in link.confidences %}
+                    <tr>
+                        <td class="word-links-tw">{{ word_cell }}</td>
+                        <td><span class="dot method-{{ c.method }}"></span> {{ c.method }}</td>
+                        <td>{{ c.score is not null ? (c.score * 100)|round ~ '%' : '–' }}</td>
+                        <td>{{ c.notes ?: '–' }}</td>
+                        <td>{{ c.created_at ? c.created_at|date('d-m-Y H:i') : '–' }}</td>
+                        <td>
+                            {% if c.created_by_name %}
+                                {{ c.created_by_name }}{% if c.created_by_email %} <span class="word-links-email">({{ c.created_by_email }})</span>{% endif %}
+                            {% else %}
+                                automatisch
+                            {% endif %}
+                        </td>
+                        <td class="word-links-id-cell">{{ link.link_id }}</td>
+                        <td class="word-links-id-cell">{{ link.tw_id }}</td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td class="word-links-tw">{{ word_cell }}</td>
+                        <td colspan="4" class="word-links-no-confidence">Geen confidence-gegevens</td>
+                        <td class="word-links-id-cell">{{ link.link_id }}</td>
+                        <td class="word-links-id-cell">{{ link.tw_id }}</td>
+                    </tr>
+                {% endif %}
                 {% endfor %}
             </tbody>
         </table>
         </div>
-        {% else %}
-        <p class="word-links-no-confidence">
-            Geen confidence-gegevens voor deze koppeling.
-            (link_id: {{ link.link_id }} · translation_word_id: {{ link.tw_id }})
-        </p>
-        {% endif %}
     </div>
     {% endfor %}
 </div>

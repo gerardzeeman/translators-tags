@@ -721,8 +721,15 @@ class LinkingRepository
      * confirmation on the same row). Read-only review data for the
      * ROLE_LINKER-only "all links" panel.
      *
-     * Returns one entry per word_link, each with a 'confidences' sub-array
-     * (one per link_confidence method recorded against it).
+     * Grouped by translation — a source word usually maps to more than one
+     * Dutch word within the same translation (e.g. one Greek word rendered
+     * as a short phrase), and those belong in one table together, but two
+     * translations must never be merged into the same block.
+     *
+     * Returns one entry per translation:
+     *   translation_code, translation_name, usfm_code, book_name,
+     *   chapter, verse, links: [ {link_id, tw_id, word_text, word_position,
+     *   is_filler, confidences: [...]}, ... ]
      */
     public function fetchWordLinksDetail(string $lang, int $sourceWordId): array
     {
@@ -755,7 +762,7 @@ class LinkingRepository
             LEFT JOIN link_confidence lc ON lc.link_id = wl.id
             LEFT JOIN users u            ON u.id = lc.created_by_user_id
             WHERE wl.{$idCol} = :source_id
-            ORDER BY t.code, lc.score DESC NULLS LAST, lc.method
+            ORDER BY t.code, tw.word_position, lc.score DESC NULLS LAST, lc.method
         SQL;
 
         $rows = $this->connection->fetchAllAssociative($sql, ['source_id' => $sourceWordId]);
@@ -791,7 +798,25 @@ class LinkingRepository
             }
         }
 
-        return array_values($links);
+        // Group per translation, preserving first-seen (SQL-sorted) order.
+        $groups = [];
+        foreach ($links as $link) {
+            $code = $link['translation_code'];
+            if (!isset($groups[$code])) {
+                $groups[$code] = [
+                    'translation_code' => $link['translation_code'],
+                    'translation_name' => $link['translation_name'],
+                    'usfm_code'        => $link['usfm_code'],
+                    'book_name'        => $link['book_name'],
+                    'chapter'          => $link['chapter'],
+                    'verse'            => $link['verse'],
+                    'links'            => [],
+                ];
+            }
+            $groups[$code]['links'][] = $link;
+        }
+
+        return array_values($groups);
     }
 
     /**
