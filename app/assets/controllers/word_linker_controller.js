@@ -17,6 +17,13 @@ export default class extends Controller {
     // ── Source word selected ──────────────────────────────────────────────────
 
     selectSource(event) {
+        // Let clicks on the Strong's popup link behave natively — it needs to
+        // bubble up to Turbo's document-level click listener so the
+        // data-turbo-frame="strongs-panel" navigation is intercepted and
+        // scoped to the frame. stopPropagation() here would swallow that
+        // before Turbo ever sees the click, falling back to a full page load.
+        if (event.target.closest('a[data-turbo-frame]')) return
+
         event.stopPropagation()
         const el       = event.currentTarget
         const sourceId = el.dataset.sourceId

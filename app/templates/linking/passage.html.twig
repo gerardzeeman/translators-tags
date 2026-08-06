@@ -90,7 +90,6 @@
                      data-source-id="{{ word.id }}"
                      data-lang="{{ lang }}"
                      data-strongs="{{ word.strongs }}"
-                     data-strongs-url="{{ word.strongs ? path('app_strongs', {number: word.strongs}) : '' }}"
                      data-linked-tw-ids="{{ linked_tw_ids }}"
                      data-action="click->word-linker#selectSource"
                      data-word-linker-target="sourceWord">
@@ -103,7 +102,9 @@
 
                     {% if word.strongs %}
                     <div class="word-popup">
-                        <span class="src-strongs">{{ word.strongs }}</span>
+                        <a href="{{ path('app_strongs', {number: word.strongs}) }}"
+                           class="src-strongs"
+                           data-turbo-frame="strongs-panel">{{ word.strongs }}</a>
                     </div>
                     {% endif %}
 
