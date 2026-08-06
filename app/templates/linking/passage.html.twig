@@ -90,6 +90,8 @@
                      data-source-id="{{ word.id }}"
                      data-lang="{{ lang }}"
                      data-strongs="{{ word.strongs }}"
+                     data-strongs-url="{{ word.strongs ? path('app_strongs', {number: word.strongs}) : '' }}"
+                     {% if is_granted('ROLE_LINKER') %}data-word-links-url="{{ path('api_linking_word_links', {lang: lang, sourceId: word.id}) }}"{% endif %}
                      data-linked-tw-ids="{{ linked_tw_ids }}"
                      data-action="click->word-linker#selectSource"
                      data-word-linker-target="sourceWord">
@@ -102,14 +104,7 @@
 
                     {% if word.strongs %}
                     <div class="word-popup">
-                        <a href="{{ path('app_strongs', {number: word.strongs}) }}"
-                           class="src-strongs"
-                           data-turbo-frame="strongs-panel">{{ word.strongs }}</a>
-                        {% if is_granted('ROLE_LINKER') %}
-                        <a href="{{ path('api_linking_word_links', {lang: lang, sourceId: word.id}) }}"
-                           class="src-links-detail"
-                           data-turbo-frame="word-links-panel">alle links</a>
-                        {% endif %}
+                        <span class="src-strongs">{{ word.strongs }}</span>
                     </div>
                     {% endif %}
 

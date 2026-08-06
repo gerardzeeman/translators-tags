@@ -17,13 +17,6 @@ export default class extends Controller {
     // ── Source word selected ──────────────────────────────────────────────────
 
     selectSource(event) {
-        // Let clicks on the Strong's popup link behave natively — it needs to
-        // bubble up to Turbo's document-level click listener so the
-        // data-turbo-frame="strongs-panel" navigation is intercepted and
-        // scoped to the frame. stopPropagation() here would swallow that
-        // before Turbo ever sees the click, falling back to a full page load.
-        if (event.target.closest('a[data-turbo-frame]')) return
-
         event.stopPropagation()
         const el       = event.currentTarget
         const sourceId = el.dataset.sourceId
@@ -35,7 +28,7 @@ export default class extends Controller {
             return
         }
 
-        this.#reset(false)
+        this.#reset(false, false)
 
         this.#selectedSourceId   = sourceId
         this.#selectedSourceLang = lang
@@ -59,6 +52,7 @@ export default class extends Controller {
 
         this.#showActionBar(el)
         this.#setStatus('Geselecteerd: klik Nederlandse woorden om te koppelen.')
+        this.#loadDetailPanels(el)
     }
 
     // ── Dutch word toggled ────────────────────────────────────────────────────
@@ -210,7 +204,11 @@ export default class extends Controller {
 
     // ── Private helpers ───────────────────────────────────────────────────────
 
-    #reset(clearStatus = true) {
+    // clearPanels is false when #reset() is called right before selecting a
+    // *different* word (selectSource already resets state before applying the
+    // new selection) — fresh panel content is about to load anyway, so
+    // flashing the placeholder first would just be visual noise.
+    #reset(clearStatus = true, clearPanels = true) {
         this.sourceWordTargets.forEach(el => el.classList.remove('src-word-active'))
         this.dutchWordTargets.forEach(el => el.classList.remove('nl-word-selected'))
 
@@ -223,6 +221,7 @@ export default class extends Controller {
             this.actionBarTargets.forEach(el => el.style.display = 'none')
         }
         if (clearStatus) this.#setStatus('Klik een bronwoord om te beginnen.')
+        if (clearPanels) this.#clearDetailPanels()
     }
 
     #findDutchWord(twId) {
@@ -266,6 +265,58 @@ export default class extends Controller {
 
     #deleteUrl(linkId) {
         return this.deleteUrlValue.replace(/\/0$/, '/' + linkId)
+    }
+
+    // ── Detail panels (Strong's + all-links) ──────────────────────────────────
+    // Loaded via plain fetch rather than Turbo Frame anchor navigation: both
+    // panels update from the same word click, and a single click can't target
+    // two Turbo Frames at once.
+
+    #loadDetailPanels(sourceEl) {
+        this.#loadFrame('strongs-panel', sourceEl.dataset.strongsUrl,
+            'Geen Strong\'s-nummer voor dit woord.')
+        this.#loadFrame('word-links-panel', sourceEl.dataset.wordLinksUrl, null)
+    }
+
+    #clearDetailPanels() {
+        this.#placeholder('strongs-panel', 'Selecteer een bronwoord om details te zien.')
+        this.#placeholder('word-links-panel', 'Selecteer een bronwoord om alle koppelingen te zien.')
+    }
+
+    async #loadFrame(frameId, url, emptyMessage) {
+        const frame = document.getElementById(frameId)
+        // Frame may not be in the DOM at all (e.g. word-links-panel is only
+        // rendered for ROLE_LINKER) — nothing to do.
+        if (!frame) return
+
+        if (!url) {
+            this.#placeholder(frameId, emptyMessage)
+            return
+        }
+
+        try {
+            const resp = await fetch(url, { headers: { 'Accept': 'text/html' } })
+            if (!resp.ok) return
+
+            const html = await resp.text()
+            // Parse via DOMParser (safer than innerHTML, avoids script execution)
+            const doc = new DOMParser().parseFromString(html, 'text/html')
+            const newFrame = doc.getElementById(frameId)
+            if (newFrame) frame.innerHTML = newFrame.innerHTML
+        } catch {
+            // Detail panels are supplementary — a failed fetch shouldn't
+            // interrupt the linking workflow, just leave the previous content.
+        }
+    }
+
+    #placeholder(frameId, message) {
+        const frame = document.getElementById(frameId)
+        if (!frame || !message) return
+        frame.replaceChildren()
+        const p = document.createElement('p')
+        p.className = 'strongs-placeholder'
+        p.textContent = message
+        frame.appendChild(p)
     }
 
     // ── Partial refresh helpers (Strongs view only) ───────────────────────────
