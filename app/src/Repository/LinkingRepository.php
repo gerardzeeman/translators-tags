@@ -704,6 +704,87 @@ class LinkingRepository
     }
 
     /**
+     * Every word_links row for a single source word (one Hebrew/Greek
+     * occurrence), across all translations, with every link_confidence entry
+     * recorded against it (a link can carry more than one method — e.g. an
+     * older 'positional' guess left in place alongside a later 'manual'
+     * confirmation on the same row). Read-only review data for the
+     * ROLE_LINKER-only "all links" panel.
+     *
+     * Returns one entry per word_link, each with a 'confidences' sub-array
+     * (one per link_confidence method recorded against it).
+     */
+    public function fetchWordLinksDetail(string $lang, int $sourceWordId): array
+    {
+        $idCol = $lang === 'HE' ? 'hebrew_word_id' : 'greek_word_id';
+
+        $sql = <<<SQL
+            SELECT
+                wl.id             AS link_id,
+                t.code            AS translation_code,
+                t.name            AS translation_name,
+                b.usfm_code,
+                b.name_nl         AS book_name,
+                tv.chapter,
+                tv.verse,
+                tw.id             AS tw_id,
+                tw.word_text,
+                tw.word_position,
+                tw.is_filler,
+                lc.method,
+                lc.score,
+                lc.notes,
+                lc.created_at,
+                u.display_name    AS created_by_name,
+                u.email           AS created_by_email
+            FROM word_links wl
+            JOIN translation_words tw    ON tw.id = wl.translation_word_id
+            JOIN translation_verses tv   ON tv.id = tw.verse_id
+            JOIN translations t          ON t.id = tv.translation_id
+            JOIN books b                 ON b.id = tv.book_id
+            LEFT JOIN link_confidence lc ON lc.link_id = wl.id
+            LEFT JOIN users u            ON u.id = lc.created_by_user_id
+            WHERE wl.{$idCol} = :source_id
+            ORDER BY t.code, lc.score DESC NULLS LAST, lc.method
+        SQL;
+
+        $rows = $this->connection->fetchAllAssociative($sql, ['source_id' => $sourceWordId]);
+
+        $links = [];
+        foreach ($rows as $row) {
+            $linkId = (int) $row['link_id'];
+            if (!isset($links[$linkId])) {
+                $links[$linkId] = [
+                    'link_id'          => $linkId,
+                    'translation_code' => $row['translation_code'],
+                    'translation_name' => $row['translation_name'],
+                    'usfm_code'        => $row['usfm_code'],
+                    'book_name'        => $row['book_name'],
+                    'chapter'          => (int) $row['chapter'],
+                    'verse'            => (int) $row['verse'],
+                    'tw_id'            => (int) $row['tw_id'],
+                    'word_text'        => $row['word_text'],
+                    'word_position'    => (int) $row['word_position'],
+                    'is_filler'        => (bool) $row['is_filler'],
+                    'confidences'      => [],
+                ];
+            }
+            if ($row['method'] !== null) {
+                $links[$linkId]['confidences'][] = [
+                    'method'           => $row['method'],
+                    'score'            => $row['score'] !== null ? (float) $row['score'] : null,
+                    'notes'            => $row['notes'],
+                    'created_at'       => $row['created_at'],
+                    'created_by_name'  => $row['created_by_name'],
+                    'created_by_email' => $row['created_by_email'],
+                ];
+            }
+        }
+
+        return array_values($links);
+    }
+
+    /**
      * Return the Strong's dictionary entry for a given Strong's number,
      * or null if the strongs_entries table has not been populated yet.
      *

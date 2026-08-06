@@ -11,6 +11,7 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 #[Route('/link')]
 class LinkingController extends AbstractController
@@ -239,6 +240,31 @@ class LinkingController extends AbstractController
             strtoupper($strongs), $translationEntity->getId()
         );
         return $this->json($progress);
+    }
+
+    /**
+     * Turbo Frame partial: every existing word_links entry for one source
+     * word, across all translations, with full link_confidence detail.
+     * Explicitly gated on ROLE_LINKER (in addition to the ^/link
+     * access_control rule) since it exposes internal review metadata
+     * (who linked what, when, and how confident the automation was).
+     *
+     * GET /link/api/word-links/{lang}/{sourceId}
+     */
+    #[IsGranted('ROLE_LINKER')]
+    #[Route('/api/word-links/{lang}/{sourceId<\d+>}', name: 'api_linking_word_links',
+            requirements: ['lang' => 'HE|GR'], methods: ['GET'])]
+    public function wordLinks(string $lang, int $sourceId): Response
+    {
+        if (!$this->linkingRepo->sourceWordExists($lang, $sourceId)) {
+            throw $this->createNotFoundException('Source word not found.');
+        }
+
+        $links = $this->linkingRepo->fetchWordLinksDetail($lang, $sourceId);
+
+        return $this->render('linking/_word_links_panel.html.twig', [
+            'links' => $links,
+        ]);
     }
 
     // ── Navigation helper ─────────────────────────────────────────────────────
