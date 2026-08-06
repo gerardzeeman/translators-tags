@@ -592,8 +592,12 @@ class LinkingRepository
      * When $twIds is empty the word is saved as "manually confirmed: no link",
      * stored in manual_empty_links. Existing word_links for this source word
      * within the given translation are removed either way.
+     *
+     * $createdByUserId is recorded on link_confidence for the $twIds branch
+     * (manual_empty_links has no such column). Not attached to a specific
+     * user if null — e.g. when this is ever called from a script.
      */
-    public function saveManualLinks(string $lang, int $sourceWordId, array $twIds, int $translationId): void
+    public function saveManualLinks(string $lang, int $sourceWordId, array $twIds, int $translationId, ?int $createdByUserId = null): void
     {
         $idCol = $lang === 'HE' ? 'hebrew_word_id' : 'greek_word_id';
 
@@ -633,7 +637,7 @@ class LinkingRepository
             // Batch-insert all word_links, then batch-insert link_confidence.
             // Using RETURNING to get IDs for the confidence insert.
             // ON CONFLICT … DO UPDATE (no-op) ensures RETURNING always fires.
-            $this->connection->transactional(function () use ($idCol, $lang, $sourceWordId, $twIds): void {
+            $this->connection->transactional(function () use ($idCol, $lang, $sourceWordId, $twIds, $createdByUserId): void {
                 $linkIds = [];
                 foreach ($twIds as $twId) {
                     $linkIds[] = $this->connection->fetchOne(
@@ -647,11 +651,17 @@ class LinkingRepository
                 }
 
                 foreach ($linkIds as $linkId) {
+                    // COALESCE keeps the original creator on re-save (e.g. re-picking the
+                    // same Dutch word after tweaking the selection) — matches the pattern
+                    // already used for inter_translation_links, see saveInterTranslationLink().
                     $this->connection->executeStatement(
-                        "INSERT INTO link_confidence (link_id, method, score, created_at)
-                         VALUES (:link_id, 'manual', 1.000, NOW())
-                         ON CONFLICT (link_id, method) DO UPDATE SET score = 1.000, created_at = NOW()",
-                        ['link_id' => (int) $linkId]
+                        "INSERT INTO link_confidence (link_id, method, score, created_at, created_by_user_id)
+                         VALUES (:link_id, 'manual', 1.000, NOW(), :created_by_user_id)
+                         ON CONFLICT (link_id, method) DO UPDATE
+                            SET score = 1.000,
+                                created_at = NOW(),
+                                created_by_user_id = COALESCE(link_confidence.created_by_user_id, EXCLUDED.created_by_user_id)",
+                        ['link_id' => (int) $linkId, 'created_by_user_id' => $createdByUserId]
                     );
                 }
             });
