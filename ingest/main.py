@@ -43,8 +43,9 @@ def main():
     from parse_statenvertaling import parse_statenvertaling
     step("5/7  Parse Statenvertaling", parse_statenvertaling)
 
-    from align_heuristic import align_heuristic
-    step("6/7  Heuristic alignment (fallback)", align_heuristic)
+    from align_heuristic import align_heuristic, resolve_translation
+    step("6/7  Heuristic alignment (fallback)",
+         lambda: align_heuristic(translation_id=resolve_translation("SV")))
 
     from parse_strongs import parse_strongs
     step("7/7  Strong's dictionary", parse_strongs)
