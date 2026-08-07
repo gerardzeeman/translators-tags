@@ -64,7 +64,7 @@
                         {% endif %}
                     </td>
                     {% endfor %}
-                    <td class="stats-shortdef">{{ row.short_def ?: '–' }}</td>
+                    <td class="stats-shortdef" title="{{ row.short_def }}">{{ row.short_def ?: '–' }}</td>
                 </tr>
                 {% endfor %}
             </tbody>

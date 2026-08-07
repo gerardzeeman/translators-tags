@@ -2331,9 +2331,11 @@ a:hover { text-decoration: underline; }
 .stats-translit { font-style: italic; color: var(--color-ink-light); }
 .stats-total { font-weight: 600; }
 .stats-shortdef {
-    white-space: normal;
     max-width: 28rem;
     color: var(--color-ink-light);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .word-filler {
