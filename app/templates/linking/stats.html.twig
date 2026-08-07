@@ -1,0 +1,99 @@
+{% extends 'base.html.twig' %}
+{% block title %}Statistieken manuele links – Bijbel Vergelijking{% endblock %}
+
+{% block body %}
+<div class="page-linking-stats">
+    <div class="linking-topbar">
+        <nav class="breadcrumb">
+            <a href="{{ path('app_linking_home') }}">Koppelen</a> › <strong>Statistieken</strong>
+        </nav>
+
+        <div class="translation-switcher">
+            {% for t in translations %}
+            {% if t.code == 'SV' or is_granted('ROLE_VIEWER_HSV') %}
+            <a href="{{ path('app_linking_stats', {translation: t.code}) }}"
+               class="trans-btn {% if t.id == translation.id %}trans-btn-active{% endif %}">
+                {{ t.code }}
+            </a>
+            {% endif %}
+            {% endfor %}
+        </div>
+    </div>
+
+    <h1>Statistieken manuele links — {{ translation.name }}</h1>
+    <p class="field-hint">
+        Per Strong's-nummer: hoe vaak het handmatig gekoppeld is, en met welk(e) Nederlands(e)
+        woord(en) — meest gebruikte vertaling eerst. Alleen woorden met minstens één handmatige
+        koppeling staan hier.
+    </p>
+
+    {% macro stats_table(rows, lang) %}
+        <div class="word-links-confidence-table-wrap">
+        <table class="stats-table">
+            <thead>
+                <tr>
+                    <th>Woord</th>
+                    <th>Strong's</th>
+                    <th>Transliteratie</th>
+                    <th>Strong's vertaling</th>
+                    <th>Totaal</th>
+                    <th>1e vertaling</th>
+                    <th>2e vertaling</th>
+                    <th>3e vertaling</th>
+                    <th>4e vertaling</th>
+                    <th>5e vertaling</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in rows %}
+                <tr>
+                    <td class="stats-lemma {% if lang == 'HE' %}stats-lemma-he{% endif %}">
+                        {{ row.lemma ?: '–' }}
+                    </td>
+                    <td class="word-links-id-cell">
+                        <a href="{{ path('app_strongs', {number: row.strongs_id}) }}">{{ row.strongs_id }}</a>
+                    </td>
+                    <td class="stats-translit">{{ row.transliteration ?: '–' }}</td>
+                    <td>{{ row.short_def ?: '–' }}</td>
+                    <td class="stats-total">{{ row.total }}×</td>
+                    {% for i in 0..4 %}
+                    <td>
+                        {% if row.translations[i] is defined %}
+                            {{ row.translations[i].count }}× {{ row.translations[i].word }}
+                        {% else %}
+                            –
+                        {% endif %}
+                    </td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        </div>
+    {% endmacro %}
+
+    <section class="link-panel stats-section">
+        <h2 class="panel-label">
+            <span class="lang-badge lang-he">עִבְרִית</span> Hebreeuws — Oude Testament
+            <span class="stats-count">({{ hebrew_stats|length }} woorden)</span>
+        </h2>
+        {% if hebrew_stats|length > 0 %}
+            {{ _self.stats_table(hebrew_stats, 'HE') }}
+        {% else %}
+        <p class="strongs-placeholder">Nog geen handmatige koppelingen in het Oude Testament.</p>
+        {% endif %}
+    </section>
+
+    <section class="link-panel stats-section">
+        <h2 class="panel-label">
+            <span class="lang-badge lang-gk">Ἑλληνικά</span> Grieks — Nieuwe Testament
+            <span class="stats-count">({{ greek_stats|length }} woorden)</span>
+        </h2>
+        {% if greek_stats|length > 0 %}
+            {{ _self.stats_table(greek_stats, 'GR') }}
+        {% else %}
+        <p class="strongs-placeholder">Nog geen handmatige koppelingen in het Nieuwe Testament.</p>
+        {% endif %}
+    </section>
+</div>
+{% endblock %}

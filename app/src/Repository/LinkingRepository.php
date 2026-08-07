@@ -820,6 +820,102 @@ class LinkingRepository
     }
 
     /**
+     * Manual-link statistics per Strong's number, for one testament and
+     * translation: how often each Strong's number was manually linked, and
+     * to which Dutch word(s) — ranked by frequency, top $topN kept.
+     *
+     * Same underlying signal as align_heuristic.py's manual-hint index
+     * (method = 'manual' only), just aggregated for display instead of used
+     * as an alignment hint.
+     *
+     * @return list<array{
+     *     strongs_id: string, lemma: ?string, transliteration: ?string,
+     *     short_def: ?string, total: int,
+     *     translations: list<array{word: string, count: int}>
+     * }>
+     */
+    public function fetchManualTranslationStats(string $testament, int $translationId, int $topN = 5): array
+    {
+        $table = $testament === 'OT' ? 'hebrew_words' : 'greek_words';
+        $idCol = $testament === 'OT' ? 'hebrew_word_id' : 'greek_word_id';
+        $prefix = $testament === 'OT' ? 'H' : 'G';
+
+        // Same canonical-Strong's-id normalisation used elsewhere in this
+        // class (e.g. fetchHebrewForLinking) so this joins cleanly against
+        // strongs_entries.strongs_id.
+        $normalisedStrongs = <<<SQL
+            regexp_replace(
+                CASE WHEN sw.strongs ~ '^[HGhg]'
+                     THEN regexp_replace(sw.strongs, '[A-Za-z]+$', '')
+                     ELSE '{$prefix}' || regexp_replace(sw.strongs, '[A-Za-z]+$', '')
+                END,
+                '^([HG])0+(\d)', '\\1\\2'
+            )
+        SQL;
+
+        $sql = <<<SQL
+            WITH counts AS (
+                SELECT
+                    {$normalisedStrongs} AS strongs,
+                    tw.word_normalised,
+                    COUNT(*) AS cnt
+                FROM word_links wl
+                JOIN link_confidence lc  ON lc.link_id = wl.id AND lc.method = 'manual'
+                JOIN translation_words tw  ON tw.id = wl.translation_word_id
+                JOIN translation_verses tv ON tv.id = tw.verse_id
+                JOIN {$table} sw           ON sw.id = wl.{$idCol}
+                WHERE sw.strongs IS NOT NULL
+                  AND tv.translation_id = :translation_id
+                GROUP BY strongs, tw.word_normalised
+            ),
+            totals AS (
+                SELECT strongs, SUM(cnt) AS total
+                FROM counts
+                GROUP BY strongs
+            ),
+            ranked AS (
+                SELECT strongs, word_normalised, cnt,
+                       ROW_NUMBER() OVER (PARTITION BY strongs ORDER BY cnt DESC, word_normalised) AS rn
+                FROM counts
+            )
+            SELECT
+                t.strongs, t.total,
+                r.word_normalised, r.cnt,
+                se.lemma, se.transliteration, se.short_def, se.short_def_nl
+            FROM totals t
+            JOIN ranked r ON r.strongs = t.strongs AND r.rn <= :top_n
+            LEFT JOIN strongs_entries se ON se.strongs_id = t.strongs
+            ORDER BY t.total DESC, t.strongs, r.rn
+        SQL;
+
+        $rows = $this->connection->fetchAllAssociative($sql, [
+            'translation_id' => $translationId,
+            'top_n'          => $topN,
+        ]);
+
+        $stats = [];
+        foreach ($rows as $row) {
+            $strongsId = $row['strongs'];
+            if (!isset($stats[$strongsId])) {
+                $stats[$strongsId] = [
+                    'strongs_id'      => $strongsId,
+                    'lemma'           => $row['lemma'],
+                    'transliteration' => $row['transliteration'],
+                    'short_def'       => $row['short_def_nl'] ?: $row['short_def'],
+                    'total'           => (int) $row['total'],
+                    'translations'    => [],
+                ];
+            }
+            $stats[$strongsId]['translations'][] = [
+                'word'  => $row['word_normalised'],
+                'count' => (int) $row['cnt'],
+            ];
+        }
+
+        return array_values($stats);
+    }
+
+    /**
      * Return the Strong's dictionary entry for a given Strong's number,
      * or null if the strongs_entries table has not been populated yet.
      *

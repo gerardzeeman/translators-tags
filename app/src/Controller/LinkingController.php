@@ -131,6 +131,33 @@ class LinkingController extends AbstractController
         ]);
     }
 
+    // ── Screen 3: manual-link statistics ──────────────────────────────────────
+
+    /**
+     * Overview of every Strong's number that has at least one manual link,
+     * with its most common Dutch translation(s), for review purposes.
+     * ROLE_LINKER only — this is internal review data, same category as the
+     * "all links" panel on the passage screen.
+     */
+    #[IsGranted('ROLE_LINKER')]
+    #[Route('/statistieken/{translation}', name: 'app_linking_stats')]
+    public function stats(string $translation): Response
+    {
+        $translationEntity = $this->translationRepo->findByCode($translation);
+        if (!$translationEntity) {
+            throw $this->createNotFoundException("Translation '{$translation}' not found.");
+        }
+
+        $translationId = $translationEntity->getId();
+
+        return $this->render('linking/stats.html.twig', [
+            'translation'   => $translationEntity,
+            'translations'  => $this->translationRepo->findAllOrderedById(),
+            'hebrew_stats'  => $this->linkingRepo->fetchManualTranslationStats('OT', $translationId),
+            'greek_stats'   => $this->linkingRepo->fetchManualTranslationStats('NT', $translationId),
+        ]);
+    }
+
     // ── API: save / delete links ──────────────────────────────────────────────
 
     #[Route('/api/save', name: 'api_linking_save', methods: ['POST'])]
