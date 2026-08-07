@@ -35,13 +35,13 @@
                     <th>Woord</th>
                     <th>Strong's</th>
                     <th>Transliteratie</th>
-                    <th>Strong's vertaling</th>
                     <th>Totaal</th>
                     <th>1e vertaling</th>
                     <th>2e vertaling</th>
                     <th>3e vertaling</th>
                     <th>4e vertaling</th>
                     <th>5e vertaling</th>
+                    <th>Strong's vertaling</th>
                 </tr>
             </thead>
             <tbody>
@@ -54,7 +54,6 @@
                         <a href="{{ path('app_strongs', {number: row.strongs_id}) }}">{{ row.strongs_id }}</a>
                     </td>
                     <td class="stats-translit">{{ row.transliteration ?: '–' }}</td>
-                    <td>{{ row.short_def ?: '–' }}</td>
                     <td class="stats-total">{{ row.total }}×</td>
                     {% for i in 0..4 %}
                     <td>
@@ -65,6 +64,7 @@
                         {% endif %}
                     </td>
                     {% endfor %}
+                    <td class="stats-shortdef">{{ row.short_def ?: '–' }}</td>
                 </tr>
                 {% endfor %}
             </tbody>

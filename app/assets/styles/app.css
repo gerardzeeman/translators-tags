@@ -2330,6 +2330,11 @@ a:hover { text-decoration: underline; }
 .stats-lemma-he { font-family: var(--font-hebrew); direction: rtl; text-align: right; }
 .stats-translit { font-style: italic; color: var(--color-ink-light); }
 .stats-total { font-weight: 600; }
+.stats-shortdef {
+    white-space: normal;
+    max-width: 28rem;
+    color: var(--color-ink-light);
+}
 
 .word-filler {
     font-style: italic;
