@@ -828,6 +828,13 @@ class LinkingRepository
      * (method = 'manual' only), just aggregated for display instead of used
      * as an alignment hint.
      *
+     * A source word occurrence can be manually linked to more than one Dutch
+     * word (e.g. G746/ἀρχή → "den" + "beginne") — those are separate
+     * word_links rows but belong together as one translation. Grouped first
+     * by source word occurrence (id), concatenating its linked Dutch words in
+     * reading order, before counting phrase frequency — so "den beginne" is
+     * counted as one unit, not as "den" and "beginne" separately.
+     *
      * @return list<array{
      *     strongs_id: string, lemma: ?string, transliteration: ?string,
      *     short_def: ?string, total: int,
@@ -854,19 +861,31 @@ class LinkingRepository
         SQL;
 
         $sql = <<<SQL
-            WITH counts AS (
+            WITH manual_words AS (
                 SELECT
+                    wl.{$idCol}   AS source_id,
                     {$normalisedStrongs} AS strongs,
                     tw.word_normalised,
-                    COUNT(*) AS cnt
+                    tw.word_position
                 FROM word_links wl
-                JOIN link_confidence lc  ON lc.link_id = wl.id AND lc.method = 'manual'
-                JOIN translation_words tw  ON tw.id = wl.translation_word_id
-                JOIN translation_verses tv ON tv.id = tw.verse_id
-                JOIN {$table} sw           ON sw.id = wl.{$idCol}
+                JOIN link_confidence lc     ON lc.link_id = wl.id AND lc.method = 'manual'
+                JOIN translation_words tw   ON tw.id = wl.translation_word_id
+                JOIN translation_verses tv  ON tv.id = tw.verse_id
+                JOIN {$table} sw            ON sw.id = wl.{$idCol}
                 WHERE sw.strongs IS NOT NULL
                   AND tv.translation_id = :translation_id
-                GROUP BY strongs, tw.word_normalised
+            ),
+            phrases AS (
+                SELECT
+                    source_id, strongs,
+                    string_agg(word_normalised, ' ' ORDER BY word_position) AS phrase
+                FROM manual_words
+                GROUP BY source_id, strongs
+            ),
+            counts AS (
+                SELECT strongs, phrase, COUNT(*) AS cnt
+                FROM phrases
+                GROUP BY strongs, phrase
             ),
             totals AS (
                 SELECT strongs, SUM(cnt) AS total
@@ -874,13 +893,13 @@ class LinkingRepository
                 GROUP BY strongs
             ),
             ranked AS (
-                SELECT strongs, word_normalised, cnt,
-                       ROW_NUMBER() OVER (PARTITION BY strongs ORDER BY cnt DESC, word_normalised) AS rn
+                SELECT strongs, phrase, cnt,
+                       ROW_NUMBER() OVER (PARTITION BY strongs ORDER BY cnt DESC, phrase) AS rn
                 FROM counts
             )
             SELECT
                 t.strongs, t.total,
-                r.word_normalised, r.cnt,
+                r.phrase, r.cnt,
                 se.lemma, se.transliteration, se.short_def, se.short_def_nl
             FROM totals t
             JOIN ranked r ON r.strongs = t.strongs AND r.rn <= :top_n
@@ -907,7 +926,7 @@ class LinkingRepository
                 ];
             }
             $stats[$strongsId]['translations'][] = [
-                'word'  => $row['word_normalised'],
+                'word'  => $row['phrase'],
                 'count' => (int) $row['cnt'],
             ];
         }
