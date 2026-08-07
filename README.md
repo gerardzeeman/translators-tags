@@ -142,5 +142,6 @@ docker compose down -v && docker compose --env-file .env.local up -d
 | [`docs/deployment.md`](docs/deployment.md) | Productie-deployment op DigitalOcean |
 | [`docs/backups.md`](docs/backups.md) | Database-backups naar DigitalOcean Spaces |
 | [`docs/data-sync.md`](docs/data-sync.md) | Database synchronisatie prod ↔ dev |
+| [`docs/verse-boundary-corrections.md`](docs/verse-boundary-corrections.md) | Vers-grensmismatches tussen grondtekst en vertaling |
 | [`docs/security.md`](docs/security.md) | Security audit-rapporten |
 | [`ingest/institutio/README.md`](ingest/institutio/README.md) | Institutio-pijplijn (Latijn → Nederlands) |

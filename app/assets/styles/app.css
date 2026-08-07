@@ -2306,6 +2306,38 @@ a:hover { text-decoration: underline; }
 }
 .word-links-email { color: var(--color-ink-muted); }
 
+.page-linking-stats { max-width: 1400px; margin: 0 auto; padding: 1.5rem; }
+.stats-section { margin-top: 1.5rem; }
+.stats-count { font-weight: 400; font-size: .8rem; color: var(--color-ink-muted); }
+.stats-table { width: 100%; border-collapse: collapse; font-size: .85rem; white-space: nowrap; }
+.stats-table th {
+    text-align: left;
+    font-weight: 600;
+    color: var(--color-ink-muted);
+    font-size: .75rem;
+    padding: .3rem .6rem .3rem 0;
+    border-bottom: 1px solid var(--divider);
+    position: sticky;
+    top: 0;
+    background: var(--bg);
+}
+.stats-table td {
+    padding: .35rem .6rem .35rem 0;
+    border-bottom: 1px solid var(--divider);
+}
+.stats-table tr:last-child td { border-bottom: none; }
+.stats-lemma { font-size: 1.1rem; font-family: var(--font-greek); }
+.stats-lemma-he { font-family: var(--font-hebrew); direction: rtl; text-align: right; }
+.stats-translit { font-style: italic; color: var(--color-ink-light); }
+.stats-total { font-weight: 600; }
+.stats-shortdef {
+    max-width: 28rem;
+    color: var(--color-ink-light);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 .word-filler {
     font-style: italic;
     color: var(--color-ink-muted);
