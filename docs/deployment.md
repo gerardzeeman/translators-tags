@@ -626,6 +626,45 @@ default-waarde).
 
 ---
 
+### 7.10 PostgreSQL publiek bereikbaar door `docker-compose.override.yml` op productie (ontdekt 2026-08-08)
+
+**Symptoom**: `docker compose ps` toonde `0.0.0.0:5432->5432/tcp` op
+`bible_postgres` — extern geverifieerd (TCP-connect vanaf een machine buiten
+de droplet slaagde). Ook stonden ufw-regels voor 2375/tcp en 2376/tcp (Docker
+remote API) op "ALLOW Anywhere", al bleken die niet daadwerkelijk bereikbaar.
+
+**Oorzaak**: `docker-compose.override.yml` — bedoeld als dev-only bestand
+(poort-mappings, live code reload) — stond als gewoon getrackt bestand in de
+repo en kwam dus via `git clone`/`git pull` ook op de productieserver terecht.
+Docker Compose laadt een bestand met exact die naam **automatisch** zodra
+`docker compose up` zonder expliciete `-f`-vlaggen draait. De gedocumenteerde
+deploy-workflow (`.github/workflows/deploy.yml`, §3.4/§5 hierboven) gebruikt
+wél altijd expliciete `-f docker-compose.yml -f docker-compose.prod.yml`, dus
+zo is dit niet ontstaan — vermoedelijk is er ooit, tijdens het handmatig
+debuggen van de deploy-storingen uit §7.8, een kale `docker compose up -d`
+gedraaid op de server, waarna de poort-binding is blijven hangen (Compose
+herschept een draaiende container niet automatisch alleen omdat een latere
+aanroep met andere `-f`-vlaggen draait).
+
+**Fix**:
+1. Direct op productie: `docker compose --env-file .env.local -f docker-compose.yml
+   -f docker-compose.prod.yml up -d --force-recreate --remove-orphans postgres app`
+   — herschept de containers volgens de correcte config, poort dicht.
+   Overbodige ufw-regels verwijderd: `ufw delete allow 2375/tcp` en `2376/tcp`.
+2. Structureel: `docker-compose.override.yml` is niet langer getrackt in git
+   (staat nu in `.gitignore`) — een `docker-compose.override.yml.dist`-template
+   is wél getrackt, zie `docs/SETUP.md` §Stap 4. Zo kan dit bestand nooit meer
+   via `git pull` op een server belanden, en blijft `docker compose up -d`
+   voor lokale ontwikkeling ongewijzigd werken na een eenmalige kopieerstap.
+
+**Geen aanwijzingen voor misbruik** gevonden in de tijd dat de poort open
+stond — geen bekende manier om dit met terugwerkende kracht te controleren op
+deze setup, dus zekerheid daarover is niet te geven. Overweeg als extra
+voorzorg `DB_PASSWORD` te roteren (zie §7.1) mocht dit onvoldoende
+geruststellend zijn.
+
+---
+
 ## Referenties
 
 - [`docs/backups.md`](backups.md) — backup-setup en herstelstappen
