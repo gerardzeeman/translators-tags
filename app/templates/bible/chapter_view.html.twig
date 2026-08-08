@@ -73,6 +73,7 @@
 {% block nav_right_extra %}
 {% set available_translations = ['SV'] %}
 {% if is_granted('ROLE_VIEWER_HSV') %}{% set available_translations = available_translations|merge(['HSV']) %}{% endif %}
+{% if is_granted('ROLE_VIEWER_SVGBS') %}{% set available_translations = available_translations|merge(['SVGBS']) %}{% endif %}
 <div class="nav-trans-selector"
      data-controller="translation-selector"
      data-translation-selector-translations-value="{{ available_translations|json_encode }}">
@@ -83,7 +84,7 @@
                    data-action="change->translation-selector#toggle"
                    data-translation="SV"
                    checked>
-            <span>Statenvertaling SV</span>
+            <span>Statenvertaling Jongbloed SV(JB)</span>
         </label>
         {% if is_granted('ROLE_VIEWER_HSV') %}
         <label class="nav-check-item">
@@ -92,6 +93,15 @@
                    data-translation="HSV"
                    checked>
             <span>Herz. Statenv. HSV</span>
+        </label>
+        {% endif %}
+        {% if is_granted('ROLE_VIEWER_SVGBS') %}
+        <label class="nav-check-item">
+            <input type="checkbox"
+                   data-action="change->translation-selector#toggle"
+                   data-translation="SVGBS"
+                   checked>
+            <span>Statenvertaling (GBS) SV(GBS)</span>
         </label>
         {% endif %}
     </div>
@@ -123,7 +133,7 @@
     </nav>
 
     {# Kolomkoppen #}
-    <div class="chapter-grid-header {% if is_granted('ROLE_VIEWER_HSV') %}has-hsv{% endif %}">
+    <div class="chapter-grid-header {% if is_granted('ROLE_VIEWER_HSV') %}has-hsv{% endif %} {% if is_granted('ROLE_VIEWER_SVGBS') %}has-svgbs{% endif %}">
         <div class="col-header col-header-source">
             {% if testament == 'OT' %}
                 <span class="col-label">Hebreeuws · BHS</span>
@@ -137,17 +147,22 @@
                 <button class="trans-btn trans-btn-active"
                         data-action="click->verse-compare#switchTranslation"
                         data-translation="{{ t.code }}"
-                        type="button">{{ t.code }}</button>
+                        type="button">{{ t.abbreviation }}</button>
                 {% endfor %}
             </div>
             {% endif %}
         </div>
         <div class="col-header col-header-sv">
-            <span class="col-label">Statenvertaling SV</span>
+            <span class="col-label">Statenvertaling Jongbloed SV(JB)</span>
         </div>
         {% if is_granted('ROLE_VIEWER_HSV') %}
         <div class="col-header col-header-hsv">
             <span class="col-label">Herz. Statenv. HSV</span>
+        </div>
+        {% endif %}
+        {% if is_granted('ROLE_VIEWER_SVGBS') %}
+        <div class="col-header col-header-svgbs">
+            <span class="col-label">Statenvertaling (GBS) SV(GBS)</span>
         </div>
         {% endif %}
     </div>
@@ -161,22 +176,30 @@
         {% endfor %}
     </nav>
 
-    {# Mobiele SV/HSV-toggle — alleen voor ROLE_VIEWER_HSV, alleen zichtbaar op smal scherm #}
-    {% if is_granted('ROLE_VIEWER_HSV') %}
+    {# Mobiele vertaal-toggle — alleen zichtbaar op smal scherm, alleen voor vertalingen waar de gebruiker rechten toe heeft #}
+    {% if is_granted('ROLE_VIEWER_HSV') or is_granted('ROLE_VIEWER_SVGBS') %}
     <div class="mobile-trans-pill">
         <button class="pill-btn trans-btn-active"
                 type="button"
                 data-action="click->verse-compare#switchTranslation"
-                data-translation="SV">SV</button>
+                data-translation="SV">SV(JB)</button>
+        {% if is_granted('ROLE_VIEWER_HSV') %}
         <button class="pill-btn"
                 type="button"
                 data-action="click->verse-compare#switchTranslation"
                 data-translation="HSV">HSV</button>
+        {% endif %}
+        {% if is_granted('ROLE_VIEWER_SVGBS') %}
+        <button class="pill-btn"
+                type="button"
+                data-action="click->verse-compare#switchTranslation"
+                data-translation="SVGBS">SV(GBS)</button>
+        {% endif %}
     </div>
     {% endif %}
 
     {# Vers-grid #}
-    <div class="chapter-verse-grid {% if is_granted('ROLE_VIEWER_HSV') %}has-hsv has-hsv-role{% endif %}"
+    <div class="chapter-verse-grid {% if is_granted('ROLE_VIEWER_HSV') %}has-hsv{% endif %} {% if is_granted('ROLE_VIEWER_SVGBS') %}has-svgbs{% endif %}"
          data-active-translation="SV">
 
         {% for verse_num, verse in verses %}
@@ -195,6 +218,7 @@
                          data-strongs="{{ word.strongs }}"
                          data-linked-sv-ids="{{ word.links_sv|map(l => l.tw_id)|join(',') }}"
                          data-linked-hsv-ids="{{ word.links_hsv is defined ? word.links_hsv|map(l => l.tw_id)|join(',') : '' }}"
+                         data-linked-svgbs-ids="{{ word.links_svgbs is defined ? word.links_svgbs|map(l => l.tw_id)|join(',') : '' }}"
                          data-controller="source-word">
 
                         <span class="word-text">{{ word.word_text }}</span>
@@ -247,6 +271,22 @@
                             {% endif %}
                         </div>
                         {% endif %}
+                        {% if is_granted('ROLE_VIEWER_SVGBS') and word.links_svgbs is defined %}
+                        <div class="link-indicators svgbs-indicators">
+                            {% if word.links_svgbs|length > 0 %}
+                                {% for link in word.links_svgbs %}
+                                {% set score = link.score|default(0) %}
+                                {% set isPropagated = link.method in ['auto_source_pivot','auto_sequence','auto_positional'] %}
+                                <span class="link-dot method-{{ link.method }}{% if isPropagated %} link-dot-propagated{% endif %}"
+                                      title="{{ link.word_text }} ({{ link.method }}: {{ score is not null ? (score * 100)|round ~ '%' : '✓' }})">
+                                    {{ link.word_text }}
+                                </span>
+                                {% endfor %}
+                            {% else %}
+                                <span class="no-link-badge" title="Geen koppeling SV(GBS)">—</span>
+                            {% endif %}
+                        </div>
+                        {% endif %}
                         {% endif %}{# ROLE_LINKER #}
 
                     </div>
@@ -292,6 +332,27 @@
                 </div>
             </div>
             {% endif %}{# ROLE_VIEWER_HSV #}
+
+            {# SV(GBS)-kolom — alleen voor ROLE_VIEWER_SVGBS #}
+            {% if is_granted('ROLE_VIEWER_SVGBS') %}
+            <div class="verse-cell verse-cell-svgbs">
+                <span class="verse-number">{{ verse_num }}</span>
+                <div class="dutch-verse">
+                    {% for word in verse.dutch_verse_svgbs %}
+                    <span class="dutch-word{% if word.is_filler %} word-filler{% endif %}"
+                          data-tw-id="{{ word.word_id }}"
+                          data-method="{{ word.best_method ?? 'none' }}"
+                          data-score="{{ word.best_score ?? 0 }}"
+                          data-filler="{{ word.is_filler ? '1' : '0' }}"
+                          {% if is_granted('ROLE_LINKER') %}data-controller="dutch-word"{% endif %}>
+                        {{- word.word_text -}}
+                    </span>{{- word.punct_after ?? '' -}}{%- if not loop.last %} {% endif -%}
+                    {% else %}
+                    <em class="no-verse">Niet gevonden in de Statenvertaling (GBS).</em>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}{# ROLE_VIEWER_SVGBS #}
 
         </div>{# /verse-row #}
         {% endfor %}

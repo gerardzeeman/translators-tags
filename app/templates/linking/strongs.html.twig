@@ -12,13 +12,13 @@
             <span class="strongs-badge">{{ strongs }}</span>
         </h1>
 
-        {# Translation switcher — HSV only shown to users with ROLE_VIEWER_HSV #}
+        {# Translation switcher — restricted translations only shown to users with the matching viewer role #}
         <div class="translation-switcher">
             {% for t in translations %}
-            {% if t.code == 'SV' or is_granted('ROLE_VIEWER_HSV') %}
+            {% if translation_visible(t) %}
             <a href="{{ path('app_linking_strongs', {translation: t.code, strongs: strongs}) }}"
                class="trans-btn {% if t.id == translation.id %}trans-btn-active{% endif %}">
-                {{ t.code }}
+                {{ t.abbreviation }}
             </a>
             {% endif %}
             {% endfor %}

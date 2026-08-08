@@ -10,6 +10,6 @@
 --     -f /docker-entrypoint-initdb.d/migrate_add_svgbs_translation.sql
 -- ─────────────────────────────────────────────────────────────────────────────
 
-INSERT INTO translations (id, code, name, language, direction, family, source_lang_authority)
-VALUES (3, 'SV-GBS', 'Statenvertaling (GBS-editie)', 'nld', 'LTR', 'SV', FALSE)
+INSERT INTO translations (id, code, name, abbreviation, language, direction, family, source_lang_authority)
+VALUES (3, 'SVGBS', 'Statenvertaling (GBS)', 'SV(GBS)', 'nld', 'LTR', 'SV', FALSE)
 ON CONFLICT (id) DO NOTHING;

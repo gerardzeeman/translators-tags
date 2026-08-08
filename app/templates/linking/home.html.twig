@@ -27,7 +27,7 @@
                         <select id="passage-translation-select"
                                 data-passage-select-target="translation">
                             {% for t in translations %}
-                            {% if t.code == 'SV' or is_granted('ROLE_VIEWER_HSV') %}
+                            {% if translation_visible(t) %}
                             <option value="{{ t.code }}">{{ t.name }}</option>
                             {% endif %}
                             {% endfor %}

@@ -51,11 +51,11 @@ class BlogMarkdownRenderer
     public function render(Blog $blog): string
     {
         // Resolved against the blog's AUTHOR, not whoever is currently viewing
-        // the page -- see BibleVerseEmbedRenderer::$authorHasHsvAccess for why.
+        // the page -- see BibleVerseEmbedRenderer::$authorRoles for why.
         // getReachableRoleNames() applies role_hierarchy inheritance (e.g. an
         // author with ROLE_ADMIN counts, since that implies ROLE_VIEWER_HSV).
         $authorRoles = $this->roleHierarchy->getReachableRoleNames($blog->getAuthor()->getRoles());
-        $this->bibleVerseEmbedRenderer->setAuthorHasHsvAccess(in_array('ROLE_VIEWER_HSV', $authorRoles, true));
+        $this->bibleVerseEmbedRenderer->setAuthorRoles($authorRoles);
 
         return (string) $this->converter->convert($blog->getContentMd());
     }

@@ -21,7 +21,8 @@ CREATE TABLE IF NOT EXISTS books (
 CREATE TABLE IF NOT EXISTS translations (
     id                    SMALLINT PRIMARY KEY,
     code                  VARCHAR(20) NOT NULL UNIQUE,      -- 'SV', 'HSV', …
-    name                  TEXT        NOT NULL,             -- 'Statenvertaling'
+    name                  TEXT        NOT NULL,             -- 'Statenvertaling Jongbloed'
+    abbreviation          VARCHAR(20),                      -- short button/badge label, e.g. 'SV(JB)'
     language              CHAR(3)     NOT NULL,             -- ISO 639-3: 'nld'
     direction             VARCHAR(3)  NOT NULL DEFAULT 'LTR' CHECK (direction IN ('LTR', 'RTL')),
     family                VARCHAR(20),                      -- e.g. 'SV' groups SV editions + HSV
@@ -295,10 +296,13 @@ ON CONFLICT (id) DO NOTHING;
 -- Seed data: translation records
 -- SV (Jongbloed) is the source_lang_authority: its word_links to Hebrew/Greek
 -- propagate to all other SV-family translations via inter_translation_links.
-INSERT INTO translations (id, code, name, language, direction, family, source_lang_authority) VALUES
-    (1, 'SV',     'Statenvertaling (Jongbloed)',   'nld', 'LTR', 'SV', TRUE),
-    (2, 'HSV',    'Herziene Statenvertaling',      'nld', 'LTR', 'SV', FALSE),
-    (3, 'SV-GBS', 'Statenvertaling (GBS-editie)',  'nld', 'LTR', 'SV', FALSE)
+INSERT INTO translations (id, code, name, abbreviation, language, direction, family, source_lang_authority) VALUES
+    (1, 'SV',    'Statenvertaling Jongbloed',  'SV(JB)',   'nld', 'LTR', 'SV', TRUE),
+    (2, 'HSV',   'Herziene Statenvertaling',   'HSV',      'nld', 'LTR', 'SV', FALSE),
+    (3, 'SVGBS', 'Statenvertaling (GBS)',      'SV(GBS)',  'nld', 'LTR', 'SV', FALSE)
 ON CONFLICT (id) DO UPDATE SET
+    code                  = EXCLUDED.code,
+    name                  = EXCLUDED.name,
+    abbreviation          = EXCLUDED.abbreviation,
     family                = EXCLUDED.family,
     source_lang_authority = EXCLUDED.source_lang_authority;

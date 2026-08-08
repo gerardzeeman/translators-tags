@@ -1165,8 +1165,8 @@ class LinkingRepository
     {
         return $this->connection->fetchAllAssociative(
             "SELECT
-                ta.id   AS id_a,  ta.code  AS code_a,  ta.name AS name_a,
-                tb.id   AS id_b,  tb.code  AS code_b,  tb.name AS name_b,
+                ta.id   AS id_a,  ta.code  AS code_a,  ta.name AS name_a,  COALESCE(ta.abbreviation, ta.code) AS abbreviation_a,
+                tb.id   AS id_b,  tb.code  AS code_b,  tb.name AS name_b,  COALESCE(tb.abbreviation, tb.code) AS abbreviation_b,
                 ta.family
              FROM translations ta
              JOIN translations tb ON tb.family = ta.family AND tb.id != ta.id

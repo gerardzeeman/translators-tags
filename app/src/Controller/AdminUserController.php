@@ -19,6 +19,7 @@ class AdminUserController extends AbstractController
     private const ASSIGNABLE_ROLES = [
         'ROLE_VIEWER'                => 'Viewer',
         'ROLE_VIEWER_HSV'            => 'Viewer HSV',
+        'ROLE_VIEWER_SVGBS'          => 'Viewer SV(GBS)',
         'ROLE_LINKER'                => 'Linker',
         'ROLE_EDIT_STRONG_TRNL'      => 'Strong\'s vertaling bewerken',
         'ROLE_EDIT_INSTITUTIO_TRNL'  => 'Institutie-vertaalvoorstellen indienen',

@@ -36,8 +36,8 @@
             {% endif %}
 
             {# Translation indicator switcher — pure JS, no page reload.
-               HSV button only shown to users with ROLE_VIEWER_HSV. #}
-            {% if is_granted('ROLE_VIEWER_HSV') %}
+               Only shown to users with at least one restricted-translation viewer role. #}
+            {% if is_granted('ROLE_VIEWER_HSV') or is_granted('ROLE_VIEWER_SVGBS') %}
             <div class="translation-indicator-toggle">
                 <span class="toggle-label">Indicatoren:</span>
                 {% for t in translations %}
@@ -45,7 +45,7 @@
                         data-action="click->verse-compare#switchTranslation"
                         data-translation="{{ t.code }}"
                         type="button">
-                    {{ t.code }}
+                    {{ t.abbreviation }}
                 </button>
                 {% endfor %}
             </div>
@@ -59,7 +59,8 @@
                  data-lang="{{ passage.testament == 'OT' ? 'HE' : 'GR' }}"
                  data-strongs="{{ word.strongs }}"
                  data-linked-sv-ids="{{ word.links_sv|map(l => l.tw_id)|join(',') }}"
-                 data-linked-hsv-ids="{{ word.links_hsv|map(l => l.tw_id)|join(',') }}"
+                 data-linked-hsv-ids="{{ word.links_hsv is defined ? word.links_hsv|map(l => l.tw_id)|join(',') : '' }}"
+                 data-linked-svgbs-ids="{{ word.links_svgbs is defined ? word.links_svgbs|map(l => l.tw_id)|join(',') : '' }}"
                  data-controller="source-word">
 
                 <span class="word-text">{{ word.word_text }}</span>
@@ -108,6 +109,20 @@
                         <span class="no-link-badge" title="Geen koppeling HSV">—</span>
                     {% endif %}
                 </div>
+                <div class="link-indicators svgbs-indicators">
+                    {% if word.links_svgbs|length > 0 %}
+                        {% for link in word.links_svgbs %}
+                        {% set score = link.score|default(0) %}
+                        {% set isPropagated = link.method in ['auto_source_pivot','auto_sequence','auto_positional'] %}
+                        <span class="link-dot method-{{ link.method }}{% if isPropagated %} link-dot-propagated{% endif %}"
+                              title="{{ link.word_text }} ({{ link.method }}: {{ score is not null ? (score * 100)|round ~ '%' : '✓' }})">
+                            {{ link.word_text }}
+                        </span>
+                        {% endfor %}
+                    {% else %}
+                        <span class="no-link-badge" title="Geen koppeling SV(GBS)">—</span>
+                    {% endif %}
+                </div>
 
             </div>
             {% endfor %}
@@ -126,10 +141,10 @@
 <div class="compare-col compare-col-right">
 
     {# ── SV translation panel (right, top) ───────────────────────────────── #}
-    <section class="panel panel-sv" aria-label="Statenvertaling">
+    <section class="panel panel-sv" aria-label="Statenvertaling Jongbloed">
 
         <h2 class="panel-heading">
-            <span class="lang-badge lang-nl">NL</span> Statenvertaling
+            <span class="lang-badge lang-nl">NL</span> Statenvertaling Jongbloed SV(JB)
         </h2>
 
         <div class="dutch-verse">
@@ -190,6 +205,41 @@
 
     </section>
     {% endif %}{# ROLE_VIEWER_HSV #}
+
+    {# ── SV(GBS) translation panel (right, bottom) — ROLE_VIEWER_SVGBS only ────── #}
+    {% if is_granted('ROLE_VIEWER_SVGBS') %}
+    <section class="panel panel-svgbs" aria-label="Statenvertaling (GBS)">
+
+        <h2 class="panel-heading">
+            <span class="lang-badge lang-nl">NL</span> Statenvertaling (GBS) SV(GBS)
+        </h2>
+
+        <div class="dutch-verse">
+            {% for word in passage.dutch_verse_svgbs %}
+            <span class="dutch-word{% if word.is_filler %} word-filler{% endif %}"
+                  data-tw-id="{{ word.word_id }}"
+                  data-method="{{ word.best_method ?? 'none' }}"
+                  data-score="{{ word.best_score ?? 0 }}"
+                  data-filler="{{ word.is_filler ? '1' : '0' }}"
+                  data-controller="dutch-word">
+                {{- word.word_text -}}
+            </span>{{- word.punct_after ?? '' -}}{%- if not loop.last %} {% endif -%}
+            {% else %}
+            <em class="no-verse">Vers niet gevonden in de Statenvertaling (GBS).</em>
+            {% endfor %}
+        </div>
+
+        <div class="confidence-legend">
+            <span class="legend-item"><span class="dot method-manual"></span> Handmatig</span>
+            <span class="legend-item"><span class="dot method-manual_hint"></span> Hint</span>
+            <span class="legend-item"><span class="dot method-proper_noun"></span> Eigennaam</span>
+            <span class="legend-item"><span class="dot method-positional"></span> Positioneel</span>
+            <span class="legend-item"><span class="dot method-auto_source_pivot"></span> Afgeleid (SV-koppeling)</span>
+            <span class="legend-item"><span class="dot method-none"></span> Geen koppeling</span>
+        </div>
+
+    </section>
+    {% endif %}{# ROLE_VIEWER_SVGBS #}
 
 </div>{# /compare-col-right #}
 </div>{# /verse-compare-grid #}

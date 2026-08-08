@@ -46,7 +46,7 @@ from db.loaders import upsert_translation_verse, bulk_insert_translation_words
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 
-TRANSLATION_ID   = 3       # SV-GBS — must match the row inserted in translations table
+TRANSLATION_ID   = 3       # SVGBS — must match the row inserted in translations table
 BASE_URL         = "https://statenvertaling.nl/tekst.php"
 REQUEST_DELAY    = 1.2     # seconds between HTTP requests (be a polite scraper)
 REQUEST_TIMEOUT  = 30
@@ -202,13 +202,13 @@ def iter_verses(html: str) -> Generator[tuple[int, str, list[dict]], None, None]
 # ─── DB helpers ───────────────────────────────────────────────────────────────
 
 def ensure_svgbs_translation() -> None:
-    """Insert the SV-GBS translation row if it doesn't exist yet."""
+    """Insert the SVGBS translation row if it doesn't exist yet."""
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                INSERT INTO translations (id, code, name, language, direction, family, source_lang_authority)
-                VALUES (%s, 'SV-GBS', 'Statenvertaling (GBS-editie)', 'nld', 'LTR', 'SV', FALSE)
+                INSERT INTO translations (id, code, name, abbreviation, language, direction, family, source_lang_authority)
+                VALUES (%s, 'SVGBS', 'Statenvertaling (GBS)', 'SV(GBS)', 'nld', 'LTR', 'SV', FALSE)
                 ON CONFLICT (id) DO NOTHING
                 """,
                 (TRANSLATION_ID,),
