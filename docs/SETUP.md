@@ -97,6 +97,15 @@ This will take a few minutes on the first run as it downloads packages. You will
 
 ## Step 4 — Start the stack
 
+`docker-compose.override.yml` (the dev-only port mappings and live code reload)
+is not tracked in git — Docker Compose auto-loads any file with that exact
+name, which is convenient locally but dangerous if it ever ends up on a
+server. Create your own copy from the template first:
+
+```powershell
+cp docker-compose.override.yml.dist docker-compose.override.yml
+```
+
 ```powershell
 docker compose up -d
 ```

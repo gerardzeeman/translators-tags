@@ -1,6 +1,11 @@
 # Docker
 .env.local
 .env.*.local
+# Local dev override -- must never land on a server checkout (Compose auto-loads
+# this exact filename on any bare `docker compose up`, which is how PostgreSQL's
+# port ended up published to the internet on production, 2026-08-08). Copy
+# docker-compose.override.yml.dist to get started locally; see docs/SETUP.md.
+docker-compose.override.yml
 
 # Python
 __pycache__/
