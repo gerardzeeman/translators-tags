@@ -296,8 +296,9 @@ ON CONFLICT (id) DO NOTHING;
 -- SV (Jongbloed) is the source_lang_authority: its word_links to Hebrew/Greek
 -- propagate to all other SV-family translations via inter_translation_links.
 INSERT INTO translations (id, code, name, language, direction, family, source_lang_authority) VALUES
-    (1, 'SV',  'Statenvertaling (Jongbloed)', 'nld', 'LTR', 'SV', TRUE),
-    (2, 'HSV', 'Herziene Statenvertaling',    'nld', 'LTR', 'SV', FALSE)
+    (1, 'SV',     'Statenvertaling (Jongbloed)',   'nld', 'LTR', 'SV', TRUE),
+    (2, 'HSV',    'Herziene Statenvertaling',      'nld', 'LTR', 'SV', FALSE),
+    (3, 'SV-GBS', 'Statenvertaling (GBS-editie)',  'nld', 'LTR', 'SV', FALSE)
 ON CONFLICT (id) DO UPDATE SET
     family                = EXCLUDED.family,
     source_lang_authority = EXCLUDED.source_lang_authority;
