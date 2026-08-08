@@ -16,7 +16,7 @@
         <div class="trans-linking-breadcrumb">
             <a href="{{ path('app_trans_linking_home') }}">Vertalingen koppelen</a>
             <span class="breadcrumb-sep">›</span>
-            <strong>{{ trans_a.code }} ↔ {{ trans_b.code }}</strong>
+            <strong>{{ trans_a.abbreviation }} ↔ {{ trans_b.abbreviation }}</strong>
             <span class="breadcrumb-sep">›</span>
             {{ book.nameNl }} {{ chapter }}:{{ verse }}
         </div>
@@ -64,7 +64,7 @@
         {# Column A (authority / SV) #}
         <div class="trans-linking-col trans-linking-col-a">
             <div class="trans-col-header">
-                <span class="trans-badge">{{ trans_a.code }}</span>
+                <span class="trans-badge">{{ trans_a.abbreviation }}</span>
                 <span class="trans-col-name">{{ trans_a.name }}</span>
             </div>
 
@@ -90,7 +90,7 @@
         {# Column B (target / HSV) #}
         <div class="trans-linking-col trans-linking-col-b">
             <div class="trans-col-header">
-                <span class="trans-badge">{{ trans_b.code }}</span>
+                <span class="trans-badge">{{ trans_b.abbreviation }}</span>
                 <span class="trans-col-name">{{ trans_b.name }}</span>
             </div>
 
@@ -125,8 +125,8 @@
         <table class="trans-links-table">
             <thead>
                 <tr>
-                    <th>{{ trans_a.code }}</th>
-                    <th>{{ trans_b.code }}</th>
+                    <th>{{ trans_a.abbreviation }}</th>
+                    <th>{{ trans_b.abbreviation }}</th>
                     <th>Methode</th>
                     <th>Conf.</th>
                     <th></th>

@@ -54,12 +54,30 @@ export default class extends Controller {
         const all     = this.translationsValue
         const visible = all.filter(c => this.visible.has(c))
 
-        // Update CSS classes on grid + header to drive grid-template-columns via CSS
+        // Update CSS classes on grid + header to drive display:none per hidden column
         all.forEach(code => {
             const hidden = !this.visible.has(code)
             grid.classList.toggle(`hide-${code.toLowerCase()}`, hidden)
             header.classList.toggle(`hide-${code.toLowerCase()}`, hidden)
         })
+
+        // Column count follows the currently visible translations exactly — avoids
+        // hand-enumerating every hide/role combination in CSS (source col + one
+        // 1fr per visible translation).
+        const columns = `2fr ${visible.map(() => '1fr').join(' ')}`
+        grid.style.gridTemplateColumns   = columns
+        header.style.gridTemplateColumns = columns
+
+        // Right border / corner radius belong on the last VISIBLE column only.
+        grid.querySelectorAll('.is-last-visible-col').forEach(el => el.classList.remove('is-last-visible-col'))
+        header.querySelectorAll('.is-last-visible-col').forEach(el => el.classList.remove('is-last-visible-col'))
+        const lastCode = visible[visible.length - 1]
+        if (lastCode) {
+            const cls = `verse-cell-${lastCode.toLowerCase()}`
+            grid.querySelectorAll(`.${cls}`).forEach(el => el.classList.add('is-last-visible-col'))
+            const headerCell = header.querySelector(`.col-header-${lastCode.toLowerCase()}`)
+            if (headerCell) headerCell.classList.add('is-last-visible-col')
+        }
 
         // Switch active translation if it's now hidden
         const active = grid.dataset.activeTranslation

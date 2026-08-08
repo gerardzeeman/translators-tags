@@ -1,5 +1,6 @@
 // assets/controllers/source_word_controller.js
 import { Controller } from '@hotwired/stimulus'
+import { linkedIdsFromDataset } from '../translation_links.js'
 
 export default class extends Controller {
     connect() {
@@ -18,11 +19,10 @@ export default class extends Controller {
         this.element.dispatchEvent(new CustomEvent(type, {
             bubbles: true,
             detail: {
-                sourceId:     this.element.dataset.sourceId,
-                linkedSvIds:  this.element.dataset.linkedSvIds  || '',
-                linkedHsvIds: this.element.dataset.linkedHsvIds || '',
-                lang:         this.element.dataset.lang,
-                strongs:      this.element.dataset.strongs,
+                sourceId:  this.element.dataset.sourceId,
+                linkedIds: linkedIdsFromDataset(this.element.dataset),
+                lang:      this.element.dataset.lang,
+                strongs:   this.element.dataset.strongs,
             }
         }))
     }

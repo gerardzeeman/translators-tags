@@ -59,20 +59,36 @@ describe('SourceWordController', () => {
         expect(detail.sourceId).toBe('42')
     })
 
-    it('activate detail contains linkedSvIds', () => {
+    it('activate detail contains linkedIds.sv', () => {
         let detail
         el.addEventListener('source-word:activate', e => { detail = e.detail })
         el.click()
 
-        expect(detail.linkedSvIds).toBe('10,11')
+        expect(detail.linkedIds.sv).toBe('10,11')
     })
 
-    it('activate detail contains linkedHsvIds', () => {
+    it('activate detail contains linkedIds.hsv', () => {
         let detail
         el.addEventListener('source-word:activate', e => { detail = e.detail })
         el.click()
 
-        expect(detail.linkedHsvIds).toBe('20')
+        expect(detail.linkedIds.hsv).toBe('20')
+    })
+
+    it('activate detail picks up any data-linked-*-ids attribute generically', async () => {
+        el.remove()
+        app.stop()
+
+        el  = buildElement({ 'data-linked-svgbs-ids': '30,31' })
+        app = await startController(IDENTIFIER, SourceWordController)
+
+        let detail
+        el.addEventListener('source-word:activate', e => { detail = e.detail })
+        el.click()
+
+        expect(detail.linkedIds.svgbs).toBe('30,31')
+        expect(detail.linkedIds.sv).toBe('10,11')
+        expect(detail.linkedIds.hsv).toBe('20')
     })
 
     it('activate detail contains lang and strongs', () => {
@@ -109,7 +125,7 @@ describe('SourceWordController', () => {
 
     // ── missing linked ids fall back to empty string ──────────────────────────
 
-    it('uses empty string for linkedSvIds when attribute is absent', async () => {
+    it('uses empty string for linkedIds.sv when attribute is empty', async () => {
         el.remove()
         app.stop()
 
@@ -120,10 +136,10 @@ describe('SourceWordController', () => {
         el.addEventListener('source-word:activate', e => { detail = e.detail })
         el.click()
 
-        expect(detail.linkedSvIds).toBe('')
+        expect(detail.linkedIds.sv).toBe('')
     })
 
-    it('uses empty string for linkedHsvIds when attribute is absent', async () => {
+    it('uses empty string for linkedIds.hsv when attribute is empty', async () => {
         el.remove()
         app.stop()
 
@@ -134,7 +150,7 @@ describe('SourceWordController', () => {
         el.addEventListener('source-word:activate', e => { detail = e.detail })
         el.click()
 
-        expect(detail.linkedHsvIds).toBe('')
+        expect(detail.linkedIds.hsv).toBe('')
     })
 
     // ── events bubble up ─────────────────────────────────────────────────────

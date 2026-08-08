@@ -626,8 +626,12 @@ a:hover { text-decoration: underline; }
 }
 
 /* Indicator-zichtbaarheid via CSS-attribuut */
-[data-active-translation="SV"]  .hsv-indicators { display: none; }
-[data-active-translation="HSV"] .sv-indicators  { display: none; }
+[data-active-translation="SV"]    .hsv-indicators,
+[data-active-translation="SV"]    .svgbs-indicators { display: none; }
+[data-active-translation="HSV"]   .sv-indicators,
+[data-active-translation="HSV"]   .svgbs-indicators  { display: none; }
+[data-active-translation="SVGBS"] .sv-indicators,
+[data-active-translation="SVGBS"] .hsv-indicators    { display: none; }
 
 .panel-heading {
     font-size: 1rem;
@@ -1009,6 +1013,11 @@ a:hover { text-decoration: underline; }
 .chapter-nav-arrows { margin-left: auto; display: flex; gap: .4rem; }
 
 /* ── Kolomkoppenrij ──────────────────────────────────────────────────────── */
+/* grid-template-columns hieronder is de SSR/no-JS fallback voor "alle vertalingen
+   zichtbaar waar de gebruiker rechten toe heeft" (aantal has-* klassen = aantal
+   kolommen). translation_selector_controller.js zet nadien een inline style op
+   basis van de daadwerkelijk zichtbare vertalingen (zie #_apply) — dat wint altijd
+   van deze regels, dus hoeft geen aparte regel per hide-combinatie te bestaan. */
 .chapter-grid-header {
     display: grid;
     grid-template-columns: 2fr 1fr;
@@ -1017,8 +1026,12 @@ a:hover { text-decoration: underline; }
     border-radius: var(--radius) var(--radius) 0 0;
     overflow: hidden;
 }
-.chapter-grid-header.has-hsv {
+.chapter-grid-header.has-hsv:not(.has-svgbs),
+.chapter-grid-header.has-svgbs:not(.has-hsv) {
     grid-template-columns: 2fr 1fr 1fr;
+}
+.chapter-grid-header.has-hsv.has-svgbs {
+    grid-template-columns: 2fr 1fr 1fr 1fr;
 }
 
 .col-header {
@@ -1028,10 +1041,12 @@ a:hover { text-decoration: underline; }
     padding: 9px 20px;
     border-right: 1px solid var(--divider);
 }
-.col-header:last-child { border-right: none; }
+.col-header:last-child,
+.col-header.is-last-visible-col { border-right: none; }
 .col-header-source { background: var(--card-warm); }
 .col-header-sv,
-.col-header-hsv    { background: var(--bg); }
+.col-header-hsv,
+.col-header-svgbs  { background: var(--bg); }
 
 .col-label {
     font-size: 9px;
@@ -1051,8 +1066,12 @@ a:hover { text-decoration: underline; }
     border-radius: 0 0 var(--radius) var(--radius);
     overflow: visible;
 }
-.chapter-verse-grid.has-hsv {
+.chapter-verse-grid.has-hsv:not(.has-svgbs),
+.chapter-verse-grid.has-svgbs:not(.has-hsv) {
     grid-template-columns: 2fr 1fr 1fr;
+}
+.chapter-verse-grid.has-hsv.has-svgbs {
+    grid-template-columns: 2fr 1fr 1fr 1fr;
 }
 
 /* display:contents laat de cellen direct in het ouder-grid participeren.
@@ -1070,32 +1089,27 @@ a:hover { text-decoration: underline; }
     min-width: 0; /* voorkom overflow in grid */
 }
 
-/* Laatste kolom per rij: geen rechterrand.
-   Met display:contents tellen we cellen in volgorde: 2e of 3e is de laatste. */
-.chapter-verse-grid:not(.has-hsv) .verse-cell-sv,
-.chapter-verse-grid.has-hsv .verse-cell-hsv {
+/* Laatste kolom (SSR-fallback, zie hierboven): geen rechterrand.
+   translation_selector_controller.js zet .is-last-visible-col op de daadwerkelijk
+   laatste zichtbare cel zodra JS actief is — die regel wint via gelijke specificiteit
+   doordat hij hieronder staat, en dekt elke hide-combinatie zonder opsomming. */
+.chapter-verse-grid:not(.has-hsv):not(.has-svgbs) .verse-cell-sv,
+.chapter-verse-grid.has-hsv:not(.has-svgbs) .verse-cell-hsv,
+.chapter-verse-grid.has-svgbs:not(.has-hsv) .verse-cell-svgbs,
+.chapter-verse-grid.has-hsv.has-svgbs .verse-cell-svgbs {
+    border-right: none;
+}
+.verse-cell.is-last-visible-col {
     border-right: none;
 }
 
 /* Verberg-klassen die de translation-selector controller toepast */
-.chapter-verse-grid.hide-sv  .verse-cell-sv,
-.chapter-verse-grid.hide-hsv .verse-cell-hsv { display: none; }
-.chapter-grid-header.hide-sv  .col-header-sv,
-.chapter-grid-header.hide-hsv .col-header-hsv { display: none; }
-
-/* Pas grid-kolommen aan op basis van verborgen vertalingen */
-/* Alleen SV zichtbaar (HSV verborgen) */
-.chapter-verse-grid.has-hsv.hide-hsv { grid-template-columns: 2fr 1fr; }
-.chapter-grid-header.has-hsv.hide-hsv { grid-template-columns: 2fr 1fr; }
-/* Alleen HSV zichtbaar (SV verborgen) */
-.chapter-verse-grid.has-hsv.hide-sv { grid-template-columns: 2fr 1fr; }
-.chapter-grid-header.has-hsv.hide-sv { grid-template-columns: 2fr 1fr; }
-
-/* border-right correctie: als sv de enige vertaling is, geen rand */
-.chapter-verse-grid.has-hsv.hide-hsv .verse-cell-sv { border-right: none; }
-/* Als sv verborgen is, is source de enige + hsv = laatste; source heeft al geen right-border nodig */
-.chapter-verse-grid.has-hsv.hide-sv .verse-cell-source { border-right: 1px solid var(--divider); }
-.chapter-verse-grid.has-hsv.hide-sv .verse-cell-hsv { border-right: none; }
+.chapter-verse-grid.hide-sv    .verse-cell-sv,
+.chapter-verse-grid.hide-hsv   .verse-cell-hsv,
+.chapter-verse-grid.hide-svgbs .verse-cell-svgbs { display: none; }
+.chapter-grid-header.hide-sv    .col-header-sv,
+.chapter-grid-header.hide-hsv   .col-header-hsv,
+.chapter-grid-header.hide-svgbs .col-header-svgbs { display: none; }
 
 /* Laatste rij: geen onderrand op de cellen */
 .verse-row:last-child .verse-cell {
@@ -1104,15 +1118,21 @@ a:hover { text-decoration: underline; }
 .verse-row:last-child .verse-cell-source {
     border-bottom-left-radius: var(--radius);
 }
-.chapter-verse-grid:not(.has-hsv) .verse-row:last-child .verse-cell-sv,
-.chapter-verse-grid.has-hsv .verse-row:last-child .verse-cell-hsv {
+.chapter-verse-grid:not(.has-hsv):not(.has-svgbs) .verse-row:last-child .verse-cell-sv,
+.chapter-verse-grid.has-hsv:not(.has-svgbs) .verse-row:last-child .verse-cell-hsv,
+.chapter-verse-grid.has-svgbs:not(.has-hsv) .verse-row:last-child .verse-cell-svgbs,
+.chapter-verse-grid.has-hsv.has-svgbs .verse-row:last-child .verse-cell-svgbs {
+    border-bottom-right-radius: var(--radius);
+}
+.verse-row:last-child .verse-cell.is-last-visible-col {
     border-bottom-right-radius: var(--radius);
 }
 
 .verse-cell-source { background: var(--card-warm); }
 .verse-cell-source:hover { background: var(--hover-warm); }
 .verse-cell-sv,
-.verse-cell-hsv   { background: var(--bg); }
+.verse-cell-hsv,
+.verse-cell-svgbs { background: var(--bg); }
 
 /* Broncel: compacter dan vertaalcellen */
 .verse-cell-source {
@@ -1167,7 +1187,8 @@ a:hover { text-decoration: underline; }
 
 /* ── Nederlandse verstekst in de hoofdstuk-view ──────────────────────────── */
 .verse-cell-sv .dutch-verse,
-.verse-cell-hsv .dutch-verse {
+.verse-cell-hsv .dutch-verse,
+.verse-cell-svgbs .dutch-verse {
     font-family: var(--font-ui);
     font-size: 15px;
     line-height: 1.82;
@@ -1433,7 +1454,8 @@ a:hover { text-decoration: underline; }
     .chapter-grid-header { display: none; }
 
     .chapter-verse-grid,
-    .chapter-verse-grid.has-hsv {
+    .chapter-verse-grid.has-hsv,
+    .chapter-verse-grid.has-svgbs {
         display: block; /* geen grid op mobiel — gewoon blokken */
         border-radius: 0;
         border-left: none;
@@ -1454,13 +1476,19 @@ a:hover { text-decoration: underline; }
     .verse-cell:last-child { border-bottom: none; }
 
     /* Hide-klassen van de translation-selector (ingesteld op desktop) mogen op mobiel niets verbergen */
-    .chapter-verse-grid.hide-sv  .verse-cell-sv,
-    .chapter-verse-grid.hide-hsv .verse-cell-hsv { display: block; }
+    .chapter-verse-grid.hide-sv    .verse-cell-sv,
+    .chapter-verse-grid.hide-hsv   .verse-cell-hsv,
+    .chapter-verse-grid.hide-svgbs .verse-cell-svgbs { display: block; }
 
-    /* Verberg HSV-kolom standaard op mobiel; toon alleen als actief.
-       .has-hsv-role garandeert dat deze regels alleen vuren voor ROLE_VIEWER_HSV-gebruikers. */
-    .chapter-verse-grid.has-hsv-role[data-active-translation="SV"]  .verse-cell-hsv { display: none; }
-    .chapter-verse-grid.has-hsv-role[data-active-translation="HSV"] .verse-cell-sv  { display: none; }
+    /* Verberg niet-actieve kolommen standaard op mobiel; toon alleen de actieve.
+       .has-hsv / .has-svgbs garanderen dat deze regels alleen vuren voor gebruikers
+       met de bijbehorende viewer-rol (anders bestaat de kolom niet in de DOM). */
+    .chapter-verse-grid.has-hsv[data-active-translation="SV"]      .verse-cell-hsv   { display: none; }
+    .chapter-verse-grid.has-hsv[data-active-translation="SVGBS"]   .verse-cell-hsv   { display: none; }
+    .chapter-verse-grid.has-hsv[data-active-translation="HSV"]     .verse-cell-sv    { display: none; }
+    .chapter-verse-grid.has-svgbs[data-active-translation="SV"]    .verse-cell-svgbs { display: none; }
+    .chapter-verse-grid.has-svgbs[data-active-translation="HSV"]   .verse-cell-svgbs { display: none; }
+    .chapter-verse-grid.has-svgbs[data-active-translation="SVGBS"] .verse-cell-sv    { display: none; }
 
     .source-word { padding: .2rem 2px; }
 
@@ -2347,8 +2375,9 @@ a:hover { text-decoration: underline; }
     vertical-align: super;
     color: var(--color-ink-muted);
 }
-.panel-hsv .word-filler,
-.panel-sv  .word-filler {
+.panel-hsv   .word-filler,
+.panel-sv    .word-filler,
+.panel-svgbs .word-filler {
     cursor: default;
 }
 

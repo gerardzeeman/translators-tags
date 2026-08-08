@@ -159,7 +159,7 @@ describe('VerseCompareController', () => {
         // First activate a source word to add highlight classes
         const srcEl = el.querySelector('[data-source-id="1"]')
         fire(srcEl, 'source-word:activate', {
-            sourceId: '1', linkedSvIds: '10,11', linkedHsvIds: '20',
+            sourceId: '1', linkedIds: { sv: '10,11', hsv: '20' },
         })
 
         // Now switch translation — should clear everything
@@ -175,7 +175,7 @@ describe('VerseCompareController', () => {
     it('adds "active" class to the activated source word', () => {
         const srcEl = el.querySelector('[data-source-id="1"]')
         fire(srcEl, 'source-word:activate', {
-            sourceId: '1', linkedSvIds: '10,11', linkedHsvIds: '20',
+            sourceId: '1', linkedIds: { sv: '10,11', hsv: '20' },
         })
 
         expect(srcEl.classList.contains('active')).toBe(true)
@@ -184,7 +184,7 @@ describe('VerseCompareController', () => {
     it('highlights linked SV words on source activate', () => {
         const srcEl = el.querySelector('[data-source-id="1"]')
         fire(srcEl, 'source-word:activate', {
-            sourceId: '1', linkedSvIds: '10,11', linkedHsvIds: '',
+            sourceId: '1', linkedIds: { sv: '10,11', hsv: '' },
         })
 
         expect(el.querySelector('[data-tw-id="10"]').classList.contains('highlighted')).toBe(true)
@@ -194,7 +194,7 @@ describe('VerseCompareController', () => {
     it('highlights linked HSV words on source activate', () => {
         const srcEl = el.querySelector('[data-source-id="1"]')
         fire(srcEl, 'source-word:activate', {
-            sourceId: '1', linkedSvIds: '', linkedHsvIds: '20',
+            sourceId: '1', linkedIds: { sv: '', hsv: '20' },
         })
 
         expect(el.querySelector('[data-tw-id="20"]').classList.contains('highlighted')).toBe(true)
@@ -203,7 +203,7 @@ describe('VerseCompareController', () => {
     it('highlights words in both panels simultaneously on source activate', () => {
         const srcEl = el.querySelector('[data-source-id="1"]')
         fire(srcEl, 'source-word:activate', {
-            sourceId: '1', linkedSvIds: '10', linkedHsvIds: '20',
+            sourceId: '1', linkedIds: { sv: '10', hsv: '20' },
         })
 
         expect(el.querySelector('[data-tw-id="10"]').classList.contains('highlighted')).toBe(true)
@@ -213,7 +213,7 @@ describe('VerseCompareController', () => {
     it('does not highlight words from the other source word', () => {
         const srcEl = el.querySelector('[data-source-id="1"]')
         fire(srcEl, 'source-word:activate', {
-            sourceId: '1', linkedSvIds: '10', linkedHsvIds: '20',
+            sourceId: '1', linkedIds: { sv: '10', hsv: '20' },
         })
 
         // twId 12 belongs to source word 2 — must NOT be highlighted
@@ -224,8 +224,8 @@ describe('VerseCompareController', () => {
         const src1 = el.querySelector('[data-source-id="1"]')
         const src2 = el.querySelector('[data-source-id="2"]')
 
-        fire(src1, 'source-word:activate', { sourceId: '1', linkedSvIds: '10', linkedHsvIds: '20' })
-        fire(src2, 'source-word:activate', { sourceId: '2', linkedSvIds: '12', linkedHsvIds: '21' })
+        fire(src1, 'source-word:activate', { sourceId: '1', linkedIds: { sv: '10', hsv: '20' } })
+        fire(src2, 'source-word:activate', { sourceId: '2', linkedIds: { sv: '12', hsv: '21' } })
 
         // First word's highlights must be cleared
         expect(el.querySelector('[data-tw-id="10"]').classList.contains('highlighted')).toBe(false)
@@ -277,7 +277,7 @@ describe('VerseCompareController', () => {
     it('adds hover-active class on source-word:hover when not click-locked', () => {
         const srcEl = el.querySelector('[data-source-id="1"]')
         fire(srcEl, 'source-word:hover', {
-            sourceId: '1', linkedSvIds: '10', linkedHsvIds: '20',
+            sourceId: '1', linkedIds: { sv: '10', hsv: '20' },
         })
 
         expect(srcEl.classList.contains('hover-active')).toBe(true)
@@ -286,7 +286,7 @@ describe('VerseCompareController', () => {
     it('adds hover-highlighted to linked words on source-word:hover', () => {
         const srcEl = el.querySelector('[data-source-id="1"]')
         fire(srcEl, 'source-word:hover', {
-            sourceId: '1', linkedSvIds: '10', linkedHsvIds: '20',
+            sourceId: '1', linkedIds: { sv: '10', hsv: '20' },
         })
 
         expect(el.querySelector('[data-tw-id="10"]').classList.contains('hover-highlighted')).toBe(true)
@@ -295,7 +295,7 @@ describe('VerseCompareController', () => {
 
     it('clears hover classes on source-word:unhover', () => {
         const srcEl = el.querySelector('[data-source-id="1"]')
-        fire(srcEl, 'source-word:hover',   { sourceId: '1', linkedSvIds: '10', linkedHsvIds: '' })
+        fire(srcEl, 'source-word:hover',   { sourceId: '1', linkedIds: { sv: '10', hsv: '' } })
         fire(srcEl, 'source-word:unhover', {})
 
         expect(srcEl.classList.contains('hover-active')).toBe(false)
@@ -305,18 +305,18 @@ describe('VerseCompareController', () => {
     it('does not apply hover highlights when click-locked', () => {
         // click-lock is set by source-word:activate
         const srcEl = el.querySelector('[data-source-id="1"]')
-        fire(srcEl, 'source-word:activate', { sourceId: '1', linkedSvIds: '10', linkedHsvIds: '' })
+        fire(srcEl, 'source-word:activate', { sourceId: '1', linkedIds: { sv: '10', hsv: '' } })
 
         // Now hover a different element — should be ignored
         const src2 = el.querySelector('[data-source-id="2"]')
-        fire(src2, 'source-word:hover', { sourceId: '2', linkedSvIds: '12', linkedHsvIds: '' })
+        fire(src2, 'source-word:hover', { sourceId: '2', linkedIds: { sv: '12', hsv: '' } })
 
         expect(src2.classList.contains('hover-active')).toBe(false)
     })
 
     it('does not clear hover classes on unhover when click-locked', () => {
         const srcEl = el.querySelector('[data-source-id="1"]')
-        fire(srcEl, 'source-word:activate', { sourceId: '1', linkedSvIds: '10', linkedHsvIds: '' })
+        fire(srcEl, 'source-word:activate', { sourceId: '1', linkedIds: { sv: '10', hsv: '' } })
 
         // "active" was set by activate — unhover must not clear it
         fire(srcEl, 'source-word:unhover', {})
@@ -387,7 +387,7 @@ describe('VerseCompareController', () => {
 
         const srcEl = el.querySelector('[data-source-id="1"]')
         fire(srcEl, 'source-word:activate', {
-            sourceId: '1', linkedSvIds: ' 10 , 11 ', linkedHsvIds: '',
+            sourceId: '1', linkedIds: { sv: ' 10 , 11 ', hsv: '' },
         })
 
         expect(el.querySelector('[data-tw-id="10"]').classList.contains('highlighted')).toBe(true)
@@ -399,7 +399,7 @@ describe('VerseCompareController', () => {
         // Should not throw
         expect(() => {
             fire(srcEl, 'source-word:activate', {
-                sourceId: '1', linkedSvIds: '', linkedHsvIds: '',
+                sourceId: '1', linkedIds: { sv: '', hsv: '' },
             })
         }).not.toThrow()
     })

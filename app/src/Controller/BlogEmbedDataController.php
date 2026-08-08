@@ -88,7 +88,10 @@ class BlogEmbedDataController extends AbstractController
     #[Route('/vertalingen', name: 'app_blog_embed_data_vertalingen', methods: ['GET'])]
     public function vertalingen(): JsonResponse
     {
-        $translations = array_map(fn($t) => ['code' => $t->getCode()], $this->translationRepository->findAllOrderedById());
+        $translations = array_map(
+            fn($t) => ['code' => $t->getCode(), 'abbreviation' => $t->getAbbreviation()],
+            $this->translationRepository->findAllOrderedById()
+        );
 
         return $this->json($translations);
     }

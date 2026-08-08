@@ -10,10 +10,10 @@
 
         <div class="translation-switcher">
             {% for t in translations %}
-            {% if t.code == 'SV' or is_granted('ROLE_VIEWER_HSV') %}
+            {% if translation_visible(t) %}
             <a href="{{ path('app_linking_stats', {translation: t.code}) }}"
                class="trans-btn {% if t.id == translation.id %}trans-btn-active{% endif %}">
-                {{ t.code }}
+                {{ t.abbreviation }}
             </a>
             {% endif %}
             {% endfor %}

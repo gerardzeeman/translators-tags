@@ -1,5 +1,6 @@
 // assets/controllers/verse_compare_controller.js
 import { Controller } from '@hotwired/stimulus'
+import { linkedIdsFromDataset, splitIds } from '../translation_links.js'
 
 export default class extends Controller {
     #clickLocked = false
@@ -111,9 +112,9 @@ export default class extends Controller {
         this.#clearHover()
     }
 
-    // ── Highlight: source word → both Dutch panels ────────────────────────────
+    // ── Highlight: source word → every Dutch panel ────────────────────────────
 
-    #highlightSource({ sourceId, linkedSvIds, linkedHsvIds }, isHover = false) {
+    #highlightSource({ sourceId, linkedIds }, isHover = false) {
         const srcCls = isHover ? 'hover-active'       : 'active'
         const hlCls  = isHover ? 'hover-highlighted'  : 'highlighted'
 
@@ -121,13 +122,11 @@ export default class extends Controller {
         const srcEl = this.element.querySelector(`[data-source-id="${sourceId}"]`)
         if (srcEl) srcEl.classList.add(srcCls)
 
-        // Highlight corresponding words in the SV panel
-        this.#highlightByTwIds(linkedSvIds, hlCls)
-        // Highlight corresponding words in the HSV panel
-        this.#highlightByTwIds(linkedHsvIds, hlCls)
+        // Highlight corresponding words in every translation panel
+        Object.values(linkedIds || {}).forEach(idsStr => this.#highlightByTwIds(idsStr, hlCls))
     }
 
-    // ── Highlight: Dutch word → source word + both Dutch panels ──────────────
+    // ── Highlight: Dutch word → source word + every Dutch panel ──────────────
 
     #highlightDutch({ twId }, isHover = false) {
         const srcCls = isHover ? 'hover-active'       : 'active'
@@ -138,16 +137,15 @@ export default class extends Controller {
         const dutchEl = this.element.querySelector(`[data-tw-id="${twStr}"]`)
         if (dutchEl) dutchEl.classList.add(hlCls)
 
-        // Find all source words linked to this tw_id (via either translation)
-        // and cross-highlight in both Dutch panels via their link sets.
+        // Find all source words linked to this tw_id (via any translation)
+        // and cross-highlight in every Dutch panel via their link sets.
         this.element.querySelectorAll('[data-source-id]').forEach(srcEl => {
-            const svIds  = this.#splitIds(srcEl.dataset.linkedSvIds)
-            const hsvIds = this.#splitIds(srcEl.dataset.linkedHsvIds)
+            const linkedIds = linkedIdsFromDataset(srcEl.dataset)
+            const matches = Object.values(linkedIds).some(idsStr => splitIds(idsStr).includes(twStr))
 
-            if (svIds.includes(twStr) || hsvIds.includes(twStr)) {
+            if (matches) {
                 srcEl.classList.add(srcCls)
-                this.#highlightByTwIds(srcEl.dataset.linkedSvIds,  hlCls)
-                this.#highlightByTwIds(srcEl.dataset.linkedHsvIds, hlCls)
+                Object.values(linkedIds).forEach(idsStr => this.#highlightByTwIds(idsStr, hlCls))
             }
         })
     }
@@ -155,7 +153,7 @@ export default class extends Controller {
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     #highlightByTwIds(idsStr, cssClass) {
-        this.#splitIds(idsStr).forEach(id => {
+        splitIds(idsStr).forEach(id => {
             const el = this.element.querySelector(`[data-tw-id="${id}"]`)
             if (el) el.classList.add(cssClass)
         })
@@ -163,10 +161,6 @@ export default class extends Controller {
 
     #grid() {
         return this.element.querySelector('.verse-compare-grid, .chapter-verse-grid')
-    }
-
-    #splitIds(idsStr) {
-        return (idsStr || '').split(',').map(s => s.trim()).filter(Boolean)
     }
 
     #clearAll() {

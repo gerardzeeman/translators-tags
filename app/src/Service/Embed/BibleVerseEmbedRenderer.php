@@ -7,6 +7,7 @@ use App\Repository\BookRepository;
 use App\Repository\PassageRepository;
 use App\Repository\TranslationRepository;
 use App\Service\MorphologyParser;
+use App\Service\TranslationAccessService;
 use Twig\Environment;
 
 /**
@@ -19,30 +20,35 @@ class BibleVerseEmbedRenderer implements BlogEmbedRendererInterface
     private const MAX_VERSES = 30;
 
     /**
-     * Whether the CURRENT blog's author (not the visitor viewing it) has
-     * ROLE_VIEWER_HSV, resolved with role-hierarchy inheritance and set by
+     * The CURRENT blog's author's (not the visitor viewing it) reachable
+     * roles, resolved with role-hierarchy inheritance and set by
      * BlogMarkdownRenderer immediately before each render pass. Defaults to
-     * false (fail closed): without this being explicitly set, no non-SV
-     * translation may be embedded. This gates authoring, not viewing --
-     * once a blog embeds HSV text legitimately, published readers (including
-     * anonymous ones) still see it, matching how the rest of the app treats
-     * published content. What it prevents is a ROLE_BLOGGER account that was
-     * never granted ROLE_VIEWER_HSV using their own draft preview as a
-     * side channel to read the full HSV translation despite that.
+     * an empty array (fail closed): without this being explicitly set, no
+     * role-gated translation may be embedded. This gates authoring, not
+     * viewing -- once a blog embeds e.g. HSV text legitimately, published
+     * readers (including anonymous ones) still see it, matching how the
+     * rest of the app treats published content. What it prevents is a
+     * ROLE_BLOGGER account that was never granted the matching viewer role
+     * using their own draft preview as a side channel to read a restricted
+     * translation despite that.
+     *
+     * @var string[]
      */
-    private bool $authorHasHsvAccess = false;
+    private array $authorRoles = [];
 
     public function __construct(
-        private readonly BookRepository        $bookRepository,
-        private readonly TranslationRepository $translationRepository,
-        private readonly PassageRepository     $passageRepository,
-        private readonly MorphologyParser      $morphologyParser,
-        private readonly Environment           $twig,
+        private readonly BookRepository            $bookRepository,
+        private readonly TranslationRepository     $translationRepository,
+        private readonly PassageRepository         $passageRepository,
+        private readonly MorphologyParser          $morphologyParser,
+        private readonly TranslationAccessService  $translationAccess,
+        private readonly Environment               $twig,
     ) {}
 
-    public function setAuthorHasHsvAccess(bool $authorHasHsvAccess): void
+    /** @param string[] $authorRoles */
+    public function setAuthorRoles(array $authorRoles): void
     {
-        $this->authorHasHsvAccess = $authorHasHsvAccess;
+        $this->authorRoles = $authorRoles;
     }
 
     public function supports(string $infoString): bool
@@ -79,10 +85,11 @@ class BibleVerseEmbedRenderer implements BlogEmbedRendererInterface
             return $this->renderError(sprintf('Vertaling "%s" niet gevonden.', $translationCode));
         }
 
-        // Same convention as the rest of the app (e.g. linking/passage.html.twig):
-        // SV is unrestricted, every other translation requires ROLE_VIEWER_HSV --
-        // here, on the blog's author, not the current visitor (see property doc above).
-        if ($translation->getCode() !== 'SV' && !$this->authorHasHsvAccess) {
+        // Same convention as the rest of the app (e.g. linking/passage.html.twig,
+        // via TranslationAccessService): SV is unrestricted, every other
+        // translation requires its own viewer role -- here, on the blog's
+        // author, not the current visitor (see property doc above).
+        if (!$this->translationAccess->isVisibleForRoles($translation->getCode(), $this->authorRoles)) {
             return $this->renderError(sprintf(
                 'Vertaling "%s" is niet beschikbaar voor deze blog.',
                 $translation->getCode()

@@ -25,6 +25,7 @@
             'ROLE_ADMIN':  'Beheerder',
             'ROLE_LINKER': 'Koppelaar (SV)',
             'ROLE_VIEWER_HSV': 'Herziene Statenvertaling',
+            'ROLE_VIEWER_SVGBS': 'Statenvertaling (GBS)',
             'ROLE_VIEWER': 'Lezer',
         } %}
         {% set named_roles = user.roles|filter(r => r != 'ROLE_USER')|map(r => role_labels[r] ?? r)|sort %}

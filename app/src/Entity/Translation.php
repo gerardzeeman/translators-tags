@@ -19,6 +19,9 @@ class Translation
     #[ORM\Column(type: 'text')]
     private string $name;
 
+    #[ORM\Column(type: 'string', length: 20, nullable: true)]
+    private ?string $abbreviation = null;
+
     #[ORM\Column(type: 'string', length: 3)]
     private string $language;
 
@@ -28,6 +31,7 @@ class Translation
     public function getId(): int { return $this->id; }
     public function getCode(): string { return $this->code; }
     public function getName(): string { return $this->name; }
+    public function getAbbreviation(): string { return $this->abbreviation ?? $this->code; }
     public function getLanguage(): string { return $this->language; }
     public function getDirection(): string { return $this->direction; }
 }

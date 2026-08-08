@@ -376,7 +376,7 @@ export default class extends Controller {
         const res = await fetch(this.vertalingenUrlValue)
         this.translations = await res.json()
         this.vertalingTarget.innerHTML = this.translations
-            .map((t) => `<option value="${this.#esc(t.code)}">${this.#esc(t.code)}</option>`)
+            .map((t) => `<option value="${this.#esc(t.code)}">${this.#esc(t.abbreviation)}</option>`)
             .join('')
     }
 

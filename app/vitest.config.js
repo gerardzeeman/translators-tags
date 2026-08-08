@@ -1,8 +1,10 @@
+const path = require('path')
+
 /** @type {import('vitest').UserConfig} */
 module.exports = {
     resolve: {
         alias: {
-            '@hotwired/stimulus': '/tmp/node_modules/@hotwired/stimulus',
+            '@hotwired/stimulus': path.resolve(__dirname, 'node_modules/@hotwired/stimulus'),
         },
     },
     test: {
