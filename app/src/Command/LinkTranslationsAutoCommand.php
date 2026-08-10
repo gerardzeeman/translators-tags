@@ -154,10 +154,15 @@ class LinkTranslationsAutoCommand extends Command
             $newLinks      = array_merge($newLinks, $sequenceLinks);
 
             // Pass 3: Positional fallback for still-unlinked
+            // Note: filler words (cursive additions, no source-language backing) are NOT
+            // excluded here -- that exclusion only applies to word_links (Dutch → Hebrew/Greek,
+            // see align_heuristic.py). An addition in one Dutch edition is very often the exact
+            // same addition in another (SV and SV(GBS) especially), so it should still get
+            // matched to its Dutch counterpart across translations.
             $linkedA = array_column($newLinks, 0);
             $linkedB = array_column($newLinks, 1);
-            $remainA = array_values(array_filter($wordsA, fn($w) => !in_array($w['id'], $linkedA) && !$w['is_filler']));
-            $remainB = array_values(array_filter($wordsB, fn($w) => !in_array($w['id'], $linkedB) && !$w['is_filler']));
+            $remainA = array_values(array_filter($wordsA, fn($w) => !in_array($w['id'], $linkedA)));
+            $remainB = array_values(array_filter($wordsB, fn($w) => !in_array($w['id'], $linkedB)));
             $positionalLinks = $this->positionalPass($remainA, $remainB);
             $newLinks        = array_merge($newLinks, $positionalLinks);
 
@@ -238,7 +243,9 @@ class LinkTranslationsAutoCommand extends Command
         while ($i > 0 && $j > 0) {
             $match = $this->wordSimilarity($wordsA[$i - 1]['word_normalised'], $wordsB[$j - 1]['word_normalised']);
             if ($dp[$i][$j] === $dp[$i - 1][$j - 1] + $match && $match >= 0) {
-                if ($match > 0 && !$wordsA[$i - 1]['is_filler'] && !$wordsB[$j - 1]['is_filler']) {
+                // Filler status (cursive additions) does not block a Dutch-to-Dutch match here
+                // -- see the note on the Pass 3 filter above.
+                if ($match > 0) {
                     // Exact match (score 2) → 90, prefix match (score 1) → 70
                     $conf    = $match === 2 ? 90 : 70;
                     $links[] = [(int) $wordsA[$i - 1]['id'], (int) $wordsB[$j - 1]['id'], 'auto_sequence', $conf];
