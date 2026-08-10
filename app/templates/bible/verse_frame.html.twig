@@ -145,6 +145,7 @@
 
         <h2 class="panel-heading">
             <span class="lang-badge lang-nl">NL</span> Statenvertaling Jongbloed SV(JB)
+            {% include 'bible/_cross_ref_badge.html.twig' with {refs: passage.cross_refs_sv} only %}
         </h2>
 
         <div class="dutch-verse">
@@ -177,6 +178,7 @@
 
         <h2 class="panel-heading">
             <span class="lang-badge lang-nl">NL</span> Herziene Statenvertaling
+            {% include 'bible/_cross_ref_badge.html.twig' with {refs: passage.cross_refs_hsv} only %}
         </h2>
 
         <div class="dutch-verse">
@@ -212,6 +214,7 @@
 
         <h2 class="panel-heading">
             <span class="lang-badge lang-nl">NL</span> Statenvertaling (GBS) SV(GBS)
+            {% include 'bible/_cross_ref_badge.html.twig' with {refs: passage.cross_refs_svgbs} only %}
         </h2>
 
         <div class="dutch-verse">

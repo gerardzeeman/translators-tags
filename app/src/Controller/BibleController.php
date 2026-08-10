@@ -3,6 +3,7 @@
 namespace App\Controller;
 
 use App\Repository\BookRepository;
+use App\Repository\CrossReferenceRepository;
 use App\Repository\LinkingRepository;
 use App\Repository\PassageRepository;
 use App\Repository\TranslationRepository;
@@ -15,11 +16,12 @@ use Symfony\Component\Routing\Attribute\Route;
 class BibleController extends AbstractController
 {
     public function __construct(
-        private readonly BookRepository        $bookRepository,
-        private readonly PassageRepository     $passageRepository,
-        private readonly TranslationRepository $translationRepository,
-        private readonly MorphologyParser      $morphologyParser,
-        private readonly LinkingRepository     $linkingRepository,
+        private readonly BookRepository            $bookRepository,
+        private readonly PassageRepository         $passageRepository,
+        private readonly TranslationRepository     $translationRepository,
+        private readonly MorphologyParser          $morphologyParser,
+        private readonly LinkingRepository         $linkingRepository,
+        private readonly CrossReferenceRepository  $crossReferenceRepository,
     ) {}
 
     /**
@@ -109,6 +111,18 @@ class BibleController extends AbstractController
             );
         }
 
+        // Cross-references: one fetch per distinct source needed by the visible
+        // translations (SV and SVGBS share the same source, so this is at most 2 queries).
+        $crossRefsBySource = [];
+        foreach ($allTranslations as $trans) {
+            $source = $this->crossReferenceRepository->sourceForTranslationCode($trans->getCode());
+            if ($source !== null && !isset($crossRefsBySource[$source])) {
+                $crossRefsBySource[$source] = $this->crossReferenceRepository->fetchForChapter(
+                    $book->getId(), $chapter, $source
+                );
+            }
+        }
+
         // Build per-verse data, enriched with morphology and per-translation links
         $verses = [];
         foreach ($passagesByVerseTid as $verseNum => $dataByTid) {
@@ -146,6 +160,11 @@ class BibleController extends AbstractController
             foreach ($allTranslations as $trans) {
                 $code = $trans->getCode();
                 $verseData['dutch_verse_' . strtolower($code)] = $dataByTid[$trans->getId()]['dutch_verse'] ?? [];
+
+                $source = $this->crossReferenceRepository->sourceForTranslationCode($code);
+                $verseData['cross_refs_' . strtolower($code)] = $source !== null
+                    ? ($crossRefsBySource[$source][$verseNum] ?? [])
+                    : [];
             }
 
             $verses[$verseNum] = $verseData;
@@ -267,6 +286,11 @@ class BibleController extends AbstractController
         foreach ($allTranslations as $trans) {
             $code = $trans->getCode();
             $passage['dutch_verse_' . strtolower($code)] = $allPassages[$code]['dutch_verse'] ?? [];
+
+            $source = $this->crossReferenceRepository->sourceForTranslationCode($code);
+            $passage['cross_refs_' . strtolower($code)] = $source !== null
+                ? $this->crossReferenceRepository->fetchForVerse($book->getId(), $chapter, $verse, $source)
+                : [];
         }
 
         // Navigation: reuse already-cached verse counts (getChapterVerseCounts is cached)
