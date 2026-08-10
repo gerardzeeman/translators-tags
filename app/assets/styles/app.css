@@ -1163,6 +1163,58 @@ a:hover { text-decoration: underline; }
     line-height: 1;
 }
 
+/* ── Kruisverwijzingen ("tekstverwijzingen") badge + popover ────────────── */
+.cross-ref-badge {
+    position: relative;
+    display: inline-block;
+    margin-left: 2px;
+}
+.cross-ref-trigger {
+    appearance: none;
+    border: none;
+    background: none;
+    padding: 0 2px;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--accent);
+    cursor: pointer;
+}
+.cross-ref-trigger:hover { text-decoration: underline; }
+.cross-ref-list {
+    position: absolute;
+    z-index: 20;
+    top: 100%;
+    left: 0;
+    min-width: 9rem;
+    max-width: 14rem;
+    max-height: 12rem;
+    overflow-y: auto;
+    margin-top: 4px;
+    padding: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    background: var(--bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+}
+.cross-ref-item {
+    display: block;
+    padding: 3px 6px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-family: var(--font-ui);
+    color: var(--text);
+    text-decoration: none;
+    white-space: nowrap;
+}
+.cross-ref-item:hover {
+    background: var(--hover-warm);
+    color: var(--accent);
+}
+
 /* ── Bronwoorden in de hoofdstuk-view ────────────────────────────────────── */
 .verse-cell-source .source-words {
     display: flex;

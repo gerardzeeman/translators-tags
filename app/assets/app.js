@@ -23,6 +23,7 @@ import ThemeController         from './controllers/theme_controller.js'
 import ChapterStripController        from './controllers/chapter_strip_controller.js'
 import TranslationSelectorController from './controllers/translation_selector_controller.js'
 import MobileNavController           from './controllers/mobile_nav_controller.js'
+import CrossRefToggleController      from './controllers/cross_ref_toggle_controller.js'
 
 app.register('verse-compare',        VerseCompareController)
 app.register('source-word',          SourceWordController)
@@ -36,3 +37,4 @@ app.register('theme',                ThemeController)
 app.register('chapter-strip',        ChapterStripController)
 app.register('translation-selector', TranslationSelectorController)
 app.register('mobile-nav',           MobileNavController)
+app.register('cross-ref-toggle',     CrossRefToggleController)

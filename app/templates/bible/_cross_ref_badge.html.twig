@@ -1,0 +1,14 @@
+{% if refs is defined and refs|length > 0 %}
+<span class="cross-ref-badge" data-controller="cross-ref-toggle">
+    <button type="button"
+            class="cross-ref-trigger"
+            data-action="click->cross-ref-toggle#toggle"
+            title="Tekstverwijzingen">†</button>
+    <span class="cross-ref-list" data-cross-ref-toggle-target="list" hidden>
+        {% for ref in refs %}
+        <a class="cross-ref-item"
+           href="{{ path('app_chapter_view', {usfm: ref.target_usfm, chapter: ref.target_chapter}) }}#v{{ ref.target_verse }}">{{ ref.label }}</a>
+        {% endfor %}
+    </span>
+</span>
+{% endif %}

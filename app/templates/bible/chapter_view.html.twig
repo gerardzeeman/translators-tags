@@ -297,6 +297,7 @@
             {# SV-kolom #}
             <div class="verse-cell verse-cell-sv">
                 <span class="verse-number">{{ verse_num }}</span>
+                {% include 'bible/_cross_ref_badge.html.twig' with {refs: verse.cross_refs_sv} only %}
                 <div class="dutch-verse">
                     {% for word in verse.dutch_verse_sv %}
                     <span class="dutch-word"
@@ -316,6 +317,7 @@
             {% if is_granted('ROLE_VIEWER_HSV') %}
             <div class="verse-cell verse-cell-hsv">
                 <span class="verse-number">{{ verse_num }}</span>
+                {% include 'bible/_cross_ref_badge.html.twig' with {refs: verse.cross_refs_hsv} only %}
                 <div class="dutch-verse">
                     {% for word in verse.dutch_verse_hsv %}
                     <span class="dutch-word{% if word.is_filler %} word-filler{% endif %}"
@@ -337,6 +339,7 @@
             {% if is_granted('ROLE_VIEWER_SVGBS') %}
             <div class="verse-cell verse-cell-svgbs">
                 <span class="verse-number">{{ verse_num }}</span>
+                {% include 'bible/_cross_ref_badge.html.twig' with {refs: verse.cross_refs_svgbs} only %}
                 <div class="dutch-verse">
                     {% for word in verse.dutch_verse_svgbs %}
                     <span class="dutch-word{% if word.is_filler %} word-filler{% endif %}"

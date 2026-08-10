@@ -104,6 +104,30 @@ CREATE TABLE IF NOT EXISTS translation_words (
 );
 
 -- ─────────────────────────────────────────────────────────────────────────────
+-- Cross-references ("zie ook"-verwijzingen tussen verzen)
+-- ─────────────────────────────────────────────────────────────────────────────
+
+-- Verse-level, not tied to a translation_id: the same book/chapter/verse
+-- reference applies across editions that share (near-)identical text. SV
+-- Jongbloed has no cross-reference apparatus of its own, so it reuses the
+-- SVGBS-sourced rows (see TranslationRepository / CrossReferenceRepository
+-- for the code -> source mapping).
+CREATE TABLE IF NOT EXISTS cross_references (
+    id              SERIAL   PRIMARY KEY,
+    source          VARCHAR(20) NOT NULL,        -- 'HSV' or 'SVGBS' -- which apparatus this came from
+    book_id         SMALLINT NOT NULL REFERENCES books(id),
+    chapter         SMALLINT NOT NULL,
+    verse           SMALLINT NOT NULL,
+    ordinal         SMALLINT NOT NULL,           -- display order within the verse
+    target_book_id  SMALLINT NOT NULL REFERENCES books(id),
+    target_chapter  SMALLINT NOT NULL,
+    target_verse    SMALLINT NOT NULL,
+    label           TEXT     NOT NULL,           -- as scraped, e.g. 'Job 38:4'
+    UNIQUE (source, book_id, chapter, verse, ordinal)
+);
+CREATE INDEX IF NOT EXISTS idx_cross_ref_verse ON cross_references (source, book_id, chapter, verse);
+
+-- ─────────────────────────────────────────────────────────────────────────────
 -- Alignment / linking tables
 -- ─────────────────────────────────────────────────────────────────────────────
 
