@@ -53,7 +53,8 @@ class CrossReferenceRepository
         $byVerse = [];
         foreach ($rows as $row) {
             $verse = (int) $row['verse'];
-            self::appendRow($byVerse[$verse] ??= [], $row);
+            $byVerse[$verse] ??= [];
+            self::appendRow($byVerse[$verse], $row);
         }
         return $byVerse;
     }
