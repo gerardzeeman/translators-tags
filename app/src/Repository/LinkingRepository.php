@@ -1171,7 +1171,7 @@ class LinkingRepository
              FROM translations ta
              JOIN translations tb ON tb.family = ta.family AND tb.id != ta.id
              WHERE ta.source_lang_authority = TRUE
-             ORDER BY ta.family, tb.code"
+             ORDER BY ta.family, CASE tb.code WHEN 'SVGBS' THEN 1 WHEN 'HSV' THEN 2 ELSE 3 END, tb.code"
         );
     }
 

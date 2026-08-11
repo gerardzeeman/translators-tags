@@ -72,8 +72,8 @@
 
 {% block nav_right_extra %}
 {% set available_translations = ['SV'] %}
-{% if is_granted('ROLE_VIEWER_HSV') %}{% set available_translations = available_translations|merge(['HSV']) %}{% endif %}
 {% if is_granted('ROLE_VIEWER_SVGBS') %}{% set available_translations = available_translations|merge(['SVGBS']) %}{% endif %}
+{% if is_granted('ROLE_VIEWER_HSV') %}{% set available_translations = available_translations|merge(['HSV']) %}{% endif %}
 <div class="nav-trans-selector"
      data-controller="translation-selector"
      data-translation-selector-translations-value="{{ available_translations|json_encode }}">
@@ -86,15 +86,6 @@
                    checked>
             <span>Statenvertaling Jongbloed SV(JB)</span>
         </label>
-        {% if is_granted('ROLE_VIEWER_HSV') %}
-        <label class="nav-check-item">
-            <input type="checkbox"
-                   data-action="change->translation-selector#toggle"
-                   data-translation="HSV"
-                   checked>
-            <span>Herz. Statenv. HSV</span>
-        </label>
-        {% endif %}
         {% if is_granted('ROLE_VIEWER_SVGBS') %}
         <label class="nav-check-item">
             <input type="checkbox"
@@ -102,6 +93,15 @@
                    data-translation="SVGBS"
                    checked>
             <span>Statenvertaling (GBS) SV(GBS)</span>
+        </label>
+        {% endif %}
+        {% if is_granted('ROLE_VIEWER_HSV') %}
+        <label class="nav-check-item">
+            <input type="checkbox"
+                   data-action="change->translation-selector#toggle"
+                   data-translation="HSV"
+                   checked>
+            <span>Herz. Statenv. HSV</span>
         </label>
         {% endif %}
     </div>
@@ -155,14 +155,14 @@
         <div class="col-header col-header-sv">
             <span class="col-label">Statenvertaling Jongbloed SV(JB)</span>
         </div>
-        {% if is_granted('ROLE_VIEWER_HSV') %}
-        <div class="col-header col-header-hsv">
-            <span class="col-label">Herz. Statenv. HSV</span>
-        </div>
-        {% endif %}
         {% if is_granted('ROLE_VIEWER_SVGBS') %}
         <div class="col-header col-header-svgbs">
             <span class="col-label">Statenvertaling (GBS) SV(GBS)</span>
+        </div>
+        {% endif %}
+        {% if is_granted('ROLE_VIEWER_HSV') %}
+        <div class="col-header col-header-hsv">
+            <span class="col-label">Herz. Statenv. HSV</span>
         </div>
         {% endif %}
     </div>
@@ -183,17 +183,17 @@
                 type="button"
                 data-action="click->verse-compare#switchTranslation"
                 data-translation="SV">SV(JB)</button>
-        {% if is_granted('ROLE_VIEWER_HSV') %}
-        <button class="pill-btn"
-                type="button"
-                data-action="click->verse-compare#switchTranslation"
-                data-translation="HSV">HSV</button>
-        {% endif %}
         {% if is_granted('ROLE_VIEWER_SVGBS') %}
         <button class="pill-btn"
                 type="button"
                 data-action="click->verse-compare#switchTranslation"
                 data-translation="SVGBS">SV(GBS)</button>
+        {% endif %}
+        {% if is_granted('ROLE_VIEWER_HSV') %}
+        <button class="pill-btn"
+                type="button"
+                data-action="click->verse-compare#switchTranslation"
+                data-translation="HSV">HSV</button>
         {% endif %}
     </div>
     {% endif %}
@@ -313,28 +313,6 @@
                 </div>
             </div>
 
-            {# HSV-kolom — alleen voor ROLE_VIEWER_HSV #}
-            {% if is_granted('ROLE_VIEWER_HSV') %}
-            <div class="verse-cell verse-cell-hsv">
-                <span class="verse-number">{{ verse_num }}</span>
-                <div class="dutch-verse">
-                    {% include 'bible/_cross_ref_marker.html.twig' with {markers: verse.cross_ref_prefix_hsv} only %}
-                    {% for word in verse.dutch_verse_hsv %}
-                    <span class="dutch-word{% if word.is_filler %} word-filler{% endif %}"
-                          data-tw-id="{{ word.word_id }}"
-                          data-method="{{ word.best_method ?? 'none' }}"
-                          data-score="{{ word.best_score ?? 0 }}"
-                          data-filler="{{ word.is_filler ? '1' : '0' }}"
-                          {% if is_granted('ROLE_LINKER') %}data-controller="dutch-word"{% endif %}>
-                        {{- word.word_text -}}
-                    </span>{{- word.punct_after ?? '' -}}{% include 'bible/_cross_ref_marker.html.twig' with {markers: word.cross_ref_markers} only %}{%- if not loop.last %} {% endif -%}
-                    {% else %}
-                    <em class="no-verse">Niet gevonden in de Herziene Statenvertaling.</em>
-                    {% endfor %}
-                </div>
-            </div>
-            {% endif %}{# ROLE_VIEWER_HSV #}
-
             {# SV(GBS)-kolom — alleen voor ROLE_VIEWER_SVGBS #}
             {% if is_granted('ROLE_VIEWER_SVGBS') %}
             <div class="verse-cell verse-cell-svgbs">
@@ -356,6 +334,28 @@
                 </div>
             </div>
             {% endif %}{# ROLE_VIEWER_SVGBS #}
+
+            {# HSV-kolom — alleen voor ROLE_VIEWER_HSV #}
+            {% if is_granted('ROLE_VIEWER_HSV') %}
+            <div class="verse-cell verse-cell-hsv">
+                <span class="verse-number">{{ verse_num }}</span>
+                <div class="dutch-verse">
+                    {% include 'bible/_cross_ref_marker.html.twig' with {markers: verse.cross_ref_prefix_hsv} only %}
+                    {% for word in verse.dutch_verse_hsv %}
+                    <span class="dutch-word{% if word.is_filler %} word-filler{% endif %}"
+                          data-tw-id="{{ word.word_id }}"
+                          data-method="{{ word.best_method ?? 'none' }}"
+                          data-score="{{ word.best_score ?? 0 }}"
+                          data-filler="{{ word.is_filler ? '1' : '0' }}"
+                          {% if is_granted('ROLE_LINKER') %}data-controller="dutch-word"{% endif %}>
+                        {{- word.word_text -}}
+                    </span>{{- word.punct_after ?? '' -}}{% include 'bible/_cross_ref_marker.html.twig' with {markers: word.cross_ref_markers} only %}{%- if not loop.last %} {% endif -%}
+                    {% else %}
+                    <em class="no-verse">Niet gevonden in de Herziene Statenvertaling.</em>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}{# ROLE_VIEWER_HSV #}
 
         </div>{# /verse-row #}
         {% endfor %}

@@ -172,42 +172,6 @@
 
     </section>
 
-    {# ── HSV translation panel (right, bottom) — ROLE_VIEWER_HSV only ─────────── #}
-    {% if is_granted('ROLE_VIEWER_HSV') %}
-    <section class="panel panel-hsv" aria-label="Herziene Statenvertaling">
-
-        <h2 class="panel-heading">
-            <span class="lang-badge lang-nl">NL</span> Herziene Statenvertaling
-        </h2>
-
-        <div class="dutch-verse">
-            {% include 'bible/_cross_ref_marker.html.twig' with {markers: passage.cross_ref_prefix_hsv} only %}
-            {% for word in passage.dutch_verse_hsv %}
-            <span class="dutch-word{% if word.is_filler %} word-filler{% endif %}"
-                  data-tw-id="{{ word.word_id }}"
-                  data-method="{{ word.best_method ?? 'none' }}"
-                  data-score="{{ word.best_score ?? 0 }}"
-                  data-filler="{{ word.is_filler ? '1' : '0' }}"
-                  data-controller="dutch-word">
-                {{- word.word_text -}}
-            </span>{{- word.punct_after ?? '' -}}{% include 'bible/_cross_ref_marker.html.twig' with {markers: word.cross_ref_markers} only %}{%- if not loop.last %} {% endif -%}
-            {% else %}
-            <em class="no-verse">Vers niet gevonden in de Herziene Statenvertaling.</em>
-            {% endfor %}
-        </div>
-
-        <div class="confidence-legend">
-            <span class="legend-item"><span class="dot method-manual"></span> Handmatig</span>
-            <span class="legend-item"><span class="dot method-manual_hint"></span> Hint</span>
-            <span class="legend-item"><span class="dot method-proper_noun"></span> Eigennaam</span>
-            <span class="legend-item"><span class="dot method-positional"></span> Positioneel</span>
-            <span class="legend-item"><span class="dot method-auto_source_pivot"></span> Afgeleid (SV-koppeling)</span>
-            <span class="legend-item"><span class="dot method-none"></span> Geen koppeling</span>
-        </div>
-
-    </section>
-    {% endif %}{# ROLE_VIEWER_HSV #}
-
     {# ── SV(GBS) translation panel (right, bottom) — ROLE_VIEWER_SVGBS only ────── #}
     {% if is_granted('ROLE_VIEWER_SVGBS') %}
     <section class="panel panel-svgbs" aria-label="Statenvertaling (GBS)">
@@ -243,6 +207,42 @@
 
     </section>
     {% endif %}{# ROLE_VIEWER_SVGBS #}
+
+    {# ── HSV translation panel (right, bottom) — ROLE_VIEWER_HSV only ─────────── #}
+    {% if is_granted('ROLE_VIEWER_HSV') %}
+    <section class="panel panel-hsv" aria-label="Herziene Statenvertaling">
+
+        <h2 class="panel-heading">
+            <span class="lang-badge lang-nl">NL</span> Herziene Statenvertaling
+        </h2>
+
+        <div class="dutch-verse">
+            {% include 'bible/_cross_ref_marker.html.twig' with {markers: passage.cross_ref_prefix_hsv} only %}
+            {% for word in passage.dutch_verse_hsv %}
+            <span class="dutch-word{% if word.is_filler %} word-filler{% endif %}"
+                  data-tw-id="{{ word.word_id }}"
+                  data-method="{{ word.best_method ?? 'none' }}"
+                  data-score="{{ word.best_score ?? 0 }}"
+                  data-filler="{{ word.is_filler ? '1' : '0' }}"
+                  data-controller="dutch-word">
+                {{- word.word_text -}}
+            </span>{{- word.punct_after ?? '' -}}{% include 'bible/_cross_ref_marker.html.twig' with {markers: word.cross_ref_markers} only %}{%- if not loop.last %} {% endif -%}
+            {% else %}
+            <em class="no-verse">Vers niet gevonden in de Herziene Statenvertaling.</em>
+            {% endfor %}
+        </div>
+
+        <div class="confidence-legend">
+            <span class="legend-item"><span class="dot method-manual"></span> Handmatig</span>
+            <span class="legend-item"><span class="dot method-manual_hint"></span> Hint</span>
+            <span class="legend-item"><span class="dot method-proper_noun"></span> Eigennaam</span>
+            <span class="legend-item"><span class="dot method-positional"></span> Positioneel</span>
+            <span class="legend-item"><span class="dot method-auto_source_pivot"></span> Afgeleid (SV-koppeling)</span>
+            <span class="legend-item"><span class="dot method-none"></span> Geen koppeling</span>
+        </div>
+
+    </section>
+    {% endif %}{# ROLE_VIEWER_HSV #}
 
 </div>{# /compare-col-right #}
 </div>{# /verse-compare-grid #}

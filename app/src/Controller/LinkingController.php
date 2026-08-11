@@ -31,7 +31,7 @@ class LinkingController extends AbstractController
     {
         $otBooks      = $this->bookRepo->findAllOldTestament();
         $ntBooks      = $this->bookRepo->findAllNewTestament();
-        $translations = $this->translationRepo->findAllOrderedById();
+        $translations = $this->translationRepo->findAllForDisplay();
 
         return $this->render('linking/home.html.twig', [
             'ot_books'     => $otBooks,
@@ -69,7 +69,7 @@ class LinkingController extends AbstractController
         $chapterCounts = $this->passageRepo->getChapterVerseCounts($book->getId());
         $nav = $this->buildNavigation($book->getId(), $chapter, $verse, $usfm, $translation, $chapterCounts);
 
-        $translations = $this->translationRepo->findAllOrderedById();
+        $translations = $this->translationRepo->findAllForDisplay();
 
         return $this->render('linking/passage.html.twig', [
             'book'         => $book,
@@ -87,7 +87,7 @@ class LinkingController extends AbstractController
     #[Route('/strongs', name: 'app_linking_strongs_home')]
     public function strongsHome(): Response
     {
-        $translations = $this->translationRepo->findAllOrderedById();
+        $translations = $this->translationRepo->findAllForDisplay();
 
         return $this->render('linking/strongs_home.html.twig', [
             'translations' => $translations,
@@ -115,7 +115,7 @@ class LinkingController extends AbstractController
         $verses           = $this->linkingRepo->fetchStrongsVerses($strongs, $translationId, $page, $perPage);
         $strongsEntry     = $this->linkingRepo->fetchStrongsEntry($strongs);
 
-        $translations = $this->translationRepo->findAllOrderedById();
+        $translations = $this->translationRepo->findAllForDisplay();
 
         return $this->render('linking/strongs.html.twig', [
             'strongs'          => $strongs,
@@ -152,7 +152,7 @@ class LinkingController extends AbstractController
 
         return $this->render('linking/stats.html.twig', [
             'translation'   => $translationEntity,
-            'translations'  => $this->translationRepo->findAllOrderedById(),
+            'translations'  => $this->translationRepo->findAllForDisplay(),
             'hebrew_stats'  => $this->linkingRepo->fetchManualTranslationStats('OT', $translationId),
             'greek_stats'   => $this->linkingRepo->fetchManualTranslationStats('NT', $translationId),
         ]);
