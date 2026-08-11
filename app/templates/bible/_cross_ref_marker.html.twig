@@ -1,0 +1,12 @@
+{% if markers is defined %}
+{% for m in markers %}
+<span class="cross-ref-marker" tabindex="0">
+    <sup class="cross-ref-letter">{{ m.letter }}</sup>
+    <span class="cross-ref-popup">
+        {% for t in m.targets %}
+        <a href="{{ path('app_chapter_view', {usfm: t.target_usfm, chapter: t.target_chapter}) }}#v{{ t.target_verse }}">{{ t.label }}</a>
+        {% endfor %}
+    </span>
+</span>
+{% endfor %}
+{% endif %}

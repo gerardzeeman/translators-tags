@@ -1,31 +1,35 @@
 """
 parse_svgbs_cross_references.py
-Scrapes verse-level cross-references ("kruisverwijzingen") from the
+Scrapes PURE cross-references ("kruisverwijzingen") from the
 "Met kanttekeningen"-weergave (ind=1) on statenvertaling.nl and stores them
-in cross_references (source='SVGBS').
+in cross_references (source='SVGBS'), anchored to the exact word they
+follow in the verse.
 
-Includes BOTH kinds of footnotes the site distinguishes: numbered
-explanatory notes (which often cite supporting verses inline) and lettered
-pure cross-reference lists — both are "verwijzingen naar andere teksten" in
-the sense the user asked for, and both use the identical HTML structure
-below, so there is no reason to special-case one over the other.
+The site distinguishes two kinds of footnotes:
+  - numbered (1, 2, 3, ...): explanatory commentary, often citing verses
+    inline as supporting prose -- DELIBERATELY EXCLUDED here.
+  - lettered (a, b, c, ...): pure cross-reference lists -- these are what
+    gets stored.
 
 HTML structure per page (inside <table class='tekst'>):
   <tr><td class='tekstbreed'><a name='vers1'></a>1 IN den <sup>1</sup><sup>a</sup>beginne ...</td></tr>
   <tr><td class='tussenonder'></td><td class='kanttonder'><b>1</b> Van den tijd ...
       <a href='javascript:fverwijs(1)' title='Tekstverwijzingen'><img .../></a></td></tr>
-  <tr id='tr1' style='display: none'><td class='tussenonder'>&nbsp;</td><td class='kanttonder'>
-      <br /><a href='tekst.php?bb=19&hf=90&ind=1#vers2'>Ps. 90:2</a>&nbsp;&nbsp;[verse text]<br />
+  <tr id='tr1' style='display: none'>...(footnote 1's expansion -- SKIPPED, numbered)...</tr>
+  <tr><td class='tussenonder'></td><td class='kanttonder'><b>a</b> Job 38:4. Ps. 33:6; ...
+      <a href='javascript:fverwijs(2)' title='Tekstverwijzingen'><img .../></a></td></tr>
+  <tr id='tr2' style='display: none'><td class='tussenonder'>&nbsp;</td><td class='kanttonder'>
+      <br /><a href='tekst.php?bb=18&hf=38&ind=1#vers4'>Job 38:4</a>&nbsp;&nbsp;[verse text]<br />
       ... one <a> per referenced verse ...
   </td></tr>
 
-The <tr id='trN'> rows are server-rendered but CSS-hidden (toggled by the
-icon button) -- no JavaScript execution needed to read them. `current_verse`
-is tracked by walking <tr> elements in document order and updating on each
-<a name='versN'> anchor; every <tr id='trN'> encountered afterwards belongs
-to that verse, until the next anchor. `bb`/`hf` in each href already match
-our own book_id/chapter numbering (same site convention used for the base
-text scrape).
+`word_position` is computed by walking the verse-text <td> and counting real
+word tokens (same punctuation-stripping rule as the base text scraper) up to
+each <sup>letter</sup> marker -- numeric <sup> markers are walked over (so
+they don't throw off the count) but never produce a stored reference.
+`fverwijs(N)` correlates a footnote-header row to its <tr id='trN'> expansion;
+the footnote-header's <b>label</b> (numeric vs. lettered) is looked up via N
+to decide whether to keep it.
 
 Usage:
   python parse_svgbs_cross_references.py            # all books
@@ -38,7 +42,7 @@ import sys
 import time
 
 import requests
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, NavigableString, Tag
 
 from db.loaders import bulk_insert_cross_references
 
@@ -103,22 +107,71 @@ def fetch_chapter_html(bb: int, chapter: int) -> str | None:
                 return None
 
 
+# ─── Word-position tracking (mirrors parse_statenvertaling_gbs.py's tokenizer) ─
+
+_PUNCT_EDGE = re.compile(r"^[^\w֐-׿]+|[^\w֐-׿]+$", re.UNICODE)
+_LETTER_LABEL = re.compile(r"^[a-z]+$")
+
+
+def _verse_marker_positions(td: Tag, verse_num: int) -> dict[str, int]:
+    """
+    Walk the verse-text <td>, returning {letter: word_position} where
+    word_position is the count of real words already seen when <sup>letter</sup>
+    is encountered. Numeric <sup> markers are walked over (kept out of the
+    word count, same as real tokenisation) but never added to the result.
+    """
+    items: list[tuple[str, str]] = []  # ("WORD", token) or ("MARK", label)
+
+    def walk(node):
+        if isinstance(node, NavigableString):
+            for m in re.finditer(r"\S+", str(node)):
+                items.append(("WORD", m.group()))
+        elif isinstance(node, Tag):
+            if node.name == "sup":
+                items.append(("MARK", node.get_text(strip=True)))
+                return
+            if node.name == "a":
+                return  # verse-number anchor: empty, but skip defensively
+            for child in node.children:
+                walk(child)
+
+    for child in td.children:
+        walk(child)
+
+    # Drop the leading plain verse-number token, e.g. "1" before "IN".
+    if items and items[0] == ("WORD", str(verse_num)):
+        items = items[1:]
+
+    positions: dict[str, int] = {}
+    word_count = 0
+    for kind, val in items:
+        if kind == "WORD":
+            if _PUNCT_EDGE.sub("", val):
+                word_count += 1
+        elif _LETTER_LABEL.match(val) and val not in positions:
+            positions[val] = word_count
+
+    return positions
+
+
 # ─── Extraction ────────────────────────────────────────────────────────────────
 
-_VERSE_ANCHOR = re.compile(r"^vers(\d+)$")
-_TR_ID        = re.compile(r"^tr(\d+)$")
-_TARGET_HREF  = re.compile(r"bb=(\d+)&hf=(\d+)&ind=\d+#vers(\d+)")
+_VERSE_ANCHOR  = re.compile(r"^vers(\d+)$")
+_TR_ID         = re.compile(r"^tr(\d+)$")
+_FVERWIJS_HREF = re.compile(r"^javascript:fverwijs\((\d+)\)")
+_TARGET_HREF   = re.compile(r"bb=(\d+)&hf=(\d+)&ind=\d+#vers(\d+)")
 
 
 def iter_cross_refs(html: str):
-    """Yield (verse, ordinal, target_book_id, target_chapter, target_verse, label)."""
+    """Yield (verse, letter, word_position, ordinal, target_book_id, target_chapter, target_verse, label)."""
     soup = BeautifulSoup(html, "lxml")
     table = soup.find("table", class_="tekst")
     if table is None:
         return
 
     current_verse: int | None = None
-    ordinal_by_verse: dict[int, int] = {}
+    marker_positions: dict[str, int] = {}
+    footnote_label_by_n: dict[int, str] = {}
 
     for tr in table.find_all("tr"):
         td = tr.find("td")
@@ -128,18 +181,37 @@ def iter_cross_refs(html: str):
             m = _VERSE_ANCHOR.match(anchor["name"])
             if m:
                 current_verse = int(m.group(1))
+                marker_positions = _verse_marker_positions(td, current_verse)
+            continue
+
+        # Footnote header row: <b>label</b> ... <a href="javascript:fverwijs(N)">
+        b_tag = tr.find("b")
+        fverwijs_a = tr.find("a", href=_FVERWIJS_HREF)
+        if b_tag and fverwijs_a:
+            fm = _FVERWIJS_HREF.match(fverwijs_a["href"])
+            if fm:
+                footnote_label_by_n[int(fm.group(1))] = b_tag.get_text(strip=True)
             continue
 
         tr_id = tr.get("id", "")
-        if _TR_ID.match(tr_id) and current_verse is not None:
+        trm = _TR_ID.match(tr_id)
+        if trm and current_verse is not None:
+            n = int(trm.group(1))
+            letter = footnote_label_by_n.get(n, "")
+            if not _LETTER_LABEL.match(letter):
+                continue  # numbered explanatory footnote -- skip
+
+            word_position = marker_positions.get(letter, 0)
+
+            ordinal = 0
             for a in tr.find_all("a", href=re.compile(r"^tekst\.php\?bb=")):
-                m = _TARGET_HREF.search(a.get("href", ""))
-                if not m:
+                tm = _TARGET_HREF.search(a.get("href", ""))
+                if not tm:
                     continue
-                tgt_book_id, tgt_chapter, tgt_verse = int(m.group(1)), int(m.group(2)), int(m.group(3))
+                tgt_book_id, tgt_chapter, tgt_verse = int(tm.group(1)), int(tm.group(2)), int(tm.group(3))
                 label = a.get_text(strip=True)
-                ordinal_by_verse[current_verse] = ordinal_by_verse.get(current_verse, 0) + 1
-                yield current_verse, ordinal_by_verse[current_verse], tgt_book_id, tgt_chapter, tgt_verse, label
+                ordinal += 1
+                yield current_verse, letter, word_position, ordinal, tgt_book_id, tgt_chapter, tgt_verse, label
 
 
 # ─── Main scrape loop ─────────────────────────────────────────────────────────
@@ -155,13 +227,14 @@ def scrape_book(book_id: int, usfm: str, chapter_count: int, dry_run: bool = Fal
             time.sleep(REQUEST_DELAY)
             continue
 
-        for verse, ordinal, tgt_book_id, tgt_ch, tgt_vs, label in iter_cross_refs(html):
+        for verse, letter, word_pos, ordinal, tgt_book_id, tgt_ch, tgt_vs, label in iter_cross_refs(html):
             if dry_run:
-                print(f"  {usfm} {chapter}:{verse} [{ordinal}] -> book {tgt_book_id} {tgt_ch}:{tgt_vs} ({label})")
+                print(f"  {usfm} {chapter}:{verse} [{letter}@{word_pos}.{ordinal}] -> book {tgt_book_id} {tgt_ch}:{tgt_vs} ({label})")
                 continue
 
             row_batch.append({
-                "source": SOURCE, "book_id": book_id, "chapter": chapter, "verse": verse, "ordinal": ordinal,
+                "source": SOURCE, "book_id": book_id, "chapter": chapter, "verse": verse,
+                "letter": letter, "word_position": word_pos, "ordinal": ordinal,
                 "target_book_id": tgt_book_id, "target_chapter": tgt_ch, "target_verse": tgt_vs,
                 "label": label,
             })
@@ -203,7 +276,7 @@ def parse_svgbs_cross_references(only_book: str | None = None, dry_run: bool = F
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Scrape SV(GBS) cross-references (statenvertaling.nl, ind=1) into cross_references (source='SVGBS')."
+        description="Scrape SV(GBS) lettered cross-references (statenvertaling.nl, ind=1) into cross_references (source='SVGBS')."
     )
     parser.add_argument("--book", metavar="USFM", default=None, help="Process a single book only (e.g. GEN).")
     parser.add_argument("--dry-run", action="store_true", help="Print extracted references; do not write to the database.")

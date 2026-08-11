@@ -1163,56 +1163,65 @@ a:hover { text-decoration: underline; }
     line-height: 1;
 }
 
-/* ── Kruisverwijzingen ("tekstverwijzingen") badge + popover ────────────── */
-.cross-ref-badge {
+/* ── Kruisverwijzingen: inline letter-marker + hover-popover ─────────────
+   Zelfde mechanisme als .word-popup (bron-woorden): puur CSS, geen JS --
+   de popover verschijnt op :hover/:focus-within van de marker zelf. */
+.cross-ref-marker {
     position: relative;
     display: inline-block;
-    margin-left: 2px;
 }
-.cross-ref-trigger {
-    appearance: none;
-    border: none;
-    background: none;
-    padding: 0 2px;
-    font-size: 11px;
+.cross-ref-letter {
+    font-size: 10px;
     font-weight: 700;
-    line-height: 1;
     color: var(--accent);
-    cursor: pointer;
+    cursor: default;
+    margin: 0 1px;
 }
-.cross-ref-trigger:hover { text-decoration: underline; }
-.cross-ref-list {
+.cross-ref-popup {
+    display: none;
     position: absolute;
-    z-index: 20;
-    top: 100%;
-    left: 0;
-    min-width: 9rem;
+    bottom: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 200;
+    min-width: 8rem;
     max-width: 14rem;
     max-height: 12rem;
     overflow-y: auto;
-    margin-top: 4px;
-    padding: 6px;
-    display: flex;
+    padding: 5px;
     flex-direction: column;
     gap: 1px;
-    background: var(--bg);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius);
-    box-shadow: var(--shadow);
+    background: var(--nav);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 4px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
 }
-.cross-ref-item {
+.cross-ref-marker:hover .cross-ref-popup,
+.cross-ref-marker:focus-within .cross-ref-popup,
+.cross-ref-marker:focus .cross-ref-popup {
+    display: flex;
+}
+.cross-ref-popup::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 5px solid transparent;
+    border-top-color: var(--nav);
+}
+.cross-ref-popup a {
     display: block;
     padding: 3px 6px;
     border-radius: 4px;
     font-size: 12px;
     font-family: var(--font-ui);
-    color: var(--text);
+    color: #fff;
     text-decoration: none;
     white-space: nowrap;
 }
-.cross-ref-item:hover {
-    background: var(--hover-warm);
-    color: var(--accent);
+.cross-ref-popup a:hover {
+    background: rgba(255, 255, 255, 0.12);
 }
 
 /* ── Bronwoorden in de hoofdstuk-view ────────────────────────────────────── */

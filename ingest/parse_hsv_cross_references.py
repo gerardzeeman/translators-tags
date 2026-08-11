@@ -1,13 +1,15 @@
 """
 parse_hsv_cross_references.py
 Scrapes verse-level cross-references ("zie ook") from herzienestatenvertaling.nl
-and stores them in cross_references (source='HSV').
+and stores them in cross_references (source='HSV'), anchored to the exact
+word they follow in the verse.
 
 Reuses the same chapter pages already scraped for verse text
 (parse_herziene_statenvertaling.py) — cross-references live in the same HTML,
 previously stripped out during verse-text extraction.
 
 HTML structure per page:
+  <span class="verse-span" data-verse-id="GEN.1.27" ...>naar Zijn beeld; ... </span>
   <span class="x" data-verse-id="GEN.1.27" id="GEN.1.27!x.2">
     <span class="xt">
       <span id="MAT.19.4">
@@ -17,11 +19,20 @@ HTML structure per page:
       <!-- possibly more <a>'s in the same group -->
     </span>
   </span>
+  <span class="verse-span" data-verse-id="GEN.1.27" ...>mannelijk en vrouwelijk schiep Hij hen.</span>
 
-`data-verse-id` gives the exact HSV verse this reference group belongs to
-(no word-position tracking needed — cross-references are stored per verse,
-not per word). Each chapter page renders this block twice (two identical
-"bible-content" divs) — deduplicated via the outer span's `id` attribute.
+HSV has no numbered/lettered footnote distinction like SV(GBS) — every
+<span class="x"> group is a pure cross-reference. Letters (a, b, c, ...) are
+assigned sequentially per verse in document order, purely for display,
+matching the convention requested for the UI.
+
+`word_position` is tracked by walking verse-span/x-span siblings in document
+order, counting real word tokens via the same tokeniser used for the base
+text scrape (imported from parse_herziene_statenvertaling.py, so counts stay
+consistent with the stored translation_words.word_position) up to each
+<span class="x"> group. Each chapter page renders this block twice (two
+identical "bible-content" divs) — scoped to the first one only, matching
+parse_herziene_statenvertaling.py's own iter_verses().
 
 Usage:
   python parse_hsv_cross_references.py            # all books
@@ -32,11 +43,13 @@ import argparse
 import re
 import sys
 import time
+from urllib.parse import quote
 
 import requests
 from bs4 import BeautifulSoup
 
 from db.loaders import bulk_insert_cross_references
+from parse_herziene_statenvertaling import _extract_verse_tokens
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -91,7 +104,6 @@ _session.headers.update({
 
 
 def fetch_chapter_html(slug: str, chapter: int) -> str | None:
-    from urllib.parse import quote
     url = f"{BASE_URL}/{quote(slug)}/{chapter}"
     for attempt in range(1, MAX_RETRIES + 1):
         try:
@@ -123,40 +135,87 @@ def _parse_verse_id(verse_id: str) -> tuple[str, int, int] | None:
         return None
 
 
+def _letter_for(n: int) -> str:
+    """0-indexed ordinal -> 'a', 'b', ..., 'z', 'aa', 'ab', ... (extremely unlikely to be needed)."""
+    if n < 26:
+        return chr(ord('a') + n)
+    return chr(ord('a') + n // 26 - 1) + chr(ord('a') + n % 26)
+
+
 def iter_cross_refs(html: str, expected_usfm: str):
-    """Yield (chapter, verse, ordinal, target_book_id, target_chapter, target_verse, label)."""
+    """Yield (chapter, verse, letter, word_position, ordinal, target_book_id, target_chapter, target_verse, label)."""
     soup = BeautifulSoup(html, "lxml")
+    bible_div = soup.find("div", class_="bible-content")
+    if bible_div is None:
+        bible_div = soup
 
+    seen_number: set[str] = set()
+    closed: set[str] = set()
     seen_group_ids: set[str] = set()
-    # ordinal counter per (chapter, verse), across all groups for that verse
-    ordinal_by_verse: dict[tuple[int, int], int] = {}
+    word_count_by_verse: dict[str, int] = {}
+    letter_ord_by_verse: dict[str, int] = {}
 
-    for x_span in soup.find_all("span", class_="x"):
-        group_id = x_span.get("id")
-        if group_id and group_id in seen_group_ids:
+    for span in bible_div.find_all("span"):
+        verse_id = span.get("data-verse-id", "").strip()
+        if not verse_id:
             continue
-        if group_id:
-            seen_group_ids.add(group_id)
-
-        parsed = _parse_verse_id(x_span.get("data-verse-id", ""))
+        parsed = _parse_verse_id(verse_id)
         if parsed is None or parsed[0] != expected_usfm:
             continue
-        _, chapter, verse = parsed
+        classes = span.get("class") or []
 
-        for a in x_span.find_all("a", class_="showExternalVerse"):
-            href = a.get("href", "")
-            m = _HREF_REF.search(href)
-            if not m:
+        if "x" in classes:
+            if verse_id in closed or verse_id not in seen_number:
                 continue
-            target_usfm, target_chapter, target_verse = m.group(1), int(m.group(2)), int(m.group(3))
-            target_book_id = _BOOK_ID_BY_USFM.get(target_usfm)
-            if target_book_id is None:
-                continue
+            group_id = span.get("id")
+            if group_id:
+                if group_id in seen_group_ids:
+                    continue
+                seen_group_ids.add(group_id)
 
-            label = a.get("data-title") or a.get_text(strip=True)
-            key = (chapter, verse)
-            ordinal_by_verse[key] = ordinal_by_verse.get(key, 0) + 1
-            yield chapter, verse, ordinal_by_verse[key], target_book_id, target_chapter, target_verse, label
+            _, chapter, verse = parsed
+            word_position = word_count_by_verse.get(verse_id, 0)
+
+            targets = []
+            for a in span.find_all("a", class_="showExternalVerse"):
+                m = _HREF_REF.search(a.get("href", ""))
+                if not m:
+                    continue
+                target_usfm, target_chapter, target_verse = m.group(1), int(m.group(2)), int(m.group(3))
+                target_book_id = _BOOK_ID_BY_USFM.get(target_usfm)
+                if target_book_id is None:
+                    continue
+                label = a.get("data-title") or a.get_text(strip=True)
+                targets.append((target_book_id, target_chapter, target_verse, label))
+
+            if targets:
+                letter_n = letter_ord_by_verse.get(verse_id, 0)
+                letter = _letter_for(letter_n)
+                letter_ord_by_verse[verse_id] = letter_n + 1
+                for ordinal, (tb, tc, tv, label) in enumerate(targets, start=1):
+                    yield chapter, verse, letter, word_position, ordinal, tb, tc, tv, label
+            continue
+
+        if "verse-span" not in classes:
+            continue
+
+        # Mirrors parse_herziene_statenvertaling.py's iter_verses() number/text-span
+        # detection, so word counts stay consistent with the stored word_position.
+        if verse_id not in seen_number:
+            seen_number.add(verse_id)
+            word_count_by_verse[verse_id] = 0
+            continue
+
+        if verse_id in closed:
+            continue
+
+        raw_text = span.get_text(separator="").strip()
+        if re.match(r"^\d+$", raw_text):
+            closed.add(verse_id)
+            continue
+
+        _, span_tokens = _extract_verse_tokens(span)
+        word_count_by_verse[verse_id] = word_count_by_verse.get(verse_id, 0) + len(span_tokens)
 
 
 # ─── Main scrape loop ─────────────────────────────────────────────────────────
@@ -173,13 +232,14 @@ def scrape_book(book_id: int, usfm: str, chapter_count: int, slug: str,
             time.sleep(REQUEST_DELAY)
             continue
 
-        for ch, vs, ordinal, tgt_book_id, tgt_ch, tgt_vs, label in iter_cross_refs(html, usfm):
+        for ch, vs, letter, word_pos, ordinal, tgt_book_id, tgt_ch, tgt_vs, label in iter_cross_refs(html, usfm):
             if dry_run:
-                print(f"  {usfm} {ch}:{vs} [{ordinal}] -> book {tgt_book_id} {tgt_ch}:{tgt_vs} ({label})")
+                print(f"  {usfm} {ch}:{vs} [{letter}@{word_pos}.{ordinal}] -> book {tgt_book_id} {tgt_ch}:{tgt_vs} ({label})")
                 continue
 
             row_batch.append({
-                "source": SOURCE, "book_id": book_id, "chapter": ch, "verse": vs, "ordinal": ordinal,
+                "source": SOURCE, "book_id": book_id, "chapter": ch, "verse": vs,
+                "letter": letter, "word_position": word_pos, "ordinal": ordinal,
                 "target_book_id": tgt_book_id, "target_chapter": tgt_ch, "target_verse": tgt_vs,
                 "label": label,
             })

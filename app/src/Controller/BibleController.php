@@ -159,12 +159,19 @@ class BibleController extends AbstractController
             ];
             foreach ($allTranslations as $trans) {
                 $code = $trans->getCode();
-                $verseData['dutch_verse_' . strtolower($code)] = $dataByTid[$trans->getId()]['dutch_verse'] ?? [];
+                $dutchVerse = $dataByTid[$trans->getId()]['dutch_verse'] ?? [];
 
                 $source = $this->crossReferenceRepository->sourceForTranslationCode($code);
-                $verseData['cross_refs_' . strtolower($code)] = $source !== null
-                    ? ($crossRefsBySource[$source][$verseNum] ?? [])
-                    : [];
+                $markersByPos = ($source !== null) ? ($crossRefsBySource[$source][$verseNum] ?? []) : [];
+
+                foreach ($dutchVerse as &$w) {
+                    $w['cross_ref_markers'] = $markersByPos[(int) $w['word_position']] ?? [];
+                }
+                unset($w);
+
+                $verseData['dutch_verse_' . strtolower($code)]  = $dutchVerse;
+                // word_position 0 = "before the first word" -- no word to attach to, shown as a verse prefix.
+                $verseData['cross_ref_prefix_' . strtolower($code)] = $markersByPos[0] ?? [];
             }
 
             $verses[$verseNum] = $verseData;
@@ -285,12 +292,20 @@ class BibleController extends AbstractController
         ];
         foreach ($allTranslations as $trans) {
             $code = $trans->getCode();
-            $passage['dutch_verse_' . strtolower($code)] = $allPassages[$code]['dutch_verse'] ?? [];
+            $dutchVerse = $allPassages[$code]['dutch_verse'] ?? [];
 
             $source = $this->crossReferenceRepository->sourceForTranslationCode($code);
-            $passage['cross_refs_' . strtolower($code)] = $source !== null
+            $markersByPos = ($source !== null)
                 ? $this->crossReferenceRepository->fetchForVerse($book->getId(), $chapter, $verse, $source)
                 : [];
+
+            foreach ($dutchVerse as &$w) {
+                $w['cross_ref_markers'] = $markersByPos[(int) $w['word_position']] ?? [];
+            }
+            unset($w);
+
+            $passage['dutch_verse_' . strtolower($code)]  = $dutchVerse;
+            $passage['cross_ref_prefix_' . strtolower($code)] = $markersByPos[0] ?? [];
         }
 
         // Navigation: reuse already-cached verse counts (getChapterVerseCounts is cached)

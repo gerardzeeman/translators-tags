@@ -147,10 +147,10 @@ def insert_link_confidence(link_id: int, method: str, score: float,
 
 
 def bulk_insert_cross_references(rows: list[dict]) -> None:
-    """Insert verse-level cross-reference rows.
+    """Insert word-position-anchored cross-reference rows.
 
-    Each row must contain: source, book_id, chapter, verse, ordinal,
-    target_book_id, target_chapter, target_verse, label.
+    Each row must contain: source, book_id, chapter, verse, letter,
+    word_position, ordinal, target_book_id, target_chapter, target_verse, label.
     """
     if not rows:
         return
@@ -159,13 +159,15 @@ def bulk_insert_cross_references(rows: list[dict]) -> None:
             cur.executemany(
                 """
                 INSERT INTO cross_references
-                    (source, book_id, chapter, verse, ordinal,
+                    (source, book_id, chapter, verse, letter, word_position, ordinal,
                      target_book_id, target_chapter, target_verse, label)
                 VALUES
-                    (%(source)s, %(book_id)s, %(chapter)s, %(verse)s, %(ordinal)s,
+                    (%(source)s, %(book_id)s, %(chapter)s, %(verse)s, %(letter)s,
+                     %(word_position)s, %(ordinal)s,
                      %(target_book_id)s, %(target_chapter)s, %(target_verse)s, %(label)s)
-                ON CONFLICT (source, book_id, chapter, verse, ordinal) DO UPDATE
-                    SET target_book_id  = EXCLUDED.target_book_id,
+                ON CONFLICT (source, book_id, chapter, verse, letter, ordinal) DO UPDATE
+                    SET word_position   = EXCLUDED.word_position,
+                        target_book_id  = EXCLUDED.target_book_id,
                         target_chapter  = EXCLUDED.target_chapter,
                         target_verse    = EXCLUDED.target_verse,
                         label           = EXCLUDED.label
