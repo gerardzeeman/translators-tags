@@ -148,7 +148,7 @@
         </h2>
 
         <div class="dutch-verse">
-            {% include 'bible/_cross_ref_marker.html.twig' with {markers: passage.cross_ref_prefix_sv} only %}
+            {% include 'bible/_cross_ref_marker.html.twig' with {markers: passage.cross_ref_prefix_sv, translation_code: 'SV'} only %}
             {% for word in passage.dutch_verse_sv %}
             <span class="dutch-word"
                   data-tw-id="{{ word.word_id }}"
@@ -156,7 +156,7 @@
                   data-score="{{ word.best_score ?? 0 }}"
                   data-controller="dutch-word">
                 {{- word.word_text -}}
-            </span>{{- word.punct_after ?? '' -}}{% include 'bible/_cross_ref_marker.html.twig' with {markers: word.cross_ref_markers} only %}{%- if not loop.last %} {% endif -%}
+            </span>{{- word.punct_after ?? '' -}}{% include 'bible/_cross_ref_marker.html.twig' with {markers: word.cross_ref_markers, translation_code: 'SV'} only %}{%- if not loop.last %} {% endif -%}
             {% else %}
             <em class="no-verse">Vers niet gevonden in de Statenvertaling.</em>
             {% endfor %}
@@ -181,7 +181,7 @@
         </h2>
 
         <div class="dutch-verse">
-            {% include 'bible/_cross_ref_marker.html.twig' with {markers: passage.cross_ref_prefix_svgbs} only %}
+            {% include 'bible/_cross_ref_marker.html.twig' with {markers: passage.cross_ref_prefix_svgbs, translation_code: 'SVGBS'} only %}
             {% for word in passage.dutch_verse_svgbs %}
             <span class="dutch-word{% if word.is_filler %} word-filler{% endif %}"
                   data-tw-id="{{ word.word_id }}"
@@ -190,7 +190,7 @@
                   data-filler="{{ word.is_filler ? '1' : '0' }}"
                   data-controller="dutch-word">
                 {{- word.word_text -}}
-            </span>{{- word.punct_after ?? '' -}}{% include 'bible/_cross_ref_marker.html.twig' with {markers: word.cross_ref_markers} only %}{%- if not loop.last %} {% endif -%}
+            </span>{{- word.punct_after ?? '' -}}{% include 'bible/_cross_ref_marker.html.twig' with {markers: word.cross_ref_markers, translation_code: 'SVGBS'} only %}{%- if not loop.last %} {% endif -%}
             {% else %}
             <em class="no-verse">Vers niet gevonden in de Statenvertaling (GBS).</em>
             {% endfor %}
@@ -217,7 +217,7 @@
         </h2>
 
         <div class="dutch-verse">
-            {% include 'bible/_cross_ref_marker.html.twig' with {markers: passage.cross_ref_prefix_hsv} only %}
+            {% include 'bible/_cross_ref_marker.html.twig' with {markers: passage.cross_ref_prefix_hsv, translation_code: 'HSV'} only %}
             {% for word in passage.dutch_verse_hsv %}
             <span class="dutch-word{% if word.is_filler %} word-filler{% endif %}"
                   data-tw-id="{{ word.word_id }}"
@@ -226,7 +226,7 @@
                   data-filler="{{ word.is_filler ? '1' : '0' }}"
                   data-controller="dutch-word">
                 {{- word.word_text -}}
-            </span>{{- word.punct_after ?? '' -}}{% include 'bible/_cross_ref_marker.html.twig' with {markers: word.cross_ref_markers} only %}{%- if not loop.last %} {% endif -%}
+            </span>{{- word.punct_after ?? '' -}}{% include 'bible/_cross_ref_marker.html.twig' with {markers: word.cross_ref_markers, translation_code: 'HSV'} only %}{%- if not loop.last %} {% endif -%}
             {% else %}
             <em class="no-verse">Vers niet gevonden in de Herziene Statenvertaling.</em>
             {% endfor %}

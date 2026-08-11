@@ -339,6 +339,38 @@ class BibleController extends AbstractController
         ]);
     }
 
+    /**
+     * Cross-reference target preview — AJAX/Turbo endpoint (same side panel as
+     * Strong's) showing a single verse's text in the SAME translation the
+     * cross-reference marker was clicked from.
+     */
+    #[Route(
+        '/book/{usfm}/{chapter<\d+>}/{verse<\d+>}/verwijzing/{translation}',
+        name: 'app_cross_ref_panel'
+    )]
+    public function crossRefPanel(string $usfm, int $chapter, int $verse, string $translation): Response
+    {
+        $book = $this->bookRepository->findByUsfmCode($usfm);
+        if (!$book) {
+            throw $this->createNotFoundException("Book '{$usfm}' not found.");
+        }
+
+        $translationEntity = $this->translationRepository->findByCode($translation);
+        if (!$translationEntity) {
+            throw $this->createNotFoundException("Translation '{$translation}' not found.");
+        }
+
+        return $this->render('bible/_cross_ref_panel.html.twig', [
+            'book'        => $book,
+            'chapter'     => $chapter,
+            'verse'       => $verse,
+            'translation' => $translationEntity,
+            'verse_text'  => $this->passageRepository->fetchVerseText(
+                $book->getId(), $chapter, $verse, $translationEntity->getId()
+            ),
+        ]);
+    }
+
     // ── helpers ──────────────────────────────────────────────────────────────
 
     private function buildNavigation(int $bookId, int $chapter, int $verse, string $usfm, string $translation, ?array $counts = null): array

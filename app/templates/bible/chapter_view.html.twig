@@ -232,7 +232,8 @@
                             {% if word.strongs %}
                             <a href="{{ path('app_strongs', {number: word.strongs}) }}"
                                class="word-strongs"
-                               data-turbo-frame="strongs-panel">{{ word.strongs }}</a>
+                               data-turbo-frame="strongs-panel"
+                               data-panel-title="Lexicon">{{ word.strongs }}</a>
                             {% endif %}
                             {% if word.morph_description %}
                             <span class="word-morph">{{ word.morph_description }}</span>
@@ -298,7 +299,7 @@
             <div class="verse-cell verse-cell-sv">
                 <span class="verse-number">{{ verse_num }}</span>
                 <div class="dutch-verse">
-                    {% include 'bible/_cross_ref_marker.html.twig' with {markers: verse.cross_ref_prefix_sv} only %}
+                    {% include 'bible/_cross_ref_marker.html.twig' with {markers: verse.cross_ref_prefix_sv, translation_code: 'SV'} only %}
                     {% for word in verse.dutch_verse_sv %}
                     <span class="dutch-word"
                           data-tw-id="{{ word.word_id }}"
@@ -306,7 +307,7 @@
                           data-score="{{ word.best_score ?? 0 }}"
                           {% if is_granted('ROLE_LINKER') %}data-controller="dutch-word"{% endif %}>
                         {{- word.word_text -}}
-                    </span>{{- word.punct_after ?? '' -}}{% include 'bible/_cross_ref_marker.html.twig' with {markers: word.cross_ref_markers} only %}{%- if not loop.last %} {% endif -%}
+                    </span>{{- word.punct_after ?? '' -}}{% include 'bible/_cross_ref_marker.html.twig' with {markers: word.cross_ref_markers, translation_code: 'SV'} only %}{%- if not loop.last %} {% endif -%}
                     {% else %}
                     <em class="no-verse">Niet gevonden in de Statenvertaling.</em>
                     {% endfor %}
@@ -318,7 +319,7 @@
             <div class="verse-cell verse-cell-svgbs">
                 <span class="verse-number">{{ verse_num }}</span>
                 <div class="dutch-verse">
-                    {% include 'bible/_cross_ref_marker.html.twig' with {markers: verse.cross_ref_prefix_svgbs} only %}
+                    {% include 'bible/_cross_ref_marker.html.twig' with {markers: verse.cross_ref_prefix_svgbs, translation_code: 'SVGBS'} only %}
                     {% for word in verse.dutch_verse_svgbs %}
                     <span class="dutch-word{% if word.is_filler %} word-filler{% endif %}"
                           data-tw-id="{{ word.word_id }}"
@@ -327,7 +328,7 @@
                           data-filler="{{ word.is_filler ? '1' : '0' }}"
                           {% if is_granted('ROLE_LINKER') %}data-controller="dutch-word"{% endif %}>
                         {{- word.word_text -}}
-                    </span>{{- word.punct_after ?? '' -}}{% include 'bible/_cross_ref_marker.html.twig' with {markers: word.cross_ref_markers} only %}{%- if not loop.last %} {% endif -%}
+                    </span>{{- word.punct_after ?? '' -}}{% include 'bible/_cross_ref_marker.html.twig' with {markers: word.cross_ref_markers, translation_code: 'SVGBS'} only %}{%- if not loop.last %} {% endif -%}
                     {% else %}
                     <em class="no-verse">Niet gevonden in de Statenvertaling (GBS).</em>
                     {% endfor %}
@@ -340,7 +341,7 @@
             <div class="verse-cell verse-cell-hsv">
                 <span class="verse-number">{{ verse_num }}</span>
                 <div class="dutch-verse">
-                    {% include 'bible/_cross_ref_marker.html.twig' with {markers: verse.cross_ref_prefix_hsv} only %}
+                    {% include 'bible/_cross_ref_marker.html.twig' with {markers: verse.cross_ref_prefix_hsv, translation_code: 'HSV'} only %}
                     {% for word in verse.dutch_verse_hsv %}
                     <span class="dutch-word{% if word.is_filler %} word-filler{% endif %}"
                           data-tw-id="{{ word.word_id }}"
@@ -349,7 +350,7 @@
                           data-filler="{{ word.is_filler ? '1' : '0' }}"
                           {% if is_granted('ROLE_LINKER') %}data-controller="dutch-word"{% endif %}>
                         {{- word.word_text -}}
-                    </span>{{- word.punct_after ?? '' -}}{% include 'bible/_cross_ref_marker.html.twig' with {markers: word.cross_ref_markers} only %}{%- if not loop.last %} {% endif -%}
+                    </span>{{- word.punct_after ?? '' -}}{% include 'bible/_cross_ref_marker.html.twig' with {markers: word.cross_ref_markers, translation_code: 'HSV'} only %}{%- if not loop.last %} {% endif -%}
                     {% else %}
                     <em class="no-verse">Niet gevonden in de Herziene Statenvertaling.</em>
                     {% endfor %}
@@ -366,7 +367,7 @@
     <aside class="strongs-sidebar"
            data-strongs-panel-target="sidebar">
         <div class="strongs-sidebar-header">
-            <span class="strongs-sidebar-title">Lexicon</span>
+            <span class="strongs-sidebar-title" data-strongs-panel-target="title">Lexicon</span>
             <button class="strongs-sidebar-close" type="button"
                     data-action="click->strongs-panel#close" aria-label="Sluiten">×</button>
         </div>

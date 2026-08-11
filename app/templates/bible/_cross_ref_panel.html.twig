@@ -1,0 +1,11 @@
+<turbo-frame id="strongs-panel">
+<div class="cross-ref-panel">
+    <h3 class="cross-ref-panel-ref">{{ book.nameNl }} {{ chapter }}:{{ verse }}</h3>
+    <span class="cross-ref-panel-trans">{{ translation.abbreviation }}</span>
+    {% if verse_text %}
+    <p class="cross-ref-panel-text">{{ verse_text }}</p>
+    {% else %}
+    <p class="strongs-note">Vers niet gevonden in {{ translation.name }}.</p>
+    {% endif %}
+</div>
+</turbo-frame>

@@ -48,6 +48,21 @@ class PassageRepository
         ];
     }
 
+    /**
+     * Plain verse text for a single translation -- used by the cross-reference
+     * side panel, which only needs to display the text, not word-level data.
+     */
+    public function fetchVerseText(int $bookId, int $chapter, int $verse, int $translationId): ?string
+    {
+        $text = $this->connection->fetchOne(
+            'SELECT verse_text FROM translation_verses
+             WHERE translation_id = :translation_id AND book_id = :book_id
+               AND chapter = :chapter AND verse = :verse',
+            ['translation_id' => $translationId, 'book_id' => $bookId, 'chapter' => $chapter, 'verse' => $verse]
+        );
+        return $text === false ? null : $text;
+    }
+
     private function fetchHebrewWords(int $bookId, int $chapter, int $verse, int $translationId): array
     {
         $sql = <<<SQL
