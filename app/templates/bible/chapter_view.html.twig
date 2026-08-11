@@ -297,8 +297,8 @@
             {# SV-kolom #}
             <div class="verse-cell verse-cell-sv">
                 <span class="verse-number">{{ verse_num }}</span>
-                {% include 'bible/_cross_ref_badge.html.twig' with {refs: verse.cross_refs_sv} only %}
                 <div class="dutch-verse">
+                    {% include 'bible/_cross_ref_marker.html.twig' with {markers: verse.cross_ref_prefix_sv} only %}
                     {% for word in verse.dutch_verse_sv %}
                     <span class="dutch-word"
                           data-tw-id="{{ word.word_id }}"
@@ -306,7 +306,7 @@
                           data-score="{{ word.best_score ?? 0 }}"
                           {% if is_granted('ROLE_LINKER') %}data-controller="dutch-word"{% endif %}>
                         {{- word.word_text -}}
-                    </span>{{- word.punct_after ?? '' -}}{%- if not loop.last %} {% endif -%}
+                    </span>{{- word.punct_after ?? '' -}}{% include 'bible/_cross_ref_marker.html.twig' with {markers: word.cross_ref_markers} only %}{%- if not loop.last %} {% endif -%}
                     {% else %}
                     <em class="no-verse">Niet gevonden in de Statenvertaling.</em>
                     {% endfor %}
@@ -317,8 +317,8 @@
             {% if is_granted('ROLE_VIEWER_HSV') %}
             <div class="verse-cell verse-cell-hsv">
                 <span class="verse-number">{{ verse_num }}</span>
-                {% include 'bible/_cross_ref_badge.html.twig' with {refs: verse.cross_refs_hsv} only %}
                 <div class="dutch-verse">
+                    {% include 'bible/_cross_ref_marker.html.twig' with {markers: verse.cross_ref_prefix_hsv} only %}
                     {% for word in verse.dutch_verse_hsv %}
                     <span class="dutch-word{% if word.is_filler %} word-filler{% endif %}"
                           data-tw-id="{{ word.word_id }}"
@@ -327,7 +327,7 @@
                           data-filler="{{ word.is_filler ? '1' : '0' }}"
                           {% if is_granted('ROLE_LINKER') %}data-controller="dutch-word"{% endif %}>
                         {{- word.word_text -}}
-                    </span>{{- word.punct_after ?? '' -}}{%- if not loop.last %} {% endif -%}
+                    </span>{{- word.punct_after ?? '' -}}{% include 'bible/_cross_ref_marker.html.twig' with {markers: word.cross_ref_markers} only %}{%- if not loop.last %} {% endif -%}
                     {% else %}
                     <em class="no-verse">Niet gevonden in de Herziene Statenvertaling.</em>
                     {% endfor %}
@@ -339,8 +339,8 @@
             {% if is_granted('ROLE_VIEWER_SVGBS') %}
             <div class="verse-cell verse-cell-svgbs">
                 <span class="verse-number">{{ verse_num }}</span>
-                {% include 'bible/_cross_ref_badge.html.twig' with {refs: verse.cross_refs_svgbs} only %}
                 <div class="dutch-verse">
+                    {% include 'bible/_cross_ref_marker.html.twig' with {markers: verse.cross_ref_prefix_svgbs} only %}
                     {% for word in verse.dutch_verse_svgbs %}
                     <span class="dutch-word{% if word.is_filler %} word-filler{% endif %}"
                           data-tw-id="{{ word.word_id }}"
@@ -349,7 +349,7 @@
                           data-filler="{{ word.is_filler ? '1' : '0' }}"
                           {% if is_granted('ROLE_LINKER') %}data-controller="dutch-word"{% endif %}>
                         {{- word.word_text -}}
-                    </span>{{- word.punct_after ?? '' -}}{%- if not loop.last %} {% endif -%}
+                    </span>{{- word.punct_after ?? '' -}}{% include 'bible/_cross_ref_marker.html.twig' with {markers: word.cross_ref_markers} only %}{%- if not loop.last %} {% endif -%}
                     {% else %}
                     <em class="no-verse">Niet gevonden in de Statenvertaling (GBS).</em>
                     {% endfor %}

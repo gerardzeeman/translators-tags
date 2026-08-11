@@ -145,10 +145,10 @@
 
         <h2 class="panel-heading">
             <span class="lang-badge lang-nl">NL</span> Statenvertaling Jongbloed SV(JB)
-            {% include 'bible/_cross_ref_badge.html.twig' with {refs: passage.cross_refs_sv} only %}
         </h2>
 
         <div class="dutch-verse">
+            {% include 'bible/_cross_ref_marker.html.twig' with {markers: passage.cross_ref_prefix_sv} only %}
             {% for word in passage.dutch_verse_sv %}
             <span class="dutch-word"
                   data-tw-id="{{ word.word_id }}"
@@ -156,7 +156,7 @@
                   data-score="{{ word.best_score ?? 0 }}"
                   data-controller="dutch-word">
                 {{- word.word_text -}}
-            </span>{{- word.punct_after ?? '' -}}{%- if not loop.last %} {% endif -%}
+            </span>{{- word.punct_after ?? '' -}}{% include 'bible/_cross_ref_marker.html.twig' with {markers: word.cross_ref_markers} only %}{%- if not loop.last %} {% endif -%}
             {% else %}
             <em class="no-verse">Vers niet gevonden in de Statenvertaling.</em>
             {% endfor %}
@@ -178,10 +178,10 @@
 
         <h2 class="panel-heading">
             <span class="lang-badge lang-nl">NL</span> Herziene Statenvertaling
-            {% include 'bible/_cross_ref_badge.html.twig' with {refs: passage.cross_refs_hsv} only %}
         </h2>
 
         <div class="dutch-verse">
+            {% include 'bible/_cross_ref_marker.html.twig' with {markers: passage.cross_ref_prefix_hsv} only %}
             {% for word in passage.dutch_verse_hsv %}
             <span class="dutch-word{% if word.is_filler %} word-filler{% endif %}"
                   data-tw-id="{{ word.word_id }}"
@@ -190,7 +190,7 @@
                   data-filler="{{ word.is_filler ? '1' : '0' }}"
                   data-controller="dutch-word">
                 {{- word.word_text -}}
-            </span>{{- word.punct_after ?? '' -}}{%- if not loop.last %} {% endif -%}
+            </span>{{- word.punct_after ?? '' -}}{% include 'bible/_cross_ref_marker.html.twig' with {markers: word.cross_ref_markers} only %}{%- if not loop.last %} {% endif -%}
             {% else %}
             <em class="no-verse">Vers niet gevonden in de Herziene Statenvertaling.</em>
             {% endfor %}
@@ -214,10 +214,10 @@
 
         <h2 class="panel-heading">
             <span class="lang-badge lang-nl">NL</span> Statenvertaling (GBS) SV(GBS)
-            {% include 'bible/_cross_ref_badge.html.twig' with {refs: passage.cross_refs_svgbs} only %}
         </h2>
 
         <div class="dutch-verse">
+            {% include 'bible/_cross_ref_marker.html.twig' with {markers: passage.cross_ref_prefix_svgbs} only %}
             {% for word in passage.dutch_verse_svgbs %}
             <span class="dutch-word{% if word.is_filler %} word-filler{% endif %}"
                   data-tw-id="{{ word.word_id }}"
@@ -226,7 +226,7 @@
                   data-filler="{{ word.is_filler ? '1' : '0' }}"
                   data-controller="dutch-word">
                 {{- word.word_text -}}
-            </span>{{- word.punct_after ?? '' -}}{%- if not loop.last %} {% endif -%}
+            </span>{{- word.punct_after ?? '' -}}{% include 'bible/_cross_ref_marker.html.twig' with {markers: word.cross_ref_markers} only %}{%- if not loop.last %} {% endif -%}
             {% else %}
             <em class="no-verse">Vers niet gevonden in de Statenvertaling (GBS).</em>
             {% endfor %}
