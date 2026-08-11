@@ -90,7 +90,7 @@ class BlogEmbedDataController extends AbstractController
     {
         $translations = array_map(
             fn($t) => ['code' => $t->getCode(), 'abbreviation' => $t->getAbbreviation()],
-            $this->translationRepository->findAllOrderedById()
+            $this->translationRepository->findAllForDisplay()
         );
 
         return $this->json($translations);

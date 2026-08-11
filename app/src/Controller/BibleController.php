@@ -72,7 +72,7 @@ class BibleController extends AbstractController
             throw $this->createNotFoundException("Book '{$usfm}' not found.");
         }
 
-        $allTranslations = $this->translationRepository->findAllOrderedById();
+        $allTranslations = $this->translationRepository->findAllForDisplay();
 
         $svTranslation       = null;
         $translationIdToCode = [];
@@ -215,7 +215,7 @@ class BibleController extends AbstractController
             throw $this->createNotFoundException("Translation '{$translation}' not found.");
         }
 
-        $allTranslations = $this->translationRepository->findAllOrderedById();
+        $allTranslations = $this->translationRepository->findAllForDisplay();
 
         // Build translation ID ↔ code maps and find SV
         $svTranslation      = null;
