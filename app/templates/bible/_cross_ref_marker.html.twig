@@ -1,10 +1,12 @@
 {% if markers is defined %}
 {% for m in markers %}
+{% set refs_list = m.targets|map(t => t.target_usfm ~ '.' ~ t.target_chapter ~ '.' ~ t.target_verse)|join(',') %}
 <span class="cross-ref-marker" tabindex="0">
     <sup class="cross-ref-letter">{{ m.letter }}</sup>
     <span class="cross-ref-popup">
         {% for t in m.targets %}
-        <a href="{{ path('app_cross_ref_panel', {usfm: t.target_usfm, chapter: t.target_chapter, verse: t.target_verse, translation: translation_code}) }}"
+        {% set this_ref = t.target_usfm ~ '.' ~ t.target_chapter ~ '.' ~ t.target_verse %}
+        <a href="{{ path('app_cross_ref_panel', {translation: translation_code, refs: refs_list, active: this_ref}) }}"
            data-turbo-frame="strongs-panel"
            data-panel-title="Tekstverwijzing">{{ t.label }}</a>
         {% endfor %}

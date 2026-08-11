@@ -341,33 +341,54 @@ class BibleController extends AbstractController
 
     /**
      * Cross-reference target preview — AJAX/Turbo endpoint (same side panel as
-     * Strong's) showing a single verse's text in the SAME translation the
-     * cross-reference marker was clicked from.
+     * Strong's) showing every verse a single letter-marker points to, in the
+     * SAME translation the marker was clicked from, with the specific entry
+     * that was clicked highlighted.
+     *
+     * `refs` is a comma-separated list of "USFM.chapter.verse" (all targets
+     * under the clicked letter); `active` is which one of those was clicked.
+     * A query string rather than path segments because the target count is
+     * unbounded (a single footnote can list many verses).
      */
-    #[Route(
-        '/book/{usfm}/{chapter<\d+>}/{verse<\d+>}/verwijzing/{translation}',
-        name: 'app_cross_ref_panel'
-    )]
-    public function crossRefPanel(string $usfm, int $chapter, int $verse, string $translation): Response
+    #[Route('/kruisverwijzing-paneel/{translation}', name: 'app_cross_ref_panel')]
+    public function crossRefPanel(string $translation, Request $request): Response
     {
-        $book = $this->bookRepository->findByUsfmCode($usfm);
-        if (!$book) {
-            throw $this->createNotFoundException("Book '{$usfm}' not found.");
-        }
-
         $translationEntity = $this->translationRepository->findByCode($translation);
         if (!$translationEntity) {
             throw $this->createNotFoundException("Translation '{$translation}' not found.");
         }
 
+        $active = (string) $request->query->get('active', '');
+        $refs   = array_filter(explode(',', (string) $request->query->get('refs', '')));
+
+        $verses = [];
+        foreach ($refs as $ref) {
+            $parts = explode('.', $ref);
+            if (count($parts) !== 3) {
+                continue;
+            }
+            [$usfm, $chapter, $verse] = $parts;
+            $book = $this->bookRepository->findByUsfmCode($usfm);
+            if (!$book || !ctype_digit($chapter) || !ctype_digit($verse)) {
+                continue;
+            }
+            $chapter = (int) $chapter;
+            $verse   = (int) $verse;
+
+            $verses[] = [
+                'book'      => $book,
+                'chapter'   => $chapter,
+                'verse'     => $verse,
+                'text'      => $this->passageRepository->fetchVerseText(
+                    $book->getId(), $chapter, $verse, $translationEntity->getId()
+                ),
+                'is_active' => $ref === $active,
+            ];
+        }
+
         return $this->render('bible/_cross_ref_panel.html.twig', [
-            'book'        => $book,
-            'chapter'     => $chapter,
-            'verse'       => $verse,
             'translation' => $translationEntity,
-            'verse_text'  => $this->passageRepository->fetchVerseText(
-                $book->getId(), $chapter, $verse, $translationEntity->getId()
-            ),
+            'verses'      => $verses,
         ]);
     }
 
