@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS books (
 CREATE TABLE IF NOT EXISTS translations (
     id                    SMALLINT PRIMARY KEY,
     code                  VARCHAR(20) NOT NULL UNIQUE,      -- 'SV', 'HSV', …
-    name                  TEXT        NOT NULL,             -- 'Statenvertaling Jongbloed'
+    name                  TEXT        NOT NULL,             -- 'Statenvertaling (Jongbloed)'
     abbreviation          VARCHAR(20),                      -- short button/badge label, e.g. 'SV(JB)'
     language              CHAR(3)     NOT NULL,             -- ISO 639-3: 'nld'
     direction             VARCHAR(3)  NOT NULL DEFAULT 'LTR' CHECK (direction IN ('LTR', 'RTL')),
@@ -343,7 +343,7 @@ ON CONFLICT (id) DO NOTHING;
 -- SV (Jongbloed) is the source_lang_authority: its word_links to Hebrew/Greek
 -- propagate to all other SV-family translations via inter_translation_links.
 INSERT INTO translations (id, code, name, abbreviation, language, direction, family, source_lang_authority) VALUES
-    (1, 'SV',    'Statenvertaling Jongbloed',  'SV(JB)',   'nld', 'LTR', 'SV', TRUE),
+    (1, 'SV',    'Statenvertaling (Jongbloed)', 'SV(JB)',  'nld', 'LTR', 'SV', TRUE),
     (2, 'HSV',   'Herziene Statenvertaling',   'HSV',      'nld', 'LTR', 'SV', FALSE),
     (3, 'SVGBS', 'Statenvertaling (GBS)',      'SV(GBS)',  'nld', 'LTR', 'SV', FALSE),
     (4, 'SV1657','Statenvertaling (1657)',     'SV(1657)', 'nld', 'LTR', 'SV', FALSE)
