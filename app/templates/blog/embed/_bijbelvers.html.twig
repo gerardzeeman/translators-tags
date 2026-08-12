@@ -1,12 +1,13 @@
 {% set is_highlighting = highlight_links and not alleen_vertaling %}
+{% set is_multi = translations|length > 1 %}
 <div class="embed-bible embed-layout-{{ layout }}"
      {% if is_highlighting %}data-controller="embed-highlight"{% endif %}>
     {% for v in verses %}
     <div class="embed-verse-block">
         <div class="embed-verse-header">
             <span class="embed-verse-ref">{{ v.book.nameNl }} {{ v.chapter }}:{{ v.verse }}</span>
-            {% if toon_vertaling or alleen_vertaling %}
-            <span class="embed-translation-code">{{ translation.abbreviation }}</span>
+            {% if (toon_vertaling or alleen_vertaling) and not is_multi and translations[0] is defined %}
+            <span class="embed-translation-code">{{ translations[0].abbreviation }}</span>
             {% endif %}
         </div>
         <div class="embed-verse-content">
@@ -26,16 +27,23 @@
             {% endif %}
 
             {% if toon_vertaling or alleen_vertaling %}
-            <div class="embed-translation">
-                {% for word in v.dutch_verse %}
-                <span class="embed-dutch-word"
-                      {% if is_highlighting %}
-                      data-embed-highlight-target="dutchWord"
-                      data-word-id="{{ word.word_id }}"
-                      data-action="mouseenter->embed-highlight#highlightDutch mouseleave->embed-highlight#unhighlightDutch"
-                      {% endif %}>{{- word.word_text -}}</span>{{- word.punct_after -}}{%- if not loop.last %} {% endif -%}
-                {% else %}
-                <em class="embed-no-translation">Geen vertaling gevonden.</em>
+            <div class="embed-translations">
+                {% for t in translations %}
+                <div class="embed-translation">
+                    {% if is_multi %}
+                    <span class="embed-translation-label">{{ t.abbreviation }}</span>
+                    {% endif %}
+                    {% for word in v.dutch_verses[t.code] %}
+                    <span class="embed-dutch-word"
+                          {% if is_highlighting %}
+                          data-embed-highlight-target="dutchWord"
+                          data-word-id="{{ word.word_id }}"
+                          data-action="mouseenter->embed-highlight#highlightDutch mouseleave->embed-highlight#unhighlightDutch"
+                          {% endif %}>{{- word.word_text -}}</span>{{- word.punct_after -}}{%- if not loop.last %} {% endif -%}
+                    {% else %}
+                    <em class="embed-no-translation">Geen vertaling gevonden.</em>
+                    {% endfor %}
+                </div>
                 {% endfor %}
             </div>
             {% endif %}

@@ -4077,8 +4077,11 @@ a:hover { text-decoration: underline; }
 .embed-source { font-family: var(--font-hebrew), var(--font-greek), serif; font-size: 1.25rem; line-height: 2; }
 .embed-source.dir-rtl { direction: rtl; text-align: right; }
 .embed-source-word { display: inline-block; padding: .05em .15em; border-radius: 3px; cursor: default; }
+.embed-translations { display: flex; flex-direction: column; gap: .9rem; min-width: 0; }
 .embed-translation { font-size: 1.05rem; line-height: 1.9; }
-.embed-translation-code {
+.embed-translation + .embed-translation { padding-top: .9rem; border-top: 1px dashed var(--divider); }
+.embed-translation-code,
+.embed-translation-label {
     display: inline-block;
     flex-shrink: 0;
     font-size: .7rem;
@@ -4089,6 +4092,7 @@ a:hover { text-decoration: underline; }
     padding: 0 .35em;
     vertical-align: middle;
 }
+.embed-translation-label { margin-bottom: .3rem; }
 .embed-dutch-word { display: inline-block; padding: .05em .15em; border-radius: 3px; }
 .embed-source-word.is-highlighted, .embed-dutch-word.is-highlighted { background: var(--gold); color: var(--nav); }
 .embed-no-translation { color: var(--color-ink-muted); }
@@ -4128,6 +4132,20 @@ a:hover { text-decoration: underline; }
 }
 .embed-word-chip:hover { border-color: var(--color-accent); }
 .embed-word-chip.is-selected { background: var(--gold); border-color: var(--accent); color: var(--nav); }
+
+.embed-vertaling-checks { display: flex; flex-direction: column; gap: .35rem; }
+.embed-vertaling-check {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    padding: .3rem .5rem;
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 400;
+}
+.embed-vertaling-check:hover { border-color: var(--color-accent); }
+.embed-vertaling-check input[type="checkbox"] { accent-color: var(--accent); cursor: pointer; margin: 0; }
 
 .embed-zin-list { display: flex; flex-direction: column; gap: .3rem; padding: .5rem; border: 1px solid var(--color-border); border-radius: 4px; max-height: 220px; overflow-y: auto; }
 .embed-zin-row { display: flex; gap: .6rem; padding: .4rem .5rem; border: 1px solid transparent; border-radius: 4px; cursor: pointer; font-size: .85rem; }

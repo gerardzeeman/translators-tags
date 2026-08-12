@@ -7,6 +7,7 @@ use App\Repository\InstitutioRepository;
 use App\Repository\PassageRepository;
 use App\Repository\TranslationRepository;
 use App\Service\Embed\InstitutioEmbedRenderer;
+use App\Service\TranslationAccessService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -23,10 +24,11 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 class BlogEmbedDataController extends AbstractController
 {
     public function __construct(
-        private readonly BookRepository        $bookRepository,
-        private readonly PassageRepository     $passageRepository,
-        private readonly TranslationRepository $translationRepository,
-        private readonly InstitutioRepository  $institutioRepository,
+        private readonly BookRepository           $bookRepository,
+        private readonly PassageRepository        $passageRepository,
+        private readonly TranslationRepository    $translationRepository,
+        private readonly InstitutioRepository     $institutioRepository,
+        private readonly TranslationAccessService $translationAccess,
     ) {}
 
     #[Route('/boeken', name: 'app_blog_embed_data_boeken', methods: ['GET'])]
@@ -88,12 +90,20 @@ class BlogEmbedDataController extends AbstractController
     #[Route('/vertalingen', name: 'app_blog_embed_data_vertalingen', methods: ['GET'])]
     public function vertalingen(): JsonResponse
     {
-        $translations = array_map(
-            fn($t) => ['code' => $t->getCode(), 'abbreviation' => $t->getAbbreviation()],
-            $this->translationRepository->findAllForDisplay()
-        );
+        // Filtered by the CURRENT user's roles -- while composing, that's the
+        // blog's (future) author, so this matches the render-time gate in
+        // BibleVerseEmbedRenderer (which checks the author's roles). Picking
+        // a translation the author can't see is caught early here instead of
+        // only failing when the post is later rendered.
+        $translations = array_values(array_filter(
+            $this->translationRepository->findAllForDisplay(),
+            fn($t) => $this->translationAccess->isVisible($t)
+        ));
 
-        return $this->json($translations);
+        return $this->json(array_map(
+            fn($t) => ['code' => $t->getCode(), 'name' => $t->getName(), 'abbreviation' => $t->getAbbreviation()],
+            $translations
+        ));
     }
 
     #[Route('/institutie/structuur', name: 'app_blog_embed_data_institutie_structuur', methods: ['GET'])]

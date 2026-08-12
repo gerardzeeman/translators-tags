@@ -2,10 +2,14 @@
 import { Controller } from '@hotwired/stimulus'
 
 // Self-contained hover-highlight for a single blog embed block: hovering a
-// source word highlights its linked translation word(s) and vice versa.
+// source word highlights its linked translation word(s) (across every
+// translation panel shown, if the embed has more than one) and vice versa.
 // Unlike source_word/dutch_word_controller.js (which coordinate across a
-// multi-translation page via bubbling events), an embed only ever shows one
-// translation, so a plain target-based controller is simpler here.
+// multi-translation page via bubbling events), an embed is self-contained --
+// its source words carry the union of all shown translations' link ids
+// (translation_words.id is globally unique, so a plain union can't
+// collide), which is enough for this simpler target-based controller to
+// highlight the right word in every panel without being translation-aware.
 export default class extends Controller {
     static targets = ['sourceWord', 'dutchWord']
 
