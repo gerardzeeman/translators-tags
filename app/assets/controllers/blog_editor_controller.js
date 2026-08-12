@@ -10,6 +10,7 @@ export default class extends Controller {
         'textarea', 'bibleDialog',
         'boek', 'hoofdstuk', 'vers', 'aantalVerzen',
         'woordRangeGroup', 'woordChips',
+        'woordinfoGroup', 'woordinfo',
         'toonVertaling', 'vertalingGroup', 'vertalingChecks',
         'alleenVertaling', 'highlightLinks', 'layoutGroup', 'layout',
         'institutieDialog',
@@ -107,6 +108,9 @@ export default class extends Controller {
         const alleen = this.alleenVertalingTarget.checked
         this.vertalingGroupTarget.hidden = !(toon || alleen)
         this.layoutGroupTarget.hidden = !(toon && !alleen)
+        // Woordinfo styles the grondtekst-hover -- irrelevant once the
+        // grondtekst itself is hidden (alleen_vertaling).
+        this.woordinfoGroupTarget.hidden = alleen
     }
 
     confirmBible() {
@@ -125,6 +129,10 @@ export default class extends Controller {
         } else if (this.selectedWords.from !== null) {
             lines.push(`woord_van: ${this.selectedWords.from}`)
             lines.push(`woord_tot: ${this.selectedWords.to ?? this.selectedWords.from}`)
+        }
+
+        if (!alleenVertaling) {
+            lines.push(`woordinfo: ${this.woordinfoTarget.value}`)
         }
 
         if (toonVertaling || alleenVertaling) {

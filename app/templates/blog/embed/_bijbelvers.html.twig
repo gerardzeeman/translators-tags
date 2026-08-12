@@ -21,7 +21,7 @@
                       data-link-ids="{{ word.dutch_links|map(l => l.tw_id)|join(',') }}"
                       data-action="mouseenter->embed-highlight#highlightSource mouseleave->embed-highlight#unhighlightSource"
                       {% endif %}
-                      title="{{ word.morph_description }}">{{- word.word_text -}}</span>{{- ' ' -}}
+                      title="{{ woord_info == 'morfologie' ? word.morph_description : word.transliteration }}">{{- word.word_text -}}</span>{{- ' ' -}}
                 {% endfor %}
             </div>
             {% endif %}

@@ -76,6 +76,8 @@ class BibleVerseEmbedRenderer implements BlogEmbedRendererInterface
         $alleenVertaling = EmbedConfigParser::bool($config, 'alleen_vertaling', false);
         $highlightLinks  = EmbedConfigParser::bool($config, 'highlight_links', true);
         $layout          = EmbedConfigParser::str($config, 'layout', 'naast-elkaar') === 'onder-elkaar' ? 'onder-elkaar' : 'naast-elkaar';
+        // What the grondtekst word hover shows -- transliteratie (default) or morfologie.
+        $woordInfo       = EmbedConfigParser::str($config, 'woordinfo', 'transliteratie') === 'morfologie' ? 'morfologie' : 'transliteratie';
 
         // 'vertaling' is a comma-separated list of codes (one or more). A bare
         // single code (the historical format, e.g. 'vertaling: SV') still
@@ -251,6 +253,7 @@ class BibleVerseEmbedRenderer implements BlogEmbedRendererInterface
             'alleen_vertaling' => $alleenVertaling,
             'highlight_links'  => $highlightLinks,
             'layout'           => $layout,
+            'woord_info'       => $woordInfo,
         ]);
     }
 
