@@ -349,15 +349,20 @@ def _resolve_book(ordv: str | None, stem: str) -> str | None:
     return _BOOK_STEMS.get(stem)
 
 
-def parse_cross_ref_targets(note_text: str) -> list[tuple[str, int, int]]:
-    """Parse a lettered note's free text into [(usfm, chapter, verse), ...].
+def parse_cross_ref_targets(note_text: str) -> list[tuple[str, int, int, str]]:
+    """Parse a lettered note's free text into [(usfm, chapter, verse, label), ...].
+    label is a short per-target reference string (e.g. "Ioan. 1:14") built
+    from the book name as it last appeared in the note text -- NOT the whole
+    note, which previously got stored as every target's label, showing the
+    full multi-target text duplicated once per target in the UI popup.
     Best-effort -- returns [] for notes this parser can't resolve (logged by
     the caller via the unresolved-note counter, not silently swallowed)."""
     s = _BRACE_RE.sub("", note_text)
     s = _CONNECTOR_RE.sub(" ", s)
 
-    out: list[tuple[str, int, int]] = []
+    out: list[tuple[str, int, int, str]] = []
     last_usfm: str | None = None
+    last_book_display: str | None = None
     for m in _SEGMENT_RE.finditer(s):
         bp = m.group("bookpart")
         if bp:
@@ -367,6 +372,7 @@ def parse_cross_ref_targets(note_text: str) -> list[tuple[str, int, int]]:
             if usfm is None:
                 continue  # unresolvable book mention -- skip this segment only
             last_usfm = usfm
+            last_book_display = bp.strip()
         else:
             if last_usfm is None:
                 continue
@@ -375,7 +381,8 @@ def parse_cross_ref_targets(note_text: str) -> list[tuple[str, int, int]]:
         for v in m.group("verses").split(","):
             v = v.strip()
             if v:
-                out.append((usfm, chapter, int(v)))
+                label = f"{last_book_display}. {chapter}:{v}" if last_book_display else f"{chapter}:{v}"
+                out.append((usfm, chapter, int(v), label))
     return out
 
 
@@ -612,7 +619,7 @@ def run(only_book: str | None = None, dry_run: bool = False) -> None:
             if not targets:
                 stats["cross_notes_unresolved"] += 1
                 continue
-            for ordinal, (tgt_usfm, tgt_chapter, tgt_verse) in enumerate(targets, start=1):
+            for ordinal, (tgt_usfm, tgt_chapter, tgt_verse, tgt_label) in enumerate(targets, start=1):
                 tgt_book_id = USFM_TO_BOOKID.get(tgt_usfm)
                 if tgt_book_id is None:
                     continue
@@ -622,7 +629,7 @@ def run(only_book: str | None = None, dry_run: bool = False) -> None:
                         "source": SOURCE, "book_id": book_id, "chapter": chapter, "verse": verse,
                         "letter": letter, "word_position": word_pos, "ordinal": ordinal,
                         "target_book_id": tgt_book_id, "target_chapter": tgt_chapter,
-                        "target_verse": tgt_verse, "label": note_text.strip(),
+                        "target_verse": tgt_verse, "label": tgt_label,
                     })
             if len(ref_batch) >= 2000:
                 bulk_insert_cross_references(ref_batch)
