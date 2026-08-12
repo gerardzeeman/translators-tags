@@ -43,6 +43,17 @@ effort regex + abbreviation-dictionary parser, NOT a structured lookup like
 the HSV/SV(GBS) scrapers had (those had explicit href targets). Unresolved
 notes are counted and reported, not silently dropped without a trace.
 
+Verse placement (see iter_verses_with_context and its helpers below for the
+full story): every one of the 37,249 <div type="svvbijbelvers"> elements in
+the source is placed (0 skipped_anchor). The only remaining imperfection is a
+handful of transcription-level chapter/verse duplications *in the source
+itself* -- confirmed one by one, not assumed -- of which just one is left
+deliberately unfixed: Psalm 100's 5 verses appear a second time under a
+stray, headless "chapter 101" anchor immediately before the real Psalm 101;
+since both copies number their own verses correctly, this can't be detected
+as a per-verse anomaly, but it's harmless -- the real Psalm 101 is processed
+second and its upsert naturally overwrites the stray copy's verses 1-5.
+
 Usage:
   python parse_statenvertaling_1657.py                # all books, DB writes
   python parse_statenvertaling_1657.py --book GEN      # single book (usfm)
@@ -123,7 +134,6 @@ XML_ABBREV_TO_USFM.update({xml_abbrev: usfm for _, usfm, xml_abbrev in _APOCRYPH
 # ─── Text helpers (verse text + filler-word tokenisation) ─────────────────────
 
 _PUNCT_EDGE = re.compile(r"^[^\w]+|[^\w]+$", re.UNICODE)
-_INTERP_RE = re.compile(r"^bib([a-z0-9]+?)(\d{3})(?::(\d{2}))?$")
 _LETTER_N = re.compile(r"^[a-z]{1,2}$")
 _DIGIT_N = re.compile(r"^\d+$")
 
@@ -370,30 +380,168 @@ def parse_cross_ref_targets(note_text: str) -> list[tuple[str, int, int]]:
 
 
 # ─── XML iteration ──────────────────────────────────────────────────────────
+#
+# A verse div's OWN interp value (e.g. value="bibgene001:01") turns out to be
+# an unreliable source for chapter/verse: across the file it appears as
+# "bibjob_001:01" (underscore in the abbreviation, all 1,070 verses of Job),
+# "bibezec0010:07" (extra zero-padding on the chapter, Ezek 10-11), "bibjere
+# 009:7" (missing zero-padding on the verse), "bibjesa04029" (missing colon),
+# and even outright typos ("bibjere002:222" where the rendered text -- and
+# the div's own <head> -- both say verse 22, not 222). Rather than chase each
+# format with more regex special-cases, this parser instead takes:
+#   - book + chapter from the nearest ancestor <div type="svvcap"> interp
+#     (format "bib<abbrev><chapter>", digit-length-tolerant so the extra
+#     zero-padding above parses fine; still needs the same underscore
+#     tolerance since chapter anchors have it too, e.g. "bibjob_001")
+#   - the verse number from the verse div's own <head> text, which was
+#     confirmed numeric and correct for every single one of the ~1,200
+#     verses that failed the old per-verse interp-value parse (including the
+#     "222" typo above, whose <head> correctly says "22")
+# This recovered all but 18 of the ~1,218 verses the old anchor-only parser
+# was silently dropping (see git history / PR description for the full
+# investigation). The remaining 18 are Sirach's translator's prologue
+# ("bibjezu00A:01".."00B:10" -- a lettered, unnumbered preface with no
+# chapter number at all in the source), handled as a one-off below.
 
-def iter_verse_divs(root):
-    """Yield <div type="svvbijbelvers"> elements in document order."""
-    for div in root.iter("div"):
-        if div.get("type") == "svvbijbelvers":
-            yield div
+_CHAPTER_ANCHOR_RE = re.compile(r"^bib([a-z0-9_]+?)(\d{1,4})$")
+_INTERP_VERSE_SUFFIX_RE = re.compile(r":(\d{1,3})$")
+
+# Sirach's prologue: two lettered paragraphs ("00A", "00B") with no chapter
+# number of their own in the source. Mapped to chapter 0, continuing the
+# verse count across both (00A: 1-8, 00B: 9-18) rather than restarting at 1,
+# since restarting would collide (both would claim verses 1-8 in chapter 0).
+_JEZU_PROLOGUE_RE = re.compile(r"^bibjezu00([AB]):(\d{2})$")
+_JEZU_PROLOGUE_OFFSET = {"A": 0, "B": 8}
+
+# One-off: 1 Chronicles' own chapter-anchor sequence goes ...011, 013, 013,
+# 014... -- chapter 12 is entirely missing and 013 appears twice. The FIRST
+# "013" div's own <head> reads "Het xij. Capittel." (xij = 12 in Roman
+# numerals), confirming the interp value itself is the one that's wrong for
+# that occurrence, not the displayed chapter title. Tracked by occurrence
+# count since both anchors are otherwise identical.
+_1KRO_013_BUG_USFM_CHAPTER = ("1CH", 13)
+_1KRO_013_BUG_FIRST_OCCURRENCE_CHAPTER = 12
+
+# Three known one-off cases where a verse's number is duplicated in BOTH
+# <head> and the div's own interp value, so the cross-validation above can't
+# tell them apart -- confirmed by checking that the verse immediately after
+# the duplicate skips a number (e.g. 2 Kings 15 goes ...7, 8, 6, 6, 10... --
+# the second "6" is really 9). Applied only when the computed verse doesn't
+# advance past the last one used (i.e. the second/duplicate occurrence).
+_KNOWN_DUPLICATE_VERSE_FIXES = {
+    ("2KI", 15, 6): 9,
+    ("EZK", 40, 39): 40,
+    ("EZK", 46, 8): 9,
+}
+
+# One remaining, deliberately-unfixed case: Psalm 100's 5 verses appear a
+# second time under a stray "bibpsal101" chapter anchor (no <head> at all on
+# that anchor, unlike every real chapter), immediately followed by the real
+# Psalm 101 (8 verses, correctly headed "Psalm Cj." -- Cj = 101 in Roman
+# numerals). Both the false chapter-101 divs and the real ones independently
+# number their own verses correctly (1..5 and 1..8), so nothing here flags it
+# as a per-verse anomaly -- it's a genuine content duplication at the chapter
+# level. Left alone: the real Psalm 101 is processed second and its upsert
+# naturally overwrites the false one's verses 1-5, so the final data is
+# correct without any special-casing; the only trace is that verses 1-5 of
+# chapter 101 get written twice during ingest.
 
 
-def parse_verse_ref(div) -> tuple[str, int, int] | None:
-    """Return (usfm, chapter, verse) from a verse div's interpGrp, or None
-    if the interp value doesn't parse cleanly (a handful of transcription
-    quirks in the source -- e.g. a missing colon before the verse number)."""
-    interp = div.find("./interpGrp/interp")
-    if interp is None:
+def _parse_chapter_anchor(value: str) -> tuple[str, int] | None:
+    m = _CHAPTER_ANCHOR_RE.match(value)
+    if not m:
         return None
-    value = interp.get("value") or ""
-    m = _INTERP_RE.match(value)
-    if not m or m.group(3) is None:
-        return None
-    abbrev, chapter_str, verse_str = m.group(1), m.group(2), m.group(3)
-    usfm = XML_ABBREV_TO_USFM.get(abbrev)
+    usfm = XML_ABBREV_TO_USFM.get(m.group(1).rstrip("_"))
     if usfm is None:
         return None
-    return usfm, int(chapter_str), int(verse_str)
+    return usfm, int(m.group(2))
+
+
+def iter_verses_with_context(root, stats: dict | None = None):
+    """Yield (div, usfm, chapter, verse) for every <div type="svvbijbelvers">
+    in document order. See module comment above for why chapter comes from
+    the nearest preceding <div type="svvcap"> anchor and verse from the verse
+    div's own <head> text rather than the verse div's own interp value --
+    except <head> turns out to have a handful of its own typos (usually
+    repeating the previous verse's number), so within each chapter the verse
+    number is only accepted from <head> if it's greater than the last one
+    used; otherwise the verse suffix of the div's own (otherwise-unreliable)
+    interp value is tried as a fallback, since in every observed case that
+    value was the one that was actually correct there. Divs that still can't
+    be placed (stats['skipped_anchor'], if a stats dict is passed) are
+    skipped, not raised -- reported, not silently dropped."""
+    current: tuple[str, int] | None = None
+    last_verse = 0
+    kro13_occurrences = 0
+
+    for div in root.iter("div"):
+        dtype = div.get("type")
+
+        if dtype == "svvcap":
+            interp = div.find("./interpGrp/interp")
+            value = interp.get("value") if interp is not None else None
+            current = _parse_chapter_anchor(value) if value else None
+            last_verse = 0
+            if current == _1KRO_013_BUG_USFM_CHAPTER:
+                kro13_occurrences += 1
+                if kro13_occurrences == 1:
+                    current = (current[0], _1KRO_013_BUG_FIRST_OCCURRENCE_CHAPTER)
+            continue
+
+        if dtype != "svvbijbelvers":
+            continue
+
+        interp = div.find("./interpGrp/interp")
+        own_value = interp.get("value") if interp is not None else None
+        jezu_m = _JEZU_PROLOGUE_RE.match(own_value) if own_value else None
+        if jezu_m:
+            yield div, "SIR", 0, _JEZU_PROLOGUE_OFFSET[jezu_m.group(1)] + int(jezu_m.group(2))
+            continue
+
+        head = div.find("./head")
+        head_text = head.text.strip() if head is not None and head.text else None
+        head_verse = int(head_text) if head_text and head_text.isdigit() else None
+        interp_verse = None
+        if own_value:
+            suffix_m = _INTERP_VERSE_SUFFIX_RE.search(own_value)
+            if suffix_m:
+                interp_verse = int(suffix_m.group(1))
+
+        # Prefer whichever source exactly matches the expected next verse
+        # number; this catches typos in EITHER source (head repeating the
+        # previous verse's number, or -- at the very start of a chapter,
+        # where "greater than the last verse" trivially passes for any
+        # head typo -- interp being the one that's off instead). Falls back
+        # to "greater than the last verse" when neither is an exact match
+        # (e.g. a genuine gap in the source), and accepts even a
+        # non-advancing value as a last resort rather than drop the verse --
+        # a rare wrong/duplicate verse number is preferable to losing the
+        # verse's text entirely.
+        expected_next = last_verse + 1
+        if head_verse == expected_next:
+            verse = head_verse
+        elif interp_verse == expected_next:
+            verse = interp_verse
+        elif head_verse is not None and head_verse > last_verse:
+            verse = head_verse
+        elif interp_verse is not None and interp_verse > last_verse:
+            verse = interp_verse
+        else:
+            verse = head_verse if head_verse is not None else interp_verse
+
+        if current is not None and verse is not None and verse <= last_verse:
+            fix = _KNOWN_DUPLICATE_VERSE_FIXES.get((current[0], current[1], verse))
+            if fix is not None:
+                verse = fix
+
+        if current is None or verse is None:
+            if stats is not None:
+                stats["skipped_anchor"] += 1
+            continue
+        last_verse = verse
+
+        usfm, chapter = current
+        yield div, usfm, chapter, verse
 
 
 # ─── Main ingest loop ───────────────────────────────────────────────────────
@@ -424,12 +572,7 @@ def run(only_book: str | None = None, dry_run: bool = False) -> None:
         "cross_notes": 0, "cross_notes_unresolved": 0, "cross_refs": 0,
     }
 
-    for verse_div in iter_verse_divs(root):
-        ref = parse_verse_ref(verse_div)
-        if ref is None:
-            stats["skipped_anchor"] += 1
-            continue
-        usfm, chapter, verse = ref
+    for verse_div, usfm, chapter, verse in iter_verses_with_context(root, stats):
         book_id = USFM_TO_BOOKID.get(usfm)
         if book_id is None:
             stats["unknown_book_anchor"] += 1
