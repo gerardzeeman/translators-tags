@@ -29,14 +29,28 @@ export default class extends Controller {
     highlightDutch(event) {
         const id = event.currentTarget.dataset.wordId
         event.currentTarget.classList.add('is-highlighted')
+
+        // Find the source word(s) linked to this word, then highlight every
+        // OTHER Dutch word (in any translation panel) that same source word
+        // is linked to -- not just the source text, so highlighting a word
+        // in one translation cross-highlights the linked word in the rest.
+        const linkedIds = new Set()
         this.sourceWordTargets.forEach((el) => {
-            el.classList.toggle('is-highlighted', this.#linkIds(el).includes(id))
+            const ids = this.#linkIds(el)
+            const matches = ids.includes(id)
+            el.classList.toggle('is-highlighted', matches)
+            if (matches) ids.forEach((linkedId) => linkedIds.add(linkedId))
+        })
+
+        this.dutchWordTargets.forEach((el) => {
+            el.classList.toggle('is-highlighted', linkedIds.has(el.dataset.wordId))
         })
     }
 
     unhighlightDutch(event) {
         event.currentTarget.classList.remove('is-highlighted')
         this.sourceWordTargets.forEach((el) => el.classList.remove('is-highlighted'))
+        this.dutchWordTargets.forEach((el) => el.classList.remove('is-highlighted'))
     }
 
     #linkIds(el) {
