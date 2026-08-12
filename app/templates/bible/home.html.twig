@@ -75,6 +75,25 @@
             </ul>
         </section>
 
+        {% if apoc_books is defined and apoc_books|length > 0 and is_granted('ROLE_VIEWER_SV1657') %}
+        <section class="testament-col testament-col-apoc">
+            <h2 class="testament-heading">
+                Apocriefe boeken <span class="testament-heading-note">(SV(1657))</span>
+            </h2>
+            <ul class="book-list">
+                {% for book in apoc_books %}
+                <li>
+                    <a href="{{ path('app_book', {usfm: book.usfmCode}) }}" class="book-link">
+                        <span class="book-num">{{ book.id }}</span>
+                        <span class="book-name">{{ book.nameNl }}</span>
+                        <span class="book-chapters">{{ book.chapterCount }} hfst</span>
+                    </a>
+                </li>
+                {% endfor %}
+            </ul>
+        </section>
+        {% endif %}
+
     </div>
     {% endif %}
 </div>

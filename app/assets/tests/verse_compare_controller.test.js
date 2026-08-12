@@ -70,6 +70,10 @@ function buildFixture({
                         data-translation="SV">SV</button>
                 <button data-action="click->${IDENTIFIER}#switchTranslation"
                         data-translation="HSV">HSV</button>
+                <select class="trans-select" data-action="change->${IDENTIFIER}#switchTranslation">
+                    <option value="SV">SV</option>
+                    <option value="HSV">HSV</option>
+                </select>
             </div>
         </div>
     `)
@@ -93,6 +97,7 @@ describe('VerseCompareController', () => {
     afterEach(() => {
         app.stop()
         el.remove()
+        localStorage.clear()   // switchTranslation persists the active code -- avoid bleed into later tests
     })
 
     // ── Initial state ─────────────────────────────────────────────────────────
@@ -168,6 +173,25 @@ describe('VerseCompareController', () => {
         expect(srcEl.classList.contains('active')).toBe(false)
         const svWord = el.querySelector('[data-tw-id="10"]')
         expect(svWord.classList.contains('highlighted')).toBe(false)
+    })
+
+    // ── switchTranslation via <select> (compact indicator-toggle variant) ──────
+
+    it('switches active-translation attribute on select change', () => {
+        const select = el.querySelector('select.trans-select')
+        select.value = 'HSV'
+        select.dispatchEvent(new Event('change', { bubbles: true }))
+
+        const grid = el.querySelector('.verse-compare-grid')
+        expect(grid.dataset.activeTranslation).toBe('HSV')
+    })
+
+    it('syncs the select value when the active translation changes via a button', () => {
+        const select = el.querySelector('select.trans-select')
+
+        el.querySelector('[data-translation="HSV"]').click()
+
+        expect(select.value).toBe('HSV')
     })
 
     // ── source-word:activate highlighting ────────────────────────────────────

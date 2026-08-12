@@ -12,7 +12,7 @@ class TranslationRepository extends ServiceEntityRepository
      * SV Jongbloed, SV(GBS), then HSV. Translations not listed here (future
      * additions) sort after these, in id order.
      */
-    private const DISPLAY_ORDER = ['SV' => 1, 'SVGBS' => 2, 'HSV' => 3];
+    private const DISPLAY_ORDER = ['SV1657' => 1, 'SV' => 2, 'SVGBS' => 3, 'HSV' => 4];
 
     public function __construct(ManagerRegistry $r)
     {

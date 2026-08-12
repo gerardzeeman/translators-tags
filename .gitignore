@@ -47,3 +47,8 @@ TEHMC - Translators Expansion of Hebrew Morphology Codes - STEPBible.org CC BY.t
 /strongs_he_batch2.csv
 /strongs_he_batch3.csv
 /strongs_he_batch4.csv
+
+# Statenvertaling 1657-editie brontekst (DBNL TEI-Lite XML, 25MB) -- bind-mounted
+# into the ingest container at run time (see ingest/parse_statenvertaling_1657.py),
+# never committed, same as the other one-off ingest source dumps above.
+/_sta001stat02_01.xml

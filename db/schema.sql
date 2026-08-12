@@ -12,7 +12,7 @@ SET client_encoding = 'UTF8';
 CREATE TABLE IF NOT EXISTS books (
     id            SMALLINT PRIMARY KEY,         -- 1-39 OT, 40-66 NT
     usfm_code     CHAR(3)   NOT NULL UNIQUE,    -- GEN, EXO … REV
-    testament     CHAR(2)   NOT NULL CHECK (testament IN ('OT', 'NT')),
+    testament     VARCHAR(4) NOT NULL CHECK (testament IN ('OT', 'NT', 'APOC')),
     name_nl       TEXT      NOT NULL,           -- Dutch canonical name
     name_original TEXT,                         -- Hebrew (OT) or Greek (NT)
     chapter_count SMALLINT  NOT NULL
@@ -322,7 +322,21 @@ INSERT INTO books (id, usfm_code, testament, name_nl, chapter_count) VALUES
 (63, '2JN', 'NT', '2 Johannes',          1),
 (64, '3JN', 'NT', '3 Johannes',          1),
 (65, 'JUD', 'NT', 'Judas',               1),
-(66, 'REV', 'NT', 'Openbaring',          22)
+(66, 'REV', 'NT', 'Openbaring',          22),
+-- Apocriefe boeken (alleen aanwezig in de Statenvertaling 1657-editie)
+(67, '1ES', 'APOC', '3 Ezra',                     9),
+(68, '2ES', 'APOC', '4 Ezra',                    16),
+(69, 'TOB', 'APOC', 'Tobias',                    14),
+(70, 'JDT', 'APOC', 'Judith',                    16),
+(71, 'WIS', 'APOC', 'Wijsheid van Salomo',       19),
+(72, 'SIR', 'APOC', 'Wijsheid van Jezus Sirach', 51),
+(73, 'BAR', 'APOC', 'Baruch',                     6),
+(74, 'ESG', 'APOC', 'Toevoegselen op Esther',    16),
+(75, 'DAT', 'APOC', 'Toevoegselen op Daniël',     4),
+(76, 'MAN', 'APOC', 'Gebed van Manasse',          1),
+(77, '1MA', 'APOC', '1 Makkabeeën',               16),
+(78, '2MA', 'APOC', '2 Makkabeeën',               15),
+(79, '3MA', 'APOC', '3 Makkabeeën',                7)
 ON CONFLICT (id) DO NOTHING;
 
 -- Seed data: translation records
@@ -331,7 +345,8 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO translations (id, code, name, abbreviation, language, direction, family, source_lang_authority) VALUES
     (1, 'SV',    'Statenvertaling Jongbloed',  'SV(JB)',   'nld', 'LTR', 'SV', TRUE),
     (2, 'HSV',   'Herziene Statenvertaling',   'HSV',      'nld', 'LTR', 'SV', FALSE),
-    (3, 'SVGBS', 'Statenvertaling (GBS)',      'SV(GBS)',  'nld', 'LTR', 'SV', FALSE)
+    (3, 'SVGBS', 'Statenvertaling (GBS)',      'SV(GBS)',  'nld', 'LTR', 'SV', FALSE),
+    (4, 'SV1657','Statenvertaling (1657)',     'SV(1657)', 'nld', 'LTR', 'SV', FALSE)
 ON CONFLICT (id) DO UPDATE SET
     code                  = EXCLUDED.code,
     name                  = EXCLUDED.name,
