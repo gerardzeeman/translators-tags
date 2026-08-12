@@ -10,7 +10,8 @@ export default class extends Controller {
         'textarea', 'bibleDialog',
         'boek', 'hoofdstuk', 'vers', 'aantalVerzen',
         'woordRangeGroup', 'woordChips',
-        'toonVertaling', 'vertalingGroup', 'vertaling',
+        'woordinfoGroup', 'woordinfo',
+        'toonVertaling', 'vertalingGroup', 'vertalingChecks',
         'alleenVertaling', 'highlightLinks', 'layoutGroup', 'layout',
         'institutieDialog',
         'instBoek', 'instHoofdstukGroup', 'instHoofdstuk', 'instAantal', 'instSectie',
@@ -107,6 +108,9 @@ export default class extends Controller {
         const alleen = this.alleenVertalingTarget.checked
         this.vertalingGroupTarget.hidden = !(toon || alleen)
         this.layoutGroupTarget.hidden = !(toon && !alleen)
+        // Woordinfo styles the grondtekst-hover -- irrelevant once the
+        // grondtekst itself is hidden (alleen_vertaling).
+        this.woordinfoGroupTarget.hidden = alleen
     }
 
     confirmBible() {
@@ -127,9 +131,17 @@ export default class extends Controller {
             lines.push(`woord_tot: ${this.selectedWords.to ?? this.selectedWords.from}`)
         }
 
+        if (!alleenVertaling) {
+            lines.push(`woordinfo: ${this.woordinfoTarget.value}`)
+        }
+
         if (toonVertaling || alleenVertaling) {
+            const gekozen = Array.from(
+                this.vertalingChecksTarget.querySelectorAll('input[type="checkbox"]:checked')
+            ).map((cb) => cb.value)
+
             lines.push(`toon_vertaling: ${toonVertaling ? 'ja' : 'nee'}`)
-            lines.push(`vertaling: ${this.vertalingTarget.value}`)
+            lines.push(`vertaling: ${gekozen.join(',')}`)
             lines.push(`alleen_vertaling: ${alleenVertaling ? 'ja' : 'nee'}`)
         }
         lines.push(`highlight_links: ${highlightLinks ? 'ja' : 'nee'}`)
@@ -375,9 +387,28 @@ export default class extends Controller {
     async #loadTranslations() {
         const res = await fetch(this.vertalingenUrlValue)
         this.translations = await res.json()
-        this.vertalingTarget.innerHTML = this.translations
-            .map((t) => `<option value="${this.#esc(t.code)}">${this.#esc(t.abbreviation)}</option>`)
+        // SV checked by default (matches the embed renderer's own default
+        // when 'vertaling' is omitted); every other allowed translation is
+        // offered but unchecked, left to the author to opt into.
+        this.vertalingChecksTarget.innerHTML = this.translations
+            .map(
+                (t) =>
+                    `<label class="embed-vertaling-check">` +
+                    `<input type="checkbox" value="${this.#esc(t.code)}" data-action="change->blog-editor#onVertalingCheckChange"${t.code === 'SV' ? ' checked' : ''}>` +
+                    `<span>${this.#esc(t.name)}</span>` +
+                    `</label>`
+            )
             .join('')
+    }
+
+    // Keep at least one translation checked while the group is in use --
+    // an empty selection would silently fall back to SV in the renderer,
+    // which is confusing when the author explicitly unchecked everything.
+    onVertalingCheckChange(event) {
+        const boxes = Array.from(this.vertalingChecksTarget.querySelectorAll('input[type="checkbox"]'))
+        if (!boxes.some((cb) => cb.checked)) {
+            event.currentTarget.checked = true
+        }
     }
 
     #renderChips() {

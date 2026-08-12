@@ -35,7 +35,8 @@ export default class extends Controller {
     // ── Public Stimulus action ────────────────────────────────────────────────
 
     switchTranslation(event) {
-        const code = event.currentTarget.dataset.translation
+        const el = event.currentTarget
+        const code = el.tagName === 'SELECT' ? el.value : el.dataset.translation
         if (!code || code === this.#activeTrans) return
         this.#activeTrans = code
         localStorage.setItem('ao:active-translation', code)
@@ -71,6 +72,11 @@ export default class extends Controller {
         // Sync switcher button active state
         this.element.querySelectorAll('[data-translation]').forEach(btn => {
             btn.classList.toggle('trans-btn-active', btn.dataset.translation === code)
+        })
+
+        // Sync the compact <select> variant of the switcher (translation-indicator-toggle)
+        this.element.querySelectorAll('select.trans-select').forEach(sel => {
+            if (sel.value !== code) sel.value = code
         })
     }
 

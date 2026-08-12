@@ -7,7 +7,10 @@
     </nav>
     <h1>{{ book.nameNl }}</h1>
     <p class="book-meta">
-        {{ book.testament == 'OT' ? 'Oude Testament · Hebreeuws' : 'Nieuwe Testament · Grieks' }}
+        {% if book.testament == 'OT' %}Oude Testament · Hebreeuws
+        {% elseif book.testament == 'NT' %}Nieuwe Testament · Grieks
+        {% else %}Apocriefe boeken · alleen in SV(1657)
+        {% endif %}
         · {{ book.chapterCount }} hoofdstukken
     </p>
     <div class="chapter-grid">

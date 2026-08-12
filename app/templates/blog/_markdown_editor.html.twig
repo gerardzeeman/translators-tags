@@ -56,12 +56,20 @@
             <div class="embed-word-chips" data-blog-editor-target="woordChips"></div>
         </div>
 
+        <div class="form-group" data-blog-editor-target="woordinfoGroup">
+            <label>Woordinfo bij grondtekst (bij hoveren)</label>
+            <select data-blog-editor-target="woordinfo" class="form-control">
+                <option value="transliteratie" selected>Transliteratie</option>
+                <option value="morfologie">Morfologie</option>
+            </select>
+        </div>
+
         <div class="form-group">
             <label><input type="checkbox" data-blog-editor-target="toonVertaling" data-action="change->blog-editor#toggleVertalingFields"> Vertaling tonen</label>
         </div>
         <div class="form-group" data-blog-editor-target="vertalingGroup" hidden>
-            <label>Vertaling</label>
-            <select data-blog-editor-target="vertaling" class="form-control"></select>
+            <label>Vertaling(en)</label>
+            <div class="embed-vertaling-checks" data-blog-editor-target="vertalingChecks"></div>
         </div>
         <div class="form-group">
             <label><input type="checkbox" data-blog-editor-target="alleenVertaling" data-action="change->blog-editor#toggleVertalingFields"> Alleen de vertaling tonen (geen grondtekst)</label>

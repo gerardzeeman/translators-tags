@@ -35,6 +35,17 @@ class BookRepository extends ServiceEntityRepository
             ->getResult();
     }
 
+    /** @return Book[] apocriefe boeken -- alleen aanwezig in de SV(1657)-editie */
+    public function findAllApocrypha(): array
+    {
+        return $this->createQueryBuilder('b')
+            ->where('b.testament = :t')
+            ->setParameter('t', 'APOC')
+            ->orderBy('b.id', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
+
     public function findByUsfmCode(string $code): ?Book
     {
         return $this->findOneBy(['usfmCode' => strtoupper($code)]);

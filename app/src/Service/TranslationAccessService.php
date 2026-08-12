@@ -13,8 +13,9 @@ use Symfony\Bundle\SecurityBundle\Security;
 class TranslationAccessService
 {
     private const ROLE_BY_CODE = [
-        'HSV'   => 'ROLE_VIEWER_HSV',
-        'SVGBS' => 'ROLE_VIEWER_SVGBS',
+        'HSV'    => 'ROLE_VIEWER_HSV',
+        'SVGBS'  => 'ROLE_VIEWER_SVGBS',
+        'SV1657' => 'ROLE_VIEWER_SV1657',
     ];
 
     public function __construct(private readonly Security $security) {}

@@ -31,7 +31,7 @@ class PassageRepository
     public function fetchPassage(int $bookId, int $chapter, int $verse, int $translationId): array
     {
         // Determine testament
-        $testament = $bookId <= 39 ? 'OT' : 'NT';
+        $testament = $bookId <= 39 ? 'OT' : ($bookId <= 66 ? 'NT' : 'APOC');
 
         if ($testament === 'OT') {
             $sourceWords = $this->fetchHebrewWords($bookId, $chapter, $verse, $translationId);
@@ -283,7 +283,7 @@ class PassageRepository
             return [];
         }
 
-        $testament = $bookId <= 39 ? 'OT' : 'NT';
+        $testament = $bookId <= 39 ? 'OT' : ($bookId <= 66 ? 'NT' : 'APOC');
 
         $sourceWordsByTrans = $testament === 'OT'
             ? $this->fetchHebrewWordsBatch($bookId, $chapter, $verse, $translationIds)
@@ -655,7 +655,7 @@ class PassageRepository
             return [];
         }
 
-        $testament = $bookId <= 39 ? 'OT' : 'NT';
+        $testament = $bookId <= 39 ? 'OT' : ($bookId <= 66 ? 'NT' : 'APOC');
 
         $sourceByVerseAndTrans = $testament === 'OT'
             ? $this->fetchHebrewWordsForChapter($bookId, $chapter, $translationIds)
@@ -970,7 +970,7 @@ class PassageRepository
     {
         return $this->cache->get("chapter_verse_counts_{$bookId}", function (\Symfony\Contracts\Cache\ItemInterface $item) use ($bookId): array {
             $item->expiresAfter(86400 * 365);
-            $testament = $bookId <= 39 ? 'OT' : 'NT';
+            $testament = $bookId <= 39 ? 'OT' : ($bookId <= 66 ? 'NT' : 'APOC');
             $table     = $testament === 'OT' ? 'hebrew_words' : 'greek_words';
 
             return $this->connection->fetchAllAssociative(

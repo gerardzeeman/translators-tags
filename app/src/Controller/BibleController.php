@@ -30,14 +30,16 @@ class BibleController extends AbstractController
     #[Route('/', name: 'app_home')]
     public function home(): Response
     {
-        $otBooks  = $this->bookRepository->findAllOldTestament();
-        $ntBooks  = $this->bookRepository->findAllNewTestament();
-        $coverage = $this->passageRepository->getCoverageStats();
+        $otBooks   = $this->bookRepository->findAllOldTestament();
+        $ntBooks   = $this->bookRepository->findAllNewTestament();
+        $apocBooks = $this->bookRepository->findAllApocrypha();
+        $coverage  = $this->passageRepository->getCoverageStats();
 
         return $this->render('bible/home.html.twig', [
-            'ot_books'  => $otBooks,
-            'nt_books'  => $ntBooks,
-            'coverage'  => $coverage,
+            'ot_books'   => $otBooks,
+            'nt_books'   => $ntBooks,
+            'apoc_books' => $apocBooks,
+            'coverage'   => $coverage,
         ]);
     }
 
@@ -195,6 +197,7 @@ class BibleController extends AbstractController
             'translations' => $allTranslations,
             'ot_books'     => $this->bookRepository->findAllOldTestament(),
             'nt_books'     => $this->bookRepository->findAllNewTestament(),
+            'apoc_books'   => $this->bookRepository->findAllApocrypha(),
         ]);
     }
 

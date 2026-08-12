@@ -21,9 +21,10 @@ use Doctrine\DBAL\Connection;
 class CrossReferenceRepository
 {
     private const SOURCE_BY_TRANSLATION_CODE = [
-        'HSV'   => 'HSV',
-        'SV'    => 'SVGBS',
-        'SVGBS' => 'SVGBS',
+        'HSV'    => 'HSV',
+        'SV'     => 'SVGBS',
+        'SVGBS'  => 'SVGBS',
+        'SV1657' => 'SV1657',
     ];
 
     public function __construct(private readonly Connection $connection) {}

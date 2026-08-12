@@ -449,6 +449,8 @@ a:hover { text-decoration: underline; }
 
 .testament-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 3rem; margin-top: 2rem; }
 @media (max-width: 900px) { .testament-grid { grid-template-columns: 1fr; } }
+.testament-col-apoc { grid-column: 1 / -1; }
+.testament-heading-note { font-size: .7em; font-weight: 400; color: var(--col-label); }
 
 .testament-heading {
     font-size: 1.2rem;
@@ -624,14 +626,32 @@ a:hover { text-decoration: underline; }
     font-family: var(--font-mono);
     white-space: nowrap;
 }
+.trans-select {
+    padding: .2rem 1.4rem .2rem .5rem;
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    font-size: .8rem;
+    font-family: var(--font-mono);
+    color: var(--color-ink-light);
+    background: var(--bg);
+    cursor: pointer;
+}
+.trans-select:hover { border-color: var(--accent); }
+.trans-select:focus { outline: none; border-color: var(--accent); }
 
 /* Indicator-zichtbaarheid via CSS-attribuut */
-[data-active-translation="SV"]    .hsv-indicators,
-[data-active-translation="SV"]    .svgbs-indicators { display: none; }
-[data-active-translation="HSV"]   .sv-indicators,
-[data-active-translation="HSV"]   .svgbs-indicators  { display: none; }
-[data-active-translation="SVGBS"] .sv-indicators,
-[data-active-translation="SVGBS"] .hsv-indicators    { display: none; }
+[data-active-translation="SV"]     .hsv-indicators,
+[data-active-translation="SV"]     .svgbs-indicators,
+[data-active-translation="SV"]     .sv1657-indicators   { display: none; }
+[data-active-translation="HSV"]    .sv-indicators,
+[data-active-translation="HSV"]    .svgbs-indicators,
+[data-active-translation="HSV"]    .sv1657-indicators   { display: none; }
+[data-active-translation="SVGBS"]  .sv-indicators,
+[data-active-translation="SVGBS"]  .hsv-indicators,
+[data-active-translation="SVGBS"]  .sv1657-indicators   { display: none; }
+[data-active-translation="SV1657"] .sv-indicators,
+[data-active-translation="SV1657"] .hsv-indicators,
+[data-active-translation="SV1657"] .svgbs-indicators    { display: none; }
 
 .panel-heading {
     font-size: 1rem;
@@ -1026,12 +1046,18 @@ a:hover { text-decoration: underline; }
     border-radius: var(--radius) var(--radius) 0 0;
     overflow: hidden;
 }
-.chapter-grid-header.has-hsv:not(.has-svgbs),
-.chapter-grid-header.has-svgbs:not(.has-hsv) {
+.chapter-grid-header.has-sv1657:not(.has-hsv):not(.has-svgbs),
+.chapter-grid-header.has-hsv:not(.has-sv1657):not(.has-svgbs),
+.chapter-grid-header.has-svgbs:not(.has-sv1657):not(.has-hsv) {
     grid-template-columns: 2fr 1fr 1fr;
 }
-.chapter-grid-header.has-hsv.has-svgbs {
+.chapter-grid-header.has-sv1657.has-hsv:not(.has-svgbs),
+.chapter-grid-header.has-sv1657.has-svgbs:not(.has-hsv),
+.chapter-grid-header.has-hsv.has-svgbs:not(.has-sv1657) {
     grid-template-columns: 2fr 1fr 1fr 1fr;
+}
+.chapter-grid-header.has-sv1657.has-hsv.has-svgbs {
+    grid-template-columns: 2fr 1fr 1fr 1fr 1fr;
 }
 
 .col-header {
@@ -1046,7 +1072,8 @@ a:hover { text-decoration: underline; }
 .col-header-source { background: var(--card-warm); }
 .col-header-sv,
 .col-header-hsv,
-.col-header-svgbs  { background: var(--bg); }
+.col-header-svgbs,
+.col-header-sv1657 { background: var(--bg); }
 
 .col-label {
     font-size: 9px;
@@ -1066,12 +1093,18 @@ a:hover { text-decoration: underline; }
     border-radius: 0 0 var(--radius) var(--radius);
     overflow: visible;
 }
-.chapter-verse-grid.has-hsv:not(.has-svgbs),
-.chapter-verse-grid.has-svgbs:not(.has-hsv) {
+.chapter-verse-grid.has-sv1657:not(.has-hsv):not(.has-svgbs),
+.chapter-verse-grid.has-hsv:not(.has-sv1657):not(.has-svgbs),
+.chapter-verse-grid.has-svgbs:not(.has-sv1657):not(.has-hsv) {
     grid-template-columns: 2fr 1fr 1fr;
 }
-.chapter-verse-grid.has-hsv.has-svgbs {
+.chapter-verse-grid.has-sv1657.has-hsv:not(.has-svgbs),
+.chapter-verse-grid.has-sv1657.has-svgbs:not(.has-hsv),
+.chapter-verse-grid.has-hsv.has-svgbs:not(.has-sv1657) {
     grid-template-columns: 2fr 1fr 1fr 1fr;
+}
+.chapter-verse-grid.has-sv1657.has-hsv.has-svgbs {
+    grid-template-columns: 2fr 1fr 1fr 1fr 1fr;
 }
 
 /* display:contents laat de cellen direct in het ouder-grid participeren.
@@ -1104,12 +1137,14 @@ a:hover { text-decoration: underline; }
 }
 
 /* Verberg-klassen die de translation-selector controller toepast */
-.chapter-verse-grid.hide-sv    .verse-cell-sv,
-.chapter-verse-grid.hide-hsv   .verse-cell-hsv,
-.chapter-verse-grid.hide-svgbs .verse-cell-svgbs { display: none; }
-.chapter-grid-header.hide-sv    .col-header-sv,
-.chapter-grid-header.hide-hsv   .col-header-hsv,
-.chapter-grid-header.hide-svgbs .col-header-svgbs { display: none; }
+.chapter-verse-grid.hide-sv     .verse-cell-sv,
+.chapter-verse-grid.hide-hsv    .verse-cell-hsv,
+.chapter-verse-grid.hide-svgbs  .verse-cell-svgbs,
+.chapter-verse-grid.hide-sv1657 .verse-cell-sv1657 { display: none; }
+.chapter-grid-header.hide-sv     .col-header-sv,
+.chapter-grid-header.hide-hsv    .col-header-hsv,
+.chapter-grid-header.hide-svgbs  .col-header-svgbs,
+.chapter-grid-header.hide-sv1657 .col-header-sv1657 { display: none; }
 
 /* Laatste rij: geen onderrand op de cellen */
 .verse-row:last-child .verse-cell {
@@ -1132,7 +1167,8 @@ a:hover { text-decoration: underline; }
 .verse-cell-source:hover { background: var(--hover-warm); }
 .verse-cell-sv,
 .verse-cell-hsv,
-.verse-cell-svgbs { background: var(--bg); }
+.verse-cell-svgbs,
+.verse-cell-sv1657 { background: var(--bg); }
 
 /* Broncel: compacter dan vertaalcellen */
 .verse-cell-source {
@@ -1290,7 +1326,8 @@ a:hover { text-decoration: underline; }
 /* ── Nederlandse verstekst in de hoofdstuk-view ──────────────────────────── */
 .verse-cell-sv .dutch-verse,
 .verse-cell-hsv .dutch-verse,
-.verse-cell-svgbs .dutch-verse {
+.verse-cell-svgbs .dutch-verse,
+.verse-cell-sv1657 .dutch-verse {
     font-family: var(--font-ui);
     font-size: 15px;
     line-height: 1.82;
@@ -1557,7 +1594,8 @@ a:hover { text-decoration: underline; }
 
     .chapter-verse-grid,
     .chapter-verse-grid.has-hsv,
-    .chapter-verse-grid.has-svgbs {
+    .chapter-verse-grid.has-svgbs,
+    .chapter-verse-grid.has-sv1657 {
         display: block; /* geen grid op mobiel — gewoon blokken */
         border-radius: 0;
         border-left: none;
@@ -1578,19 +1616,26 @@ a:hover { text-decoration: underline; }
     .verse-cell:last-child { border-bottom: none; }
 
     /* Hide-klassen van de translation-selector (ingesteld op desktop) mogen op mobiel niets verbergen */
-    .chapter-verse-grid.hide-sv    .verse-cell-sv,
-    .chapter-verse-grid.hide-hsv   .verse-cell-hsv,
-    .chapter-verse-grid.hide-svgbs .verse-cell-svgbs { display: block; }
+    .chapter-verse-grid.hide-sv     .verse-cell-sv,
+    .chapter-verse-grid.hide-hsv    .verse-cell-hsv,
+    .chapter-verse-grid.hide-svgbs  .verse-cell-svgbs,
+    .chapter-verse-grid.hide-sv1657 .verse-cell-sv1657 { display: block; }
 
     /* Verberg niet-actieve kolommen standaard op mobiel; toon alleen de actieve.
-       .has-hsv / .has-svgbs garanderen dat deze regels alleen vuren voor gebruikers
-       met de bijbehorende viewer-rol (anders bestaat de kolom niet in de DOM). */
-    .chapter-verse-grid.has-hsv[data-active-translation="SV"]      .verse-cell-hsv   { display: none; }
-    .chapter-verse-grid.has-hsv[data-active-translation="SVGBS"]   .verse-cell-hsv   { display: none; }
-    .chapter-verse-grid.has-hsv[data-active-translation="HSV"]     .verse-cell-sv    { display: none; }
-    .chapter-verse-grid.has-svgbs[data-active-translation="SV"]    .verse-cell-svgbs { display: none; }
-    .chapter-verse-grid.has-svgbs[data-active-translation="HSV"]   .verse-cell-svgbs { display: none; }
-    .chapter-verse-grid.has-svgbs[data-active-translation="SVGBS"] .verse-cell-sv    { display: none; }
+       .has-hsv / .has-svgbs / .has-sv1657 garanderen dat deze regels alleen vuren
+       voor gebruikers met de bijbehorende viewer-rol (anders bestaat de kolom niet in de DOM). */
+    .chapter-verse-grid.has-hsv[data-active-translation="SV"]        .verse-cell-hsv    { display: none; }
+    .chapter-verse-grid.has-hsv[data-active-translation="SVGBS"]     .verse-cell-hsv    { display: none; }
+    .chapter-verse-grid.has-hsv[data-active-translation="SV1657"]    .verse-cell-hsv    { display: none; }
+    .chapter-verse-grid.has-hsv[data-active-translation="HSV"]       .verse-cell-sv     { display: none; }
+    .chapter-verse-grid.has-svgbs[data-active-translation="SV"]      .verse-cell-svgbs  { display: none; }
+    .chapter-verse-grid.has-svgbs[data-active-translation="HSV"]     .verse-cell-svgbs  { display: none; }
+    .chapter-verse-grid.has-svgbs[data-active-translation="SV1657"]  .verse-cell-svgbs  { display: none; }
+    .chapter-verse-grid.has-svgbs[data-active-translation="SVGBS"]   .verse-cell-sv     { display: none; }
+    .chapter-verse-grid.has-sv1657[data-active-translation="SV"]     .verse-cell-sv1657 { display: none; }
+    .chapter-verse-grid.has-sv1657[data-active-translation="HSV"]    .verse-cell-sv1657 { display: none; }
+    .chapter-verse-grid.has-sv1657[data-active-translation="SVGBS"]  .verse-cell-sv1657 { display: none; }
+    .chapter-verse-grid.has-sv1657[data-active-translation="SV1657"] .verse-cell-sv     { display: none; }
 
     .source-word { padding: .2rem 2px; }
 
@@ -2477,9 +2522,10 @@ a:hover { text-decoration: underline; }
     vertical-align: super;
     color: var(--color-ink-muted);
 }
-.panel-hsv   .word-filler,
-.panel-sv    .word-filler,
-.panel-svgbs .word-filler {
+.panel-hsv    .word-filler,
+.panel-sv     .word-filler,
+.panel-svgbs  .word-filler,
+.panel-sv1657 .word-filler {
     cursor: default;
 }
 
@@ -4031,8 +4077,11 @@ a:hover { text-decoration: underline; }
 .embed-source { font-family: var(--font-hebrew), var(--font-greek), serif; font-size: 1.25rem; line-height: 2; }
 .embed-source.dir-rtl { direction: rtl; text-align: right; }
 .embed-source-word { display: inline-block; padding: .05em .15em; border-radius: 3px; cursor: default; }
+.embed-translations { display: flex; flex-direction: column; gap: .9rem; min-width: 0; }
 .embed-translation { font-size: 1.05rem; line-height: 1.9; }
-.embed-translation-code {
+.embed-translation + .embed-translation { padding-top: .9rem; border-top: 1px dashed var(--divider); }
+.embed-translation-code,
+.embed-translation-label {
     display: inline-block;
     flex-shrink: 0;
     font-size: .7rem;
@@ -4043,6 +4092,7 @@ a:hover { text-decoration: underline; }
     padding: 0 .35em;
     vertical-align: middle;
 }
+.embed-translation-label { margin-bottom: .3rem; }
 .embed-dutch-word { display: inline-block; padding: .05em .15em; border-radius: 3px; }
 .embed-source-word.is-highlighted, .embed-dutch-word.is-highlighted { background: var(--gold); color: var(--nav); }
 .embed-no-translation { color: var(--color-ink-muted); }
@@ -4082,6 +4132,20 @@ a:hover { text-decoration: underline; }
 }
 .embed-word-chip:hover { border-color: var(--color-accent); }
 .embed-word-chip.is-selected { background: var(--gold); border-color: var(--accent); color: var(--nav); }
+
+.embed-vertaling-checks { display: flex; flex-direction: column; gap: .35rem; }
+.embed-vertaling-check {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    padding: .3rem .5rem;
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 400;
+}
+.embed-vertaling-check:hover { border-color: var(--color-accent); }
+.embed-vertaling-check input[type="checkbox"] { accent-color: var(--accent); cursor: pointer; margin: 0; }
 
 .embed-zin-list { display: flex; flex-direction: column; gap: .3rem; padding: .5rem; border: 1px solid var(--color-border); border-radius: 4px; max-height: 220px; overflow-y: auto; }
 .embed-zin-row { display: flex; gap: .6rem; padding: .4rem .5rem; border: 1px solid transparent; border-radius: 4px; cursor: pointer; font-size: .85rem; }
