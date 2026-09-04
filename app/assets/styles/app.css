@@ -4342,3 +4342,68 @@ a:hover { text-decoration: underline; }
     border-radius: 3px;
     padding: 0 .3rem;
 }
+
+/* ─── Generieke knopklassen (.btn/.btn-sm/.btn-xs) ─────────────────────────
+   .btn-primary bestond al (felle accentknop); dit voegt de neutrale/outline
+   basisstijl en maatvarianten toe die .trans-linking-nav en de historische
+   alignmentpagina's al gebruikten zonder dat er ooit CSS voor bestond. ── */
+.btn {
+    display: inline-block;
+    padding: .5rem 1rem;
+    background: var(--card-warm);
+    color: var(--text);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    font-family: var(--font-serif);
+    font-size: 1rem;
+    cursor: pointer;
+    text-decoration: none;
+}
+.btn:hover { background: var(--hover-warm); text-decoration: none; }
+.btn-sm { padding: .35rem .75rem; font-size: .85rem; }
+.btn-xs { padding: .2rem .55rem; font-size: .75rem; }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+
+/* ─── Historische alignment: boek-/hoofdstukoverzicht ──────────────────── */
+.hist-align-book-grid { display: flex; flex-wrap: wrap; gap: .5rem; margin: .5rem 0 1.5rem; }
+.hist-align-book-card {
+    padding: .4rem .8rem;
+    background: var(--card-warm);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    color: var(--text);
+    text-decoration: none;
+}
+.hist-align-book-card:hover { background: var(--hover-warm); text-decoration: none; }
+
+.hist-align-overview-table { width: 100%; border-collapse: collapse; margin-top: .5rem; }
+.hist-align-overview-table th, .hist-align-overview-table td {
+    text-align: left;
+    padding: .5rem .75rem;
+    border-bottom: 1px solid var(--color-border-light);
+}
+.hist-align-overview-table th { font-family: var(--font-mono); font-size: .8rem; color: var(--color-ink-muted); font-weight: 600; }
+
+.hist-align-score-bar {
+    position: relative;
+    width: 160px;
+    height: 1.3rem;
+    background: var(--card-warm);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    overflow: hidden;
+}
+.hist-align-score-bar-fill {
+    position: absolute;
+    top: 0; left: 0; bottom: 0;
+    background: var(--color-manual);
+    opacity: .35;
+}
+.hist-align-score-bar span {
+    position: relative;
+    display: block;
+    text-align: center;
+    line-height: 1.3rem;
+    font-family: var(--font-mono);
+    font-size: .75rem;
+}

@@ -37,6 +37,116 @@ class HistoricalAlignmentController extends AbstractController
     ) {
     }
 
+    // ── Book picker ──────────────────────────────────────────────────────────
+
+    #[Route('', name: 'app_hist_align_home')]
+    public function home(): Response
+    {
+        return $this->render('linking/historical_books.html.twig', [
+            'books' => $this->bookRepo->findAllOrderedById(),
+        ]);
+    }
+
+    // ── Book overview: chapters with score % ─────────────────────────────────
+
+    #[Route('/{usfm<[A-Za-z0-9]{2,8}>}', name: 'app_hist_align_book')]
+    public function book(string $usfm): Response
+    {
+        $book = $this->bookRepo->findByUsfmCode($usfm);
+        if (!$book) {
+            throw $this->createNotFoundException("Book '{$usfm}' not found.");
+        }
+
+        $data = $this->linkingRepo->fetchHistoricalAlignmentScopeData($book->getId());
+
+        $chapters = [];
+        foreach ($data['verse_list'] as $row) {
+            $ch = (int) $row['chapter'];
+            $vs = (int) $row['verse'];
+            $key = $ch . ':' . $vs;
+            $score = $this->scoreService->computeVerseScore(
+                $data['words_by_verse'][$key] ?? [],
+                $data['links_by_verse'][$key] ?? [],
+                $data['pivot_code']
+            );
+
+            $chapters[$ch]['verse_count'] = ($chapters[$ch]['verse_count'] ?? 0) + 1;
+            $chapters[$ch]['total_score'] = ($chapters[$ch]['total_score'] ?? 0.0) + $score['total_score'];
+            $chapters[$ch]['counted_positions'] = ($chapters[$ch]['counted_positions'] ?? 0) + $score['counted_positions'];
+            if (!isset($chapters[$ch]['first_gap_verse']) && $score['percent'] < 99.95) {
+                $chapters[$ch]['first_gap_verse'] = $vs;
+            }
+        }
+        ksort($chapters, SORT_NUMERIC);
+        foreach ($chapters as $ch => &$c) {
+            $c['percent'] = $c['counted_positions'] > 0 ? ($c['total_score'] / $c['counted_positions']) * 100 : 100.0;
+            $c['first_gap_verse'] ??= 1;
+        }
+        unset($c);
+
+        $firstGapChapter = 1;
+        $firstGapVerse = 1;
+        foreach ($chapters as $ch => $c) {
+            if ($c['percent'] < 99.95) {
+                $firstGapChapter = $ch;
+                $firstGapVerse = $c['first_gap_verse'];
+                break;
+            }
+        }
+
+        return $this->render('linking/historical_chapters.html.twig', [
+            'book' => $book,
+            'usfm' => $usfm,
+            'chapters' => $chapters,
+            'first_gap_chapter' => $firstGapChapter,
+            'first_gap_verse' => $firstGapVerse,
+        ]);
+    }
+
+    // ── Chapter overview: verses with score % ───────────────────────────────
+
+    #[Route('/{usfm<[A-Za-z0-9]{2,8}>}/{chapter<\d+>}', name: 'app_hist_align_chapter')]
+    public function chapter(string $usfm, int $chapter): Response
+    {
+        $book = $this->bookRepo->findByUsfmCode($usfm);
+        if (!$book) {
+            throw $this->createNotFoundException("Book '{$usfm}' not found.");
+        }
+
+        $data = $this->linkingRepo->fetchHistoricalAlignmentScopeData($book->getId(), $chapter);
+        if (!$data['verse_list']) {
+            throw $this->createNotFoundException("Chapter {$chapter} not found for '{$usfm}'.");
+        }
+
+        $verses = [];
+        foreach ($data['verse_list'] as $row) {
+            $vs = (int) $row['verse'];
+            $key = $chapter . ':' . $vs;
+            $verses[$vs] = $this->scoreService->computeVerseScore(
+                $data['words_by_verse'][$key] ?? [],
+                $data['links_by_verse'][$key] ?? [],
+                $data['pivot_code']
+            );
+        }
+        ksort($verses, SORT_NUMERIC);
+
+        $firstGapVerse = 1;
+        foreach ($verses as $vs => $score) {
+            if ($score['percent'] < 99.95) {
+                $firstGapVerse = $vs;
+                break;
+            }
+        }
+
+        return $this->render('linking/historical_verses.html.twig', [
+            'book' => $book,
+            'usfm' => $usfm,
+            'chapter' => $chapter,
+            'verses' => $verses,
+            'first_gap_verse' => $firstGapVerse,
+        ]);
+    }
+
     // ── Verse review screen ─────────────────────────────────────────────────
 
     #[Route('/{usfm<[A-Za-z0-9]{2,8}>}/{chapter<\d+>}/{verse<\d+>}', name: 'app_hist_align_verse')]

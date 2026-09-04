@@ -1,0 +1,48 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Historische alignment · {{ book.nameNl }}{% endblock %}
+
+{% block head %}<meta name="csrf-token" content="{{ csrf_token('historical_align_api') }}">{% endblock %}
+
+{% block body %}
+<div class="hist-align-screen">
+    <div class="hist-align-topbar">
+        <div class="hist-align-breadcrumb">
+            <a href="{{ path('app_hist_align_home') }}">Historische alignment</a> · <strong>{{ book.nameNl }}</strong>
+        </div>
+        <div class="hist-align-actions"
+             data-controller="historical-recompute"
+             data-historical-recompute-url-value="{{ path('app_hist_align_api_recompute') }}"
+             data-historical-recompute-scope-type-value="book"
+             data-historical-recompute-usfm-value="{{ usfm }}">
+            <span data-historical-recompute-target="status"></span>
+            <button type="button" class="btn btn-sm" data-action="click->historical-recompute#recompute">Herbereken dit hele boek</button>
+            <a class="btn btn-sm btn-primary" href="{{ path('app_hist_align_verse', {usfm: usfm, chapter: first_gap_chapter, verse: first_gap_verse}) }}">Review dit boek</a>
+        </div>
+    </div>
+
+    <table class="hist-align-overview-table">
+        <thead>
+            <tr><th>Hoofdstuk</th><th>Verzen</th><th>Score</th><th></th></tr>
+        </thead>
+        <tbody>
+            {% for ch, c in chapters %}
+            <tr>
+                <td>{{ ch }}</td>
+                <td>{{ c.verse_count }}</td>
+                <td>
+                    <div class="hist-align-score-bar">
+                        <div class="hist-align-score-bar-fill" style="width: {{ c.percent }}%"></div>
+                        <span>{{ c.percent|round(1) }}%</span>
+                    </div>
+                </td>
+                <td>
+                    <a class="btn btn-xs" href="{{ path('app_hist_align_chapter', {usfm: usfm, chapter: ch}) }}">Verzen</a>
+                    <a class="btn btn-xs btn-primary" href="{{ path('app_hist_align_verse', {usfm: usfm, chapter: ch, verse: c.first_gap_verse}) }}">Review</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

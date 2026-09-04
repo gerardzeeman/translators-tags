@@ -1198,6 +1198,90 @@ class LinkingRepository
     }
 
     /**
+     * Batch-fetches everything the book-/chapter-overview pages need to
+     * compute a HistoricalAlignmentScoreService score per verse, in as few
+     * queries as possible: one for the pivot's own verse list (authoritative
+     * for SV1657 -- avoids relying on Hebrew/Greek-derived verse counts,
+     * which can disagree with SV1657 due to versification differences), one
+     * for every word across the four translations in scope, one for every
+     * link touching those words. The per-verse score computation itself
+     * then happens in PHP over already-in-memory data -- no N+1 queries per
+     * verse, which matters for a book like Psalms (~2500 verses).
+     *
+     * @return array{
+     *   pivot_code: string,
+     *   verse_list: list<array{chapter: int, verse: int}>,
+     *   words_by_verse: array<string, array<string, list<array>>>,
+     *   links_by_verse: array<string, list<array>>,
+     * }
+     */
+    public function fetchHistoricalAlignmentScopeData(int $bookId, ?int $chapter = null): array
+    {
+        $pivot = $this->connection->fetchAssociative(
+            'SELECT id, code FROM translations WHERE is_alignment_pivot = TRUE LIMIT 1'
+        );
+        $pivotId = (int) $pivot['id'];
+        $pivotCode = (string) $pivot['code'];
+
+        $verseListParams = ['pivotId' => $pivotId, 'bookId' => $bookId];
+        $verseListSql = 'SELECT chapter, verse FROM translation_verses WHERE translation_id = :pivotId AND book_id = :bookId';
+        if ($chapter !== null) {
+            $verseListSql .= ' AND chapter = :chapter';
+            $verseListParams['chapter'] = $chapter;
+        }
+        $verseListSql .= ' ORDER BY chapter, verse';
+        $verseList = $this->connection->fetchAllAssociative($verseListSql, $verseListParams);
+
+        $wordsParams = ['bookId' => $bookId];
+        $wordsSql = "SELECT tv.chapter, tv.verse, t.code, tw.id, tw.word_position, tw.word_text, tw.is_filler, tw.alignment_note
+                     FROM translation_words tw
+                     JOIN translation_verses tv ON tv.id = tw.verse_id
+                     JOIN translations t ON t.id = tv.translation_id
+                     WHERE tv.book_id = :bookId
+                       AND t.family = (SELECT family FROM translations WHERE is_alignment_pivot = TRUE LIMIT 1)";
+        if ($chapter !== null) {
+            $wordsSql .= ' AND tv.chapter = :chapter';
+            $wordsParams['chapter'] = $chapter;
+        }
+        $words = $this->connection->fetchAllAssociative($wordsSql, $wordsParams);
+
+        $wordsByVerse = [];
+        $verseKeyByWordId = [];
+        foreach ($words as $w) {
+            $key = $w['chapter'] . ':' . $w['verse'];
+            $wordsByVerse[$key][$w['code']][] = $w;
+            $verseKeyByWordId[(int) $w['id']] = $key;
+        }
+
+        $linksParams = ['bookId' => $bookId];
+        $linksSql = 'SELECT itl.word_a_id, itl.word_b_id, itl.method, itl.score
+                     FROM inter_translation_links itl
+                     JOIN translation_words twa ON twa.id = itl.word_a_id
+                     JOIN translation_verses tva ON tva.id = twa.verse_id
+                     WHERE tva.book_id = :bookId';
+        if ($chapter !== null) {
+            $linksSql .= ' AND tva.chapter = :chapter';
+            $linksParams['chapter'] = $chapter;
+        }
+        $links = $this->connection->fetchAllAssociative($linksSql, $linksParams);
+
+        $linksByVerse = [];
+        foreach ($links as $l) {
+            $key = $verseKeyByWordId[(int) $l['word_a_id']] ?? null;
+            if ($key !== null) {
+                $linksByVerse[$key][] = $l;
+            }
+        }
+
+        return [
+            'pivot_code' => $pivotCode,
+            'verse_list' => $verseList,
+            'words_by_verse' => $wordsByVerse,
+            'links_by_verse' => $linksByVerse,
+        ];
+    }
+
+    /**
      * Clears alignment_note (particle_drop/prefix_drop) for the pivot
      * translation's words in the given scope, so a fresh recompute can
      * re-derive it cleanly across all three of its pairs (particle_drop is

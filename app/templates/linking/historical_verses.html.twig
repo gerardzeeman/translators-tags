@@ -1,0 +1,47 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Historische alignment · {{ book.nameNl }} {{ chapter }}{% endblock %}
+
+{% block head %}<meta name="csrf-token" content="{{ csrf_token('historical_align_api') }}">{% endblock %}
+
+{% block body %}
+<div class="hist-align-screen">
+    <div class="hist-align-topbar">
+        <div class="hist-align-breadcrumb">
+            <a href="{{ path('app_hist_align_home') }}">Historische alignment</a> ·
+            <a href="{{ path('app_hist_align_book', {usfm: usfm}) }}">{{ book.nameNl }}</a> ·
+            <strong>{{ chapter }}</strong>
+        </div>
+        <div class="hist-align-actions"
+             data-controller="historical-recompute"
+             data-historical-recompute-url-value="{{ path('app_hist_align_api_recompute') }}"
+             data-historical-recompute-scope-type-value="chapter"
+             data-historical-recompute-usfm-value="{{ usfm }}"
+             data-historical-recompute-chapter-value="{{ chapter }}">
+            <span data-historical-recompute-target="status"></span>
+            <button type="button" class="btn btn-sm" data-action="click->historical-recompute#recompute">Herbereken dit hoofdstuk</button>
+            <a class="btn btn-sm btn-primary" href="{{ path('app_hist_align_verse', {usfm: usfm, chapter: chapter, verse: first_gap_verse}) }}">Review dit hoofdstuk</a>
+        </div>
+    </div>
+
+    <table class="hist-align-overview-table">
+        <thead>
+            <tr><th>Vers</th><th>Score</th><th></th></tr>
+        </thead>
+        <tbody>
+            {% for vs, score in verses %}
+            <tr>
+                <td>{{ vs }}</td>
+                <td>
+                    <div class="hist-align-score-bar">
+                        <div class="hist-align-score-bar-fill" style="width: {{ score.percent }}%"></div>
+                        <span>{{ score.percent|round(1) }}%</span>
+                    </div>
+                </td>
+                <td><a class="btn btn-xs btn-primary" href="{{ path('app_hist_align_verse', {usfm: usfm, chapter: chapter, verse: vs}) }}">Review</a></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
