@@ -1198,6 +1198,64 @@ class LinkingRepository
     }
 
     /**
+     * Clears alignment_note (particle_drop/prefix_drop) for the pivot
+     * translation's words in the given scope, so a fresh recompute can
+     * re-derive it cleanly across all three of its pairs (particle_drop is
+     * pair-independent so always converges the same either way, but
+     * prefix_drop can vary per pair -- see markAlignmentNote()'s
+     * $onlyIfUnset union semantics). Call once per full recompute run,
+     * before processing any pair.
+     */
+    public function clearAlignmentNotesForPivotScope(int $pivotTranslationId, ?string $book, ?int $chapter, ?int $verse): int
+    {
+        $sql = "UPDATE translation_words tw
+                SET alignment_note = NULL
+                FROM translation_verses tv, books b
+                WHERE tw.verse_id = tv.id AND tv.book_id = b.id
+                  AND tv.translation_id = :pivotId
+                  AND tw.alignment_note IS NOT NULL";
+        $params = ['pivotId' => $pivotTranslationId];
+
+        if ($book !== null) {
+            $sql .= ' AND b.usfm_code = :usfm';
+            $params['usfm'] = $book;
+        }
+        if ($chapter !== null) {
+            $sql .= ' AND tv.chapter = :chapter';
+            $params['chapter'] = $chapter;
+        }
+        if ($verse !== null) {
+            $sql .= ' AND tv.verse = :verse';
+            $params['verse'] = $verse;
+        }
+
+        return (int) $this->connection->executeStatement($sql, $params);
+    }
+
+    /**
+     * Marks words with a systematic-exclusion reason (see migration
+     * Version20260904130000). With $onlyIfUnset, an existing note is never
+     * downgraded/overwritten -- used for prefix_drop, which can be flagged
+     * by one pair's alignment run and not another's, so a flag from any
+     * pair should stick for the whole recompute.
+     */
+    public function markAlignmentNote(array $wordIds, string $note, bool $onlyIfUnset = false): void
+    {
+        if (!$wordIds) {
+            return;
+        }
+        $sql = 'UPDATE translation_words SET alignment_note = :note WHERE id IN (:ids)';
+        if ($onlyIfUnset) {
+            $sql .= ' AND alignment_note IS NULL';
+        }
+        $this->connection->executeStatement(
+            $sql,
+            ['note' => $note, 'ids' => $wordIds],
+            ['ids' => ArrayParameterType::INTEGER]
+        );
+    }
+
+    /**
      * Existing manual links within a word-ID scope, as raw (word_a_id,
      * word_b_id) pairs. Used to seed forced anchors for
      * HistoricalAlignmentService::alignPair() -- manual links are always

@@ -106,6 +106,11 @@ CREATE TABLE IF NOT EXISTS translation_words (
                                                  -- TRUE for HSV cursive/"add" words:
                                                  -- no direct source-language backing;
                                                  -- excluded from source-link propagation
+    alignment_note  VARCHAR(20) CHECK (alignment_note IN ('particle_drop', 'prefix_drop')),
+                                                 -- set by HistoricalAlignmentService on
+                                                 -- SV1657-side words that are systematically
+                                                 -- excluded from the alignment; see migration
+                                                 -- Version20260904130000
     UNIQUE (verse_id, word_position)
 );
 

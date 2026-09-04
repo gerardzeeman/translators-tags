@@ -78,6 +78,13 @@ class LinkTranslationsAutoCommand extends Command
             return Command::SUCCESS;
         }
 
+        // Start each full historical recompute from a clean alignment_note
+        // slate so particle_drop/prefix_drop flags don't go stale across
+        // runs (see LinkingRepository::clearAlignmentNotesForPivotScope()).
+        if ($engine === 'historical' && !$dryRun) {
+            $this->linkingRepo->clearAlignmentNotesForPivotScope((int) $pairs[0]['id_a'], $book, $chapter, $verse);
+        }
+
         foreach ($pairs as $pair) {
             $io->section(sprintf('%s ↔ %s (family: %s)', $pair['code_a'], $pair['code_b'], $pair['family']));
 
@@ -501,6 +508,17 @@ class LinkTranslationsAutoCommand extends Command
                 }
             }
             $linked += $verseLinked;
+
+            if (!$dryRun) {
+                // particle_drop is pair-independent (purely a function of the
+                // SV1657 text) so it's always safe to (re-)assert. prefix_drop
+                // can vary per pair -- only ever set it, never overwrite an
+                // existing note, so a flag from any of the 3 pairs sticks.
+                $particleWordIds = array_map(fn($i) => (int) $wordsA[$i]['id'], $result->particles);
+                $prefixWordIds = array_map(fn($i) => (int) $wordsA[$i]['id'], $result->droppedPrefixes);
+                $this->linkingRepo->markAlignmentNote($particleWordIds, 'particle_drop');
+                $this->linkingRepo->markAlignmentNote($prefixWordIds, 'prefix_drop', onlyIfUnset: true);
+            }
 
             unset($wordsA, $wordsB, $idsA, $idsB, $forcedAnchors, $result, $srcRaw, $tgtRaw);
             $io->progressAdvance();
