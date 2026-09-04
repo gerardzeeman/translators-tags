@@ -83,12 +83,35 @@ class SyncExportManualCommand extends Command
         $io->text(sprintf('  empty_links:   %d rows → %s', $count, $emptyFile));
 
         // ── 3. inter_translation_links (manual + manual_empty) ────────────────
+        // word_a_id/word_b_id are raw translation_words surrogate keys, which do
+        // NOT correspond across databases that scraped HSV/SV independently (dev
+        // and prod each assign their own auto-increment IDs). We export the
+        // natural key (translation code, book/chapter/verse, word position)
+        // instead, so the importer can resolve it to whatever local ID applies.
         $itlFile = "{$dir}/manual_itl.csv";
         $count = $this->exportQuery(
-            "SELECT id, word_a_id, word_b_id, method, confidence, created_at
-             FROM inter_translation_links
-             WHERE method IN ('manual', 'manual_empty')
-             ORDER BY id",
+            "SELECT
+                itl.id,
+                ta.code    AS word_a_translation,
+                tva.book_id AS word_a_book_id,
+                tva.chapter AS word_a_chapter,
+                tva.verse   AS word_a_verse,
+                twa.word_position AS word_a_word_position,
+                tb.code    AS word_b_translation,
+                tvb.book_id AS word_b_book_id,
+                tvb.chapter AS word_b_chapter,
+                tvb.verse   AS word_b_verse,
+                twb.word_position AS word_b_word_position,
+                itl.method, itl.confidence, itl.created_at
+             FROM inter_translation_links itl
+             JOIN translation_words  twa ON twa.id = itl.word_a_id
+             JOIN translation_verses tva ON tva.id = twa.verse_id
+             JOIN translations       ta  ON ta.id  = tva.translation_id
+             JOIN translation_words  twb ON twb.id = itl.word_b_id
+             JOIN translation_verses tvb ON tvb.id = twb.verse_id
+             JOIN translations       tb  ON tb.id  = tvb.translation_id
+             WHERE itl.method IN ('manual', 'manual_empty')
+             ORDER BY itl.id",
             $itlFile
         );
         $io->text(sprintf('  itl_links:     %d rows → %s', $count, $itlFile));
