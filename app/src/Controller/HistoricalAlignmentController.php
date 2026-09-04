@@ -6,6 +6,7 @@ use App\Entity\User;
 use App\Repository\BookRepository;
 use App\Repository\LinkingRepository;
 use App\Repository\PassageRepository;
+use App\Service\Alignment\HistoricalAlignmentRowBuilder;
 use App\Service\Alignment\HistoricalAlignmentScoreService;
 use Symfony\Bundle\FrameworkBundle\Console\Application;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -34,6 +35,7 @@ class HistoricalAlignmentController extends AbstractController
         private readonly BookRepository $bookRepo,
         private readonly PassageRepository $passageRepo,
         private readonly HistoricalAlignmentScoreService $scoreService,
+        private readonly HistoricalAlignmentRowBuilder $rowBuilder,
     ) {
     }
 
@@ -163,6 +165,7 @@ class HistoricalAlignmentController extends AbstractController
         }
 
         $score = $this->scoreService->computeVerseScore($data['words'], $data['links'], $data['pivot_code']);
+        $rows = $this->rowBuilder->buildRows($data['words'], $data['links'], $data['pivot_code']);
 
         $chapterCounts = $this->passageRepo->getChapterVerseCounts($book->getId());
         $nav = $this->buildNav($chapter, $verse, $usfm, $chapterCounts);
@@ -175,6 +178,7 @@ class HistoricalAlignmentController extends AbstractController
             'translations' => $data['translations'],
             'words' => $data['words'],
             'links' => $data['links'],
+            'rows' => $rows,
             'pivot_code' => $data['pivot_code'],
             'score' => $score,
             'nav' => $nav,

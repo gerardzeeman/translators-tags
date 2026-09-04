@@ -262,26 +262,27 @@ export default class extends Controller {
 
     // ── Keyboard focus movement ──────────────────────────────────────────────
 
+    // Words are laid out in a table now (one row per pivot word, matching
+    // words from other columns placed in that same row -- see
+    // HistoricalAlignmentRowBuilder), not in per-column DOM containers, so
+    // navigation goes by data-code/data-row rather than DOM ancestry.
     #moveFocus(fromEl, key) {
-        const col = fromEl.closest('.hist-align-col')
-        const wordsInCol = Array.from(col.querySelectorAll('.hist-align-word'))
-        const idx = wordsInCol.indexOf(fromEl)
+        const code = fromEl.dataset.code
+        const wordsInCode = this.wordTargets.filter((el) => el.dataset.code === code)
 
-        if (key === 'ArrowRight') {
-            wordsInCol[idx + 1]?.focus()
-            return
-        }
-        if (key === 'ArrowLeft') {
-            wordsInCol[Math.max(0, idx - 1)]?.focus()
+        if (key === 'ArrowRight' || key === 'ArrowLeft') {
+            const idx = wordsInCode.indexOf(fromEl)
+            const nextIdx = Math.max(0, Math.min(idx + (key === 'ArrowRight' ? 1 : -1), wordsInCode.length - 1))
+            wordsInCode[nextIdx]?.focus()
             return
         }
 
-        const columns = Array.from(this.columnsTarget.querySelectorAll('.hist-align-col'))
-        const colIdx = columns.indexOf(col)
-        const targetCol = columns[key === 'ArrowDown' ? colIdx + 1 : colIdx - 1]
-        if (!targetCol) return
-        const targetWords = Array.from(targetCol.querySelectorAll('.hist-align-word'))
-        targetWords[Math.min(idx, targetWords.length - 1)]?.focus()
+        const row = parseInt(fromEl.dataset.row, 10)
+        const candidates = wordsInCode
+            .map((el) => ({ el, row: parseInt(el.dataset.row, 10) }))
+            .filter((c) => (key === 'ArrowDown' ? c.row > row : c.row < row))
+            .sort((a, b) => (key === 'ArrowDown' ? a.row - b.row : b.row - a.row))
+        candidates[0]?.el.focus()
     }
 
     // ── Pending selection state ──────────────────────────────────────────────

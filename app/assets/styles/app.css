@@ -4270,9 +4270,16 @@ a:hover { text-decoration: underline; }
 .hist-align-line.method-particle_drop,
 .hist-align-line.method-prefix_drop         { stroke: var(--color-ink-muted); stroke-dasharray: 4 3; }
 
-.hist-align-col { position: relative; z-index: 2; border-left: 1px solid var(--color-border); padding: .75rem .6rem 1.25rem; }
-.hist-align-col:first-child { border-left: none; }
-.hist-align-col-header {
+/* Rijen = één per SV1657-woord (HistoricalAlignmentRowBuilder); elke kolom
+   toont het/de gekoppelde woord(en) in diezelfde rij, zodat overeenkomstige
+   woorden onder elkaar staan i.p.v. los per kolom doorlopen. */
+.hist-align-table { position: relative; z-index: 2; width: 100%; border-collapse: collapse; table-layout: fixed; }
+.hist-align-table th,
+.hist-align-table td { border-left: 1px solid var(--color-border); padding: .35rem .6rem; vertical-align: top; }
+.hist-align-table th:first-child,
+.hist-align-table td:first-child { border-left: none; }
+.hist-align-table tbody tr:nth-child(even) { background: color-mix(in srgb, var(--card-warm) 45%, transparent); }
+.hist-align-table thead th {
     position: sticky;
     top: 0;
     background: var(--card-warm);
@@ -4280,8 +4287,8 @@ a:hover { text-decoration: underline; }
     font-size: .85rem;
     font-weight: 600;
     color: var(--col-label);
-    padding: .3rem .4rem;
-    margin: -.75rem -.6rem .6rem;
+    text-align: left;
+    padding: .5rem .6rem;
     border-bottom: 1px solid var(--color-border);
 }
 .hist-align-pivot-badge {
@@ -4293,11 +4300,12 @@ a:hover { text-decoration: underline; }
     padding: 0 .3rem;
     vertical-align: middle;
 }
-.hist-align-col-words { display: flex; flex-wrap: wrap; gap: .15rem .3rem; line-height: 2.1; }
 
 .hist-align-word {
+    display: inline-block;
     cursor: pointer;
     padding: .15rem .45rem;
+    margin: 0 .2rem .2rem 0;
     border-radius: var(--radius);
     border: 1px solid transparent;
     background: transparent;

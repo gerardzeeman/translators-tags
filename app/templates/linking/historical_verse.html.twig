@@ -1,5 +1,16 @@
 {% extends 'base.html.twig' %}
 
+{% macro word_chip(w, code, row_idx) %}
+<span class="hist-align-word{% if w.is_filler %} word-filler{% endif %}{% if w.alignment_note %} word-note word-note-{{ w.alignment_note }}{% endif %}"
+      data-historical-alignment-target="word"
+      data-word-id="{{ w.id }}"
+      data-code="{{ code }}"
+      data-row="{{ row_idx }}"
+      tabindex="0"
+      title="{% if w.alignment_note == 'particle_drop' %}Systematisch weggelaten: dubbele ontkenning{% elseif w.alignment_note == 'prefix_drop' %}Systematisch weggelaten: los voorvoegsel{% endif %}"
+      data-action="click->historical-alignment#selectWord keydown->historical-alignment#onKeydown mouseenter->historical-alignment#hoverWord mouseleave->historical-alignment#unhoverWord focus->historical-alignment#hoverWord blur->historical-alignment#unhoverWord">{{ w.word_text }}{% if w.is_filler %}<span class="filler-marker" title="Aanvullend woord (geen bronwoord)">*</span>{% endif %}</span>
+{% endmacro %}
+
 {% block title %}Historische alignment · {{ usfm }} {{ chapter }}:{{ verse }}{% endblock %}
 
 {% block head %}<meta name="csrf-token" content="{{ csrf_token('historical_align_api') }}">{% endblock %}
@@ -61,22 +72,26 @@
     <div class="hist-align-columns" data-historical-alignment-target="columns">
         <svg class="hist-align-svg" data-historical-alignment-target="svg"></svg>
 
-        {% for t in translations %}
-        <div class="hist-align-col panel-{{ t.code|lower }}">
-            <div class="hist-align-col-header">{{ t.abbreviation }}{% if t.is_alignment_pivot %} <span class="hist-align-pivot-badge" title="Basistekst / pivot">basis</span>{% endif %}</div>
-            <div class="hist-align-col-words">
-                {% for w in words[t.code] %}
-                <span class="hist-align-word{% if w.is_filler %} word-filler{% endif %}{% if w.alignment_note %} word-note word-note-{{ w.alignment_note }}{% endif %}"
-                      data-historical-alignment-target="word"
-                      data-word-id="{{ w.id }}"
-                      data-code="{{ t.code }}"
-                      tabindex="0"
-                      title="{% if w.alignment_note == 'particle_drop' %}Systematisch weggelaten: dubbele ontkenning{% elseif w.alignment_note == 'prefix_drop' %}Systematisch weggelaten: los voorvoegsel{% endif %}"
-                      data-action="click->historical-alignment#selectWord keydown->historical-alignment#onKeydown mouseenter->historical-alignment#hoverWord mouseleave->historical-alignment#unhoverWord focus->historical-alignment#hoverWord blur->historical-alignment#unhoverWord">{{ w.word_text }}{% if w.is_filler %}<span class="filler-marker" title="Aanvullend woord (geen bronwoord)">*</span>{% endif %}</span>
+        <table class="hist-align-table">
+            <thead>
+                <tr>
+                    {% for t in translations %}
+                    <th class="panel-{{ t.code|lower }}">{{ t.abbreviation }}{% if t.is_alignment_pivot %} <span class="hist-align-pivot-badge" title="Basistekst / pivot">basis</span>{% endif %}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for rowIdx, row in rows %}
+                <tr>
+                    {% for t in translations %}
+                    <td class="panel-{{ t.code|lower }}">
+                        {% for w in row[t.code] %}{{ _self.word_chip(w, t.code, rowIdx) }}{% endfor %}
+                    </td>
+                    {% endfor %}
+                </tr>
                 {% endfor %}
-            </div>
-        </div>
-        {% endfor %}
+            </tbody>
+        </table>
     </div>
 
     <div class="hist-align-legend">
