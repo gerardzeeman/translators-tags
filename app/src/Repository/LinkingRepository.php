@@ -1176,6 +1176,50 @@ class LinkingRepository
     }
 
     /**
+     * Translation pairs for the 4-way historical-spelling alignment pipeline:
+     * every translation sharing a family with the `is_alignment_pivot` one
+     * (currently SV1657), pivoted on it. Deliberately a separate query from
+     * fetchTranslationPairs() -- that one pivots on source_lang_authority
+     * (SV/Jongbloed, for the unrelated Hebrew/Greek word_links propagation),
+     * not is_alignment_pivot. See migration Version20260904120000.
+     */
+    public function fetchHistoricalAlignmentPairs(): array
+    {
+        return $this->connection->fetchAllAssociative(
+            "SELECT
+                ta.id   AS id_a,  ta.code  AS code_a,  ta.name AS name_a,  COALESCE(ta.abbreviation, ta.code) AS abbreviation_a,
+                tb.id   AS id_b,  tb.code  AS code_b,  tb.name AS name_b,  COALESCE(tb.abbreviation, tb.code) AS abbreviation_b,
+                ta.family
+             FROM translations ta
+             JOIN translations tb ON tb.family = ta.family AND tb.id != ta.id
+             WHERE ta.is_alignment_pivot = TRUE
+             ORDER BY ta.family, tb.code"
+        );
+    }
+
+    /**
+     * Existing manual links within a word-ID scope, as raw (word_a_id,
+     * word_b_id) pairs. Used to seed forced anchors for
+     * HistoricalAlignmentService::alignPair() -- manual links are always
+     * respected and never overwritten by the auto-linker.
+     */
+    public function fetchManualLinkPairs(array $idsA, array $idsB): array
+    {
+        if (!$idsA || !$idsB) {
+            return [];
+        }
+
+        return $this->connection->fetchAllAssociative(
+            "SELECT word_a_id, word_b_id FROM inter_translation_links
+             WHERE method = 'manual'
+               AND ((word_a_id IN (:listA) AND word_b_id IN (:listB))
+                 OR (word_a_id IN (:listB) AND word_b_id IN (:listA)))",
+            ['listA' => $idsA, 'listB' => $idsB],
+            ['listA' => ArrayParameterType::INTEGER, 'listB' => ArrayParameterType::INTEGER]
+        );
+    }
+
+    /**
      * Progress for an inter-translation pair: verses linked vs total.
      */
     public function fetchInterTranslationProgress(int $translationAId, int $translationBId): array
@@ -1296,19 +1340,30 @@ class LinkingRepository
 
     /**
      * Save an inter-translation link (word_a_id < word_b_id enforced).
+     * `updated_at`/`updated_by` are stamped on every write, including when
+     * re-confirming a link that already existed (see plan sectie 4/6).
      */
-    public function saveInterTranslationLink(int $wordAId, int $wordBId, string $method = 'manual', ?int $confidence = null, ?int $createdByUserId = null): void
-    {
+    public function saveInterTranslationLink(
+        int $wordAId,
+        int $wordBId,
+        string $method = 'manual',
+        ?int $confidence = null,
+        ?int $createdByUserId = null,
+        ?float $score = null,
+    ): void {
         [$a, $b] = $wordAId < $wordBId ? [$wordAId, $wordBId] : [$wordBId, $wordAId];
 
         $this->connection->executeStatement(
-            "INSERT INTO inter_translation_links (word_a_id, word_b_id, method, confidence, created_by_user_id)
-             VALUES (:a, :b, :method, :confidence, :userId)
+            "INSERT INTO inter_translation_links (word_a_id, word_b_id, method, confidence, score, created_by_user_id, updated_at, updated_by)
+             VALUES (:a, :b, :method, :confidence, :score, :userId, NOW(), :userId)
              ON CONFLICT (word_a_id, word_b_id) DO UPDATE
                 SET method = EXCLUDED.method,
                     confidence = CASE WHEN EXCLUDED.confidence IS NULL THEN NULL ELSE EXCLUDED.confidence END,
-                    created_by_user_id = COALESCE(inter_translation_links.created_by_user_id, EXCLUDED.created_by_user_id)",
-            ['a' => $a, 'b' => $b, 'method' => $method, 'confidence' => $confidence, 'userId' => $createdByUserId]
+                    score = EXCLUDED.score,
+                    created_by_user_id = COALESCE(inter_translation_links.created_by_user_id, EXCLUDED.created_by_user_id),
+                    updated_at = NOW(),
+                    updated_by = EXCLUDED.updated_by",
+            ['a' => $a, 'b' => $b, 'method' => $method, 'confidence' => $confidence, 'score' => $score, 'userId' => $createdByUserId]
         );
     }
 
