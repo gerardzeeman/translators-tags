@@ -140,17 +140,40 @@ class SyncImportManualCommand extends Command
             $io->text(sprintf('  empty_links: %d new%s', $emptyInserted, $dryRun ? ' (would insert)' : ''));
 
             // ── 3. inter_translation_links ────────────────────────────────────
+            // word_a_id/word_b_id in the CSV are natural keys (see
+            // SyncExportManualCommand), not the exporting database's raw
+            // translation_words IDs — resolve each to this database's own ID.
             $rows = $this->readCsv("{$dir}/manual_itl.csv");
             $itlInserted = 0;
+            $itlSkipped  = 0;
             foreach ($rows as $row) {
+                $wa = $this->resolveTranslationWordId(
+                    $row['word_a_translation'], (int) $row['word_a_book_id'],
+                    (int) $row['word_a_chapter'], (int) $row['word_a_verse'],
+                    (int) $row['word_a_word_position']
+                );
+                $wb = $this->resolveTranslationWordId(
+                    $row['word_b_translation'], (int) $row['word_b_book_id'],
+                    (int) $row['word_b_chapter'], (int) $row['word_b_verse'],
+                    (int) $row['word_b_word_position']
+                );
+
+                if ($wa === null || $wb === null) {
+                    // Referenced word doesn't exist locally (e.g. that
+                    // translation hasn't been ingested here) — skip rather
+                    // than fail the whole import.
+                    $itlSkipped++;
+                    continue;
+                }
+
                 if (!$dryRun) {
                     $affected = $this->connection->executeStatement(
                         "INSERT INTO inter_translation_links (word_a_id, word_b_id, method, confidence)
                          VALUES (:wa, :wb, :method, :conf)
                          ON CONFLICT (word_a_id, word_b_id) DO NOTHING",
                         [
-                            'wa'     => (int) $row['word_a_id'],
-                            'wb'     => (int) $row['word_b_id'],
+                            'wa'     => $wa,
+                            'wb'     => $wb,
                             'method' => $row['method'],
                             'conf'   => (int) $row['confidence'],
                         ]
@@ -161,6 +184,12 @@ class SyncImportManualCommand extends Command
                 }
             }
             $io->text(sprintf('  itl_links:   %d new%s', $itlInserted, $dryRun ? ' (would insert)' : ''));
+            if ($itlSkipped > 0) {
+                $io->warning(sprintf(
+                    '  itl_links:   %d skipped (referenced translation word not found locally)',
+                    $itlSkipped
+                ));
+            }
 
             if (!$dryRun) {
                 $this->connection->commit();
@@ -176,6 +205,40 @@ class SyncImportManualCommand extends Command
 
         $io->success($dryRun ? 'Dry run complete — no changes written.' : 'Import complete.');
         return Command::SUCCESS;
+    }
+
+    /**
+     * Resolves a translation word's natural key (translation code, book,
+     * chapter, verse, word position) to this database's own
+     * translation_words.id. Returns null if the word doesn't exist locally.
+     */
+    private function resolveTranslationWordId(
+        string $translationCode,
+        int $bookId,
+        int $chapter,
+        int $verse,
+        int $wordPosition,
+    ): ?int {
+        $id = $this->connection->fetchOne(
+            "SELECT tw.id
+             FROM translation_words tw
+             JOIN translation_verses tv ON tv.id = tw.verse_id
+             JOIN translations tr ON tr.id = tv.translation_id
+             WHERE tr.code = :code
+               AND tv.book_id = :book_id
+               AND tv.chapter = :chapter
+               AND tv.verse = :verse
+               AND tw.word_position = :word_position",
+            [
+                'code'          => $translationCode,
+                'book_id'       => $bookId,
+                'chapter'       => $chapter,
+                'verse'         => $verse,
+                'word_position' => $wordPosition,
+            ]
+        );
+
+        return $id !== false ? (int) $id : null;
     }
 
     /**
