@@ -26,8 +26,14 @@ CREATE TABLE IF NOT EXISTS translations (
     language              CHAR(3)     NOT NULL,             -- ISO 639-3: 'nld'
     direction             VARCHAR(3)  NOT NULL DEFAULT 'LTR' CHECK (direction IN ('LTR', 'RTL')),
     family                VARCHAR(20),                      -- e.g. 'SV' groups SV editions + HSV
-    source_lang_authority BOOLEAN     NOT NULL DEFAULT FALSE -- TRUE: this translation's word_links
+    source_lang_authority BOOLEAN     NOT NULL DEFAULT FALSE,-- TRUE: this translation's word_links
                                                             --   are the anchor for propagation
+    is_alignment_pivot    BOOLEAN     NOT NULL DEFAULT FALSE -- TRUE: this translation is the pivot
+                                                            --   for the 4-way historical-spelling
+                                                            --   alignment pipeline (SV1657). Kept
+                                                            --   separate from source_lang_authority,
+                                                            --   which anchors the unrelated
+                                                            --   Hebrew/Greek word_links propagation.
 );
 
 -- Versification difference mapping (OT: Hebrew tradition vs Dutch)
@@ -193,14 +199,25 @@ CREATE TABLE IF NOT EXISTS inter_translation_links (
     word_b_id   INTEGER      NOT NULL REFERENCES translation_words(id) ON DELETE CASCADE,
     method      VARCHAR(30)  NOT NULL DEFAULT 'auto_source_pivot'
                     CHECK (method IN (
-                        'auto_source_pivot', 'auto_sequence', 'auto_positional',
-                        'manual', 'manual_empty'
+                        'auto_source_pivot', 'auto_sequence', 'auto_positional', 'manual', 'manual_empty',
+                        'anchor', 'window', 'compound', 'phrase', 'moved', 'one_to_many', 'synonym',
+                        'particle_drop', 'prefix_drop'
                     )),
     confidence  SMALLINT     CHECK (confidence BETWEEN 0 AND 100),
+    score       REAL         CHECK (score BETWEEN 0 AND 1),   -- 0-1 confidence for the
+                                                                -- HistoricalAlignmentService pipeline
+    updated_at  TIMESTAMPTZ,
     created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
     CONSTRAINT itl_ordered CHECK (word_a_id < word_b_id),
     UNIQUE (word_a_id, word_b_id)
 );
+
+-- NOTE: inter_translation_links.updated_by (-> users(id)) and the review_lock
+-- table (also -> users(id)) are added by migration Version20260904120000, not
+-- here -- this file has no `users` table of its own (same reason
+-- inter_translation_links.created_by_user_id is migration-only, see
+-- Version20260624120000/130000). Always apply schema.sql *and then* run
+-- `doctrine:migrations:migrate`; schema.sql alone is not a complete bootstrap.
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Indexes
@@ -342,14 +359,15 @@ ON CONFLICT (id) DO NOTHING;
 -- Seed data: translation records
 -- SV (Jongbloed) is the source_lang_authority: its word_links to Hebrew/Greek
 -- propagate to all other SV-family translations via inter_translation_links.
-INSERT INTO translations (id, code, name, abbreviation, language, direction, family, source_lang_authority) VALUES
-    (1, 'SV',    'Statenvertaling (Jongbloed)', 'SV(JB)',  'nld', 'LTR', 'SV', TRUE),
-    (2, 'HSV',   'Herziene Statenvertaling',   'HSV',      'nld', 'LTR', 'SV', FALSE),
-    (3, 'SVGBS', 'Statenvertaling (GBS)',      'SV(GBS)',  'nld', 'LTR', 'SV', FALSE),
-    (4, 'SV1657','Statenvertaling (1657)',     'SV(1657)', 'nld', 'LTR', 'SV', FALSE)
+INSERT INTO translations (id, code, name, abbreviation, language, direction, family, source_lang_authority, is_alignment_pivot) VALUES
+    (1, 'SV',    'Statenvertaling (Jongbloed)', 'SV(JB)',  'nld', 'LTR', 'SV', TRUE,  FALSE),
+    (2, 'HSV',   'Herziene Statenvertaling',   'HSV',      'nld', 'LTR', 'SV', FALSE, FALSE),
+    (3, 'SVGBS', 'Statenvertaling (GBS)',      'SV(GBS)',  'nld', 'LTR', 'SV', FALSE, FALSE),
+    (4, 'SV1657','Statenvertaling (1657)',     'SV(1657)', 'nld', 'LTR', 'SV', FALSE, TRUE)
 ON CONFLICT (id) DO UPDATE SET
     code                  = EXCLUDED.code,
     name                  = EXCLUDED.name,
     abbreviation          = EXCLUDED.abbreviation,
     family                = EXCLUDED.family,
-    source_lang_authority = EXCLUDED.source_lang_authority;
+    source_lang_authority = EXCLUDED.source_lang_authority,
+    is_alignment_pivot    = EXCLUDED.is_alignment_pivot;
