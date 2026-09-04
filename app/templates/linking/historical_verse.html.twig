@@ -76,7 +76,7 @@
             <thead>
                 <tr>
                     {% for t in translations %}
-                    <th class="panel-{{ t.code|lower }}">{{ t.abbreviation }}{% if t.is_alignment_pivot %} <span class="hist-align-pivot-badge" title="Basistekst / pivot">basis</span>{% endif %}</th>
+                    <th class="panel-{{ t.code|lower }}">{{ t.abbreviation }}{% if t.is_alignment_pivot %} <span class="hist-align-pivot-badge" title="Basistekst / pivot voor deze alignment">basis</span>{% endif %}{% if t.source_lang_authority %} <span class="hist-align-pivot-badge" title="Basistekst voor de Hebreeuws/Grieks-koppeling (bronkoppeling)">basis</span>{% endif %}</th>
                     {% endfor %}
                 </tr>
             </thead>

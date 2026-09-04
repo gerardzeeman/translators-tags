@@ -1350,12 +1350,12 @@ class LinkingRepository
     public function fetchHistoricalAlignmentVerseData(int $bookId, int $chapter, int $verse): array
     {
         $translations = $this->connection->fetchAllAssociative(
-            "SELECT id, code, name, COALESCE(abbreviation, code) AS abbreviation, is_alignment_pivot
+            "SELECT id, code, name, COALESCE(abbreviation, code) AS abbreviation, is_alignment_pivot, source_lang_authority
              FROM translations
              WHERE family = (SELECT family FROM translations WHERE is_alignment_pivot = TRUE LIMIT 1)"
         );
 
-        $displayOrder = ['SV1657' => 0, 'SV' => 1, 'SVGBS' => 2, 'HSV' => 3];
+        $displayOrder = ['SV1657' => 0, 'SVGBS' => 1, 'SV' => 2, 'HSV' => 3];
         usort($translations, static fn($a, $b) => ($displayOrder[$a['code']] ?? 99) <=> ($displayOrder[$b['code']] ?? 99));
 
         $pivotCode = null;
