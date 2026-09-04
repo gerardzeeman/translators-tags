@@ -25,7 +25,7 @@ final class Version20260810120000 extends AbstractMigration
     public function up(Schema $schema): void
     {
         $this->addSql(<<<'SQL'
-            CREATE TABLE cross_references (
+            CREATE TABLE IF NOT EXISTS cross_references (
                 id              SERIAL   PRIMARY KEY,
                 source          VARCHAR(20) NOT NULL,
                 book_id         SMALLINT NOT NULL REFERENCES books(id),
@@ -39,7 +39,7 @@ final class Version20260810120000 extends AbstractMigration
                 UNIQUE (source, book_id, chapter, verse, ordinal)
             )
             SQL);
-        $this->addSql('CREATE INDEX idx_cross_ref_verse ON cross_references (source, book_id, chapter, verse)');
+        $this->addSql('CREATE INDEX IF NOT EXISTS idx_cross_ref_verse ON cross_references (source, book_id, chapter, verse)');
     }
 
     public function down(Schema $schema): void

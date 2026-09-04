@@ -19,7 +19,7 @@ final class Version20260624150000 extends AbstractMigration
         // The existing unique constraint covers (word_a_id, word_b_id) but not word_b_id alone.
         // Queries filtering on word_b_id IN (...) need their own index so the planner can
         // combine two Bitmap Index Scans instead of falling back to a sequential scan.
-        $this->addSql('CREATE INDEX idx_itl_word_b ON inter_translation_links (word_b_id)');
+        $this->addSql('CREATE INDEX IF NOT EXISTS idx_itl_word_b ON inter_translation_links (word_b_id)');
     }
 
     public function down(Schema $schema): void
