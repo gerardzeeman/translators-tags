@@ -4,7 +4,7 @@ namespace App\Service\Alignment;
 
 /**
  * Turns the flat (words-per-translation, links) data for one verse into a
- * row-based layout for the review UI: one row per pivot (SV1657) word, with
+ * row-based layout for the review UI: one row per pivot word, with
  * each target translation's linked word(s) placed in that same row -- so
  * corresponding words line up underneath each other instead of each
  * column flowing independently (which made the alignment hard to read at a

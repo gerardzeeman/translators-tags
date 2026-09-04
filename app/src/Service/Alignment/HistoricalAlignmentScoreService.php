@@ -17,11 +17,11 @@ namespace App\Service\Alignment;
  *   particle_drop / prefix_drop) counts NOWHERE -- not in the numerator,
  *   not in the denominator.
  *
- *   Every word position in every translation contributes separately: an
- *   SV1657 word appears as the source word in three pairs (SV1657-SV,
- *   SV1657-SVGBS, SV1657-HSV) and so yields three separate scores, one per
- *   pair -- not one averaged score. A target-translation word (SV, SVGBS,
- *   HSV) appears in exactly one pair (its own with SV1657) and so yields
+ *   Every word position in every translation contributes separately: a
+ *   pivot word appears as the source word in three pairs (pivot-X, for each
+ *   of the three other translations X) and so yields three separate scores,
+ *   one per pair -- not one averaged score. A target-translation word
+ *   appears in exactly one pair (its own with the pivot) and so yields
  *   exactly one score.
  *
  *   vers_score (%) = sum(all word_scores, across all four texts and all

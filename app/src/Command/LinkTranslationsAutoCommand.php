@@ -37,7 +37,7 @@ class LinkTranslationsAutoCommand extends Command
             ->addOption('book',    null, InputOption::VALUE_OPTIONAL, 'Only process this book USFM code', null)
             ->addOption('chapter', null, InputOption::VALUE_OPTIONAL, 'Only process this chapter, e.g. GEN.1', null)
             ->addOption('verse',   null, InputOption::VALUE_OPTIONAL, 'Only process this verse, e.g. GEN.1.1', null)
-            ->addOption('engine',  null, InputOption::VALUE_OPTIONAL, 'Which pipeline to run: "pairwise" (default, legacy source-pivot/sequence/positional passes) or "historical" (HistoricalAlignmentService, pivoted on SV1657, see is_alignment_pivot)', 'pairwise');
+            ->addOption('engine',  null, InputOption::VALUE_OPTIONAL, 'Which pipeline to run: "pairwise" (default, legacy source-pivot/sequence/positional passes) or "historical" (HistoricalAlignmentService, pivoted on whichever translation has is_alignment_pivot=TRUE)', 'pairwise');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -63,7 +63,7 @@ class LinkTranslationsAutoCommand extends Command
             return Command::FAILURE;
         }
 
-        $io->title($engine === 'historical' ? 'Auto-link historical alignment (SV1657-pivot)' : 'Auto-link translation pairs');
+        $io->title($engine === 'historical' ? 'Auto-link historical alignment (is_alignment_pivot)' : 'Auto-link translation pairs');
 
         $pairs = $engine === 'historical'
             ? $this->linkingRepo->fetchHistoricalAlignmentPairs()
@@ -415,7 +415,7 @@ class LinkTranslationsAutoCommand extends Command
         );
     }
 
-    // ── Historical-alignment engine (HistoricalAlignmentService, SV1657-pivot) ──
+    // ── Historical-alignment engine (HistoricalAlignmentService, is_alignment_pivot) ──
 
     /**
      * Unlike processPair(), this always resets non-manual links and always
@@ -511,7 +511,7 @@ class LinkTranslationsAutoCommand extends Command
 
             if (!$dryRun) {
                 // particle_drop is pair-independent (purely a function of the
-                // SV1657 text) so it's always safe to (re-)assert. prefix_drop
+                // the pivot's own text) so it's always safe to (re-)assert. prefix_drop
                 // can vary per pair -- only ever set it, never overwrite an
                 // existing note, so a flag from any of the 3 pairs sticks.
                 $particleWordIds = array_map(fn($i) => (int) $wordsA[$i]['id'], $result->particles);

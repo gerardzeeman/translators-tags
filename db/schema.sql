@@ -30,10 +30,13 @@ CREATE TABLE IF NOT EXISTS translations (
                                                             --   are the anchor for propagation
     is_alignment_pivot    BOOLEAN     NOT NULL DEFAULT FALSE -- TRUE: this translation is the pivot
                                                             --   for the 4-way historical-spelling
-                                                            --   alignment pipeline (SV1657). Kept
-                                                            --   separate from source_lang_authority,
-                                                            --   which anchors the unrelated
-                                                            --   Hebrew/Greek word_links propagation.
+                                                            --   alignment pipeline (SV/Jongbloed).
+                                                            --   Kept as a separate column from
+                                                            --   source_lang_authority (same row as
+                                                            --   of Version20260904140000, but a
+                                                            --   distinct concept -- Hebrew/Greek
+                                                            --   word_links propagation vs. the
+                                                            --   4-way spelling-alignment pivot).
 );
 
 -- Versification difference mapping (OT: Hebrew tradition vs Dutch)
@@ -365,10 +368,10 @@ ON CONFLICT (id) DO NOTHING;
 -- SV (Jongbloed) is the source_lang_authority: its word_links to Hebrew/Greek
 -- propagate to all other SV-family translations via inter_translation_links.
 INSERT INTO translations (id, code, name, abbreviation, language, direction, family, source_lang_authority, is_alignment_pivot) VALUES
-    (1, 'SV',    'Statenvertaling (Jongbloed)', 'SV(JB)',  'nld', 'LTR', 'SV', TRUE,  FALSE),
+    (1, 'SV',    'Statenvertaling (Jongbloed)', 'SV(JB)',  'nld', 'LTR', 'SV', TRUE,  TRUE),
     (2, 'HSV',   'Herziene Statenvertaling',   'HSV',      'nld', 'LTR', 'SV', FALSE, FALSE),
     (3, 'SVGBS', 'Statenvertaling (GBS)',      'SV(GBS)',  'nld', 'LTR', 'SV', FALSE, FALSE),
-    (4, 'SV1657','Statenvertaling (1657)',     'SV(1657)', 'nld', 'LTR', 'SV', FALSE, TRUE)
+    (4, 'SV1657','Statenvertaling (1657)',     'SV(1657)', 'nld', 'LTR', 'SV', FALSE, FALSE)
 ON CONFLICT (id) DO UPDATE SET
     code                  = EXCLUDED.code,
     name                  = EXCLUDED.name,

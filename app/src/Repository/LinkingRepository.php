@@ -1178,10 +1178,13 @@ class LinkingRepository
     /**
      * Translation pairs for the 4-way historical-spelling alignment pipeline:
      * every translation sharing a family with the `is_alignment_pivot` one
-     * (currently SV1657), pivoted on it. Deliberately a separate query from
-     * fetchTranslationPairs() -- that one pivots on source_lang_authority
-     * (SV/Jongbloed, for the unrelated Hebrew/Greek word_links propagation),
-     * not is_alignment_pivot. See migration Version20260904120000.
+     * (currently SV/Jongbloed, see migration Version20260904140000), pivoted
+     * on it. Deliberately a separate query/column from
+     * fetchTranslationPairs()'s `source_lang_authority` pivot -- the two
+     * happen to currently point at the same translation, but they're
+     * unrelated concepts (this one is the 4-way spelling-alignment pivot;
+     * that one anchors Hebrew/Greek word_links propagation) and are free to
+     * diverge again. See migration Version20260904120000.
      */
     public function fetchHistoricalAlignmentPairs(): array
     {

@@ -161,7 +161,7 @@ class HistoricalAlignmentController extends AbstractController
 
         $data = $this->linkingRepo->fetchHistoricalAlignmentVerseData($book->getId(), $chapter, $verse);
         if ($data['pivot_code'] === '' || empty($data['words'][$data['pivot_code']])) {
-            throw $this->createNotFoundException('Verse not found or has no SV1657 text.');
+            throw $this->createNotFoundException("Verse not found or has no {$data['pivot_code']} (pivot) text.");
         }
 
         $score = $this->scoreService->computeVerseScore($data['words'], $data['links'], $data['pivot_code']);
