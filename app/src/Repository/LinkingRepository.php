@@ -1256,6 +1256,113 @@ class LinkingRepository
     }
 
     /**
+     * All data the historical-alignment review page needs for one verse:
+     * the four translations (in fixed SV1657/SV/SVGBS/HSV display order),
+     * their words (including alignment_note), and every
+     * inter_translation_links row touching any of those words.
+     *
+     * @return array{translations: list<array>, words: array<string, list<array>>, links: list<array>, pivot_code: string}
+     */
+    public function fetchHistoricalAlignmentVerseData(int $bookId, int $chapter, int $verse): array
+    {
+        $translations = $this->connection->fetchAllAssociative(
+            "SELECT id, code, name, COALESCE(abbreviation, code) AS abbreviation, is_alignment_pivot
+             FROM translations
+             WHERE family = (SELECT family FROM translations WHERE is_alignment_pivot = TRUE LIMIT 1)"
+        );
+
+        $displayOrder = ['SV1657' => 0, 'SV' => 1, 'SVGBS' => 2, 'HSV' => 3];
+        usort($translations, static fn($a, $b) => ($displayOrder[$a['code']] ?? 99) <=> ($displayOrder[$b['code']] ?? 99));
+
+        $pivotCode = null;
+        $wordsByCode = [];
+        foreach ($translations as $t) {
+            if ($t['is_alignment_pivot']) {
+                $pivotCode = $t['code'];
+            }
+            $wordsByCode[$t['code']] = $this->connection->fetchAllAssociative(
+                "SELECT tw.id, tw.word_position, tw.word_text, tw.is_filler, tw.alignment_note
+                 FROM translation_words tw
+                 JOIN translation_verses tv ON tv.id = tw.verse_id
+                 WHERE tv.translation_id = :tid AND tv.book_id = :bid AND tv.chapter = :ch AND tv.verse = :vs
+                 ORDER BY tw.word_position",
+                ['tid' => $t['id'], 'bid' => $bookId, 'ch' => $chapter, 'vs' => $verse]
+            );
+        }
+
+        $allIds = [];
+        foreach ($wordsByCode as $words) {
+            foreach ($words as $w) {
+                $allIds[] = (int) $w['id'];
+            }
+        }
+
+        $links = [];
+        if ($allIds) {
+            $links = $this->connection->fetchAllAssociative(
+                "SELECT id, word_a_id, word_b_id, method, score, confidence, updated_at
+                 FROM inter_translation_links
+                 WHERE word_a_id IN (:ids) OR word_b_id IN (:ids)",
+                ['ids' => $allIds],
+                ['ids' => ArrayParameterType::INTEGER]
+            );
+        }
+
+        return ['translations' => $translations, 'words' => $wordsByCode, 'links' => $links, 'pivot_code' => (string) $pivotCode];
+    }
+
+    /**
+     * Guards manual link/unlink API calls: both words must belong to the
+     * same verse (book/chapter/verse) and to translations within the
+     * alignment-pivot family, so a request can't forge a link between
+     * unrelated words.
+     */
+    public function wordsShareVerseInAlignmentFamily(int $wordAId, int $wordBId): bool
+    {
+        return (bool) $this->connection->fetchOne(
+            "SELECT 1
+             FROM translation_words wa
+             JOIN translation_words wb ON true
+             JOIN translation_verses tva ON tva.id = wa.verse_id
+             JOIN translation_verses tvb ON tvb.id = wb.verse_id
+             JOIN translations ta ON ta.id = tva.translation_id
+             JOIN translations tb ON tb.id = tvb.translation_id
+             WHERE wa.id = :a AND wb.id = :b
+               AND ta.family = tb.family
+               AND ta.family = (SELECT family FROM translations WHERE is_alignment_pivot = TRUE LIMIT 1)
+               AND tva.book_id = tvb.book_id AND tva.chapter = tvb.chapter AND tva.verse = tvb.verse
+             LIMIT 1",
+            ['a' => $wordAId, 'b' => $wordBId]
+        );
+    }
+
+    /**
+     * "Goedkeuren" (plan sectie 6): promotes every link touching any of
+     * these word IDs to `manual`, score 1.0 -- including links that were
+     * already manual, which get their updated_at/updated_by refreshed as a
+     * re-confirmation, per plan sectie 4/6.
+     */
+    public function approveVerseLinks(array $wordIds, int $userId): int
+    {
+        if (!$wordIds) {
+            return 0;
+        }
+
+        return (int) $this->connection->executeStatement(
+            "UPDATE inter_translation_links
+             SET method = 'manual',
+                 score = 1.0,
+                 confidence = NULL,
+                 updated_at = NOW(),
+                 updated_by = :userId,
+                 created_by_user_id = COALESCE(created_by_user_id, :userId)
+             WHERE word_a_id IN (:ids) OR word_b_id IN (:ids)",
+            ['ids' => $wordIds, 'userId' => $userId],
+            ['ids' => ArrayParameterType::INTEGER]
+        );
+    }
+
+    /**
      * Existing manual links within a word-ID scope, as raw (word_a_id,
      * word_b_id) pairs. Used to seed forced anchors for
      * HistoricalAlignmentService::alignPair() -- manual links are always

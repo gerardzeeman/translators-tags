@@ -102,6 +102,7 @@
                     <a href="{{ path('app_linking_home') }}">Koppelen</a>
                     <a href="{{ path('app_linking_strongs_home') }}">Strong's koppelen</a>
                     <a href="{{ path('app_trans_linking_home') }}">Vertalingen koppelen</a>
+                    <a href="{{ path('app_hist_align_verse', {usfm: 'GEN', chapter: 1, verse: 1}) }}">Historische alignment (SV1657)</a>
                     <a href="{{ path('app_linking_stats', {translation: 'SV'}) }}">Statistieken</a>
                     {% endif %}
                     {% if is_granted('ROLE_EDIT_STRONG_TRNL') %}

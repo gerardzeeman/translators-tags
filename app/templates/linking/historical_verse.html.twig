@@ -1,0 +1,96 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Historische alignment · {{ usfm }} {{ chapter }}:{{ verse }}{% endblock %}
+
+{% block head %}<meta name="csrf-token" content="{{ csrf_token('historical_align_api') }}">{% endblock %}
+
+{% block body %}
+{% set all_word_ids = [] %}
+{% for code, col_words in words %}
+    {% for w in col_words %}{% set all_word_ids = all_word_ids|merge([w.id]) %}{% endfor %}
+{% endfor %}
+
+<div class="hist-align-screen"
+     data-controller="historical-alignment review-lock"
+     data-historical-alignment-link-url-value="{{ path('app_hist_align_api_link') }}"
+     data-historical-alignment-unlink-url-value="{{ path('app_hist_align_api_unlink') }}"
+     data-historical-alignment-approve-url-value="{{ path('app_hist_align_api_approve') }}"
+     data-historical-alignment-recompute-url-value="{{ path('app_hist_align_api_recompute') }}"
+     data-historical-alignment-usfm-value="{{ usfm }}"
+     data-historical-alignment-chapter-value="{{ chapter }}"
+     data-historical-alignment-verse-value="{{ verse }}"
+     data-historical-alignment-next-url-value="{{ nav.next ? path('app_hist_align_verse', nav.next) : '' }}"
+     data-historical-alignment-word-ids-value="{{ all_word_ids|json_encode }}"
+     data-historical-alignment-links-value="{{ links|json_encode }}"
+     data-review-lock-scope-type-value="verse"
+     data-review-lock-scope-id-value="{{ usfm }}.{{ chapter }}.{{ verse }}"
+     data-review-lock-acquire-url-value="{{ path('app_review_lock_acquire') }}"
+     data-review-lock-heartbeat-url-value="{{ path('app_review_lock_heartbeat') }}"
+     data-review-lock-release-url-value="{{ path('app_review_lock_release') }}"
+     data-review-lock-csrf-token-value="{{ csrf_token('review_lock_api') }}">
+
+    <div class="hist-align-topbar">
+        <div class="hist-align-breadcrumb">
+            <strong>{{ book.nameNl }}</strong> {{ chapter }}:{{ verse }}
+        </div>
+        <div class="hist-align-nav">
+            {% if nav.prev %}<a class="btn btn-sm" href="{{ path('app_hist_align_verse', nav.prev) }}">← Vorig</a>{% endif %}
+            <span class="nav-pos">vers {{ verse }} / {{ nav.verse_count }}</span>
+            {% if nav.next %}<a class="btn btn-sm" href="{{ path('app_hist_align_verse', nav.next) }}">Volgend →</a>{% endif %}
+        </div>
+        <div class="hist-align-score" data-historical-alignment-target="scoreDisplay">
+            Score: <strong>{{ score.percent|round(1) }}%</strong>
+            <span class="hist-align-score-detail">({{ score.counted_positions }} posities)</span>
+        </div>
+        <div class="hist-align-actions">
+            <button type="button" class="btn btn-sm" data-action="click->historical-alignment#recompute">Herbereken dit vers</button>
+            <button type="button" class="btn btn-sm btn-primary" data-action="click->historical-alignment#approve">Goedkeuren (A)</button>
+        </div>
+    </div>
+
+    <div class="hist-align-lock-banner" data-review-lock-target="banner" hidden>
+        <span data-review-lock-target="bannerText"></span>
+    </div>
+
+    <div class="hist-align-toast" data-historical-alignment-target="toast" hidden></div>
+
+    <div class="hist-align-gap-warning" data-historical-alignment-target="gapWarning" hidden>
+        Er staan nog woorden ongekoppeld in dit vers.
+    </div>
+
+    <div class="hist-align-columns" data-historical-alignment-target="columns">
+        <svg class="hist-align-svg" data-historical-alignment-target="svg"></svg>
+
+        {% for t in translations %}
+        <div class="hist-align-col panel-{{ t.code|lower }}">
+            <div class="hist-align-col-header">{{ t.abbreviation }}{% if t.is_alignment_pivot %} <span class="hist-align-pivot-badge" title="Basistekst / pivot">basis</span>{% endif %}</div>
+            <div class="hist-align-col-words">
+                {% for w in words[t.code] %}
+                <span class="hist-align-word{% if w.is_filler %} word-filler{% endif %}{% if w.alignment_note %} word-note word-note-{{ w.alignment_note }}{% endif %}"
+                      data-historical-alignment-target="word"
+                      data-word-id="{{ w.id }}"
+                      data-code="{{ t.code }}"
+                      tabindex="0"
+                      title="{% if w.alignment_note == 'particle_drop' %}Systematisch weggelaten: dubbele ontkenning{% elseif w.alignment_note == 'prefix_drop' %}Systematisch weggelaten: los voorvoegsel{% endif %}"
+                      data-action="click->historical-alignment#selectWord keydown->historical-alignment#onKeydown mouseenter->historical-alignment#hoverWord mouseleave->historical-alignment#unhoverWord focus->historical-alignment#hoverWord blur->historical-alignment#unhoverWord">{{ w.word_text }}{% if w.is_filler %}<span class="filler-marker" title="Aanvullend woord (geen bronwoord)">*</span>{% endif %}</span>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="hist-align-legend">
+        <span class="legend-item"><span class="legend-line legend-anchor"></span> Zeker (anchor)</span>
+        <span class="legend-item"><span class="legend-line legend-derived"></span> Afgeleid (window/compound/phrase)</span>
+        <span class="legend-item"><span class="legend-line legend-last-resort"></span> Laatste redmiddel (synonym/moved/1:n)</span>
+        <span class="legend-item"><span class="legend-line legend-manual"></span> Handmatig</span>
+        <span class="legend-item"><span class="legend-line legend-note"></span> Systematisch weggelaten</span>
+        <span class="legend-item"><span class="legend-dot legend-unlinked"></span> Ongekoppeld</span>
+    </div>
+
+    <p class="hist-align-help">
+        Klik een woord, klik een woord in een andere kolom → koppeling. Klik op een lijn → verwijderen.
+        Pijltjestoetsen om te navigeren, spatie/Enter om te (ont)koppelen, <kbd>A</kbd> om goed te keuren.
+    </p>
+</div>
+{% endblock %}
