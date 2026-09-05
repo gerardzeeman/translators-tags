@@ -111,10 +111,10 @@ class PassageRepository
                 FROM word_links wl
                 JOIN translation_words tw  ON tw.id = wl.translation_word_id
                 JOIN translation_verses tv ON tv.id = tw.verse_id
-                JOIN link_confidence lc    ON lc.link_id = wl.id
+                LEFT JOIN link_confidence lc    ON lc.link_id = wl.id
                 WHERE wl.hebrew_word_id = hw.id
                   AND tv.translation_id = :translation_id
-                ORDER BY tw.id, lc.score DESC
+                ORDER BY tw.id, lc.score DESC NULLS LAST
             ) best ON true
             WHERE hw.book_id = :book_id
               AND hw.chapter = :chapter
@@ -171,10 +171,10 @@ class PassageRepository
                 FROM word_links wl
                 JOIN translation_words tw  ON tw.id = wl.translation_word_id
                 JOIN translation_verses tv ON tv.id = tw.verse_id
-                JOIN link_confidence lc    ON lc.link_id = wl.id
+                LEFT JOIN link_confidence lc    ON lc.link_id = wl.id
                 WHERE wl.greek_word_id = gw.id
                   AND tv.translation_id = :translation_id
-                ORDER BY tw.id, lc.score DESC
+                ORDER BY tw.id, lc.score DESC NULLS LAST
             ) best ON true
             WHERE gw.book_id = :book_id
               AND gw.chapter = :chapter
@@ -214,9 +214,9 @@ class PassageRepository
             LEFT JOIN LATERAL (
                 SELECT lc2.method, lc2.score
                 FROM word_links wl2
-                JOIN link_confidence lc2 ON lc2.link_id = wl2.id
+                LEFT JOIN link_confidence lc2 ON lc2.link_id = wl2.id
                 WHERE wl2.translation_word_id = tw.id
-                ORDER BY lc2.score DESC
+                ORDER BY lc2.score DESC NULLS LAST
                 LIMIT 1
             ) wl_best ON true
             LEFT JOIN LATERAL (
@@ -339,12 +339,12 @@ class PassageRepository
             FROM word_links wl
             JOIN translation_words tw ON tw.id = wl.translation_word_id
             JOIN translation_verses tv ON tv.id = tw.verse_id
-            JOIN link_confidence lc ON lc.link_id = wl.id
+            LEFT JOIN link_confidence lc ON lc.link_id = wl.id
             WHERE tv.translation_id IN (:translation_ids)
               AND tv.book_id = :book_id
               AND tv.chapter = :chapter
               AND tv.verse   = :verse
-            ORDER BY tv.translation_id, wl.hebrew_word_id, tw.id, lc.score DESC
+            ORDER BY tv.translation_id, wl.hebrew_word_id, tw.id, lc.score DESC NULLS LAST
         SQL;
 
         $linkRows = $this->connection->fetchAllAssociative($linkSql, [
@@ -404,12 +404,12 @@ class PassageRepository
             FROM word_links wl
             JOIN translation_words tw ON tw.id = wl.translation_word_id
             JOIN translation_verses tv ON tv.id = tw.verse_id
-            JOIN link_confidence lc ON lc.link_id = wl.id
+            LEFT JOIN link_confidence lc ON lc.link_id = wl.id
             WHERE tv.translation_id IN (:translation_ids)
               AND tv.book_id = :book_id
               AND tv.chapter = :chapter
               AND tv.verse   = :verse
-            ORDER BY tv.translation_id, wl.greek_word_id, tw.id, lc.score DESC
+            ORDER BY tv.translation_id, wl.greek_word_id, tw.id, lc.score DESC NULLS LAST
         SQL;
 
         $linkRows = $this->connection->fetchAllAssociative($linkSql, [
@@ -463,9 +463,9 @@ class PassageRepository
             LEFT JOIN LATERAL (
                 SELECT lc2.method, lc2.score
                 FROM word_links wl2
-                JOIN link_confidence lc2 ON lc2.link_id = wl2.id
+                LEFT JOIN link_confidence lc2 ON lc2.link_id = wl2.id
                 WHERE wl2.translation_word_id = tw.id
-                ORDER BY lc2.score DESC LIMIT 1
+                ORDER BY lc2.score DESC NULLS LAST LIMIT 1
             ) wl_best ON true
             LEFT JOIN LATERAL (
                 SELECT itl.method, itl.confidence::float / 100.0 AS score
@@ -666,11 +666,11 @@ class PassageRepository
             FROM word_links wl
             JOIN translation_words tw  ON tw.id = wl.translation_word_id
             JOIN translation_verses tv ON tv.id = tw.verse_id
-            JOIN link_confidence lc    ON lc.link_id = wl.id
+            LEFT JOIN link_confidence lc    ON lc.link_id = wl.id
             WHERE tv.translation_id IN (:translation_ids)
               AND tv.book_id = :book_id
               AND tv.chapter = :chapter
-            ORDER BY tv.translation_id, tv.verse, wl.greek_word_id, tw.id, lc.score DESC
+            ORDER BY tv.translation_id, tv.verse, wl.greek_word_id, tw.id, lc.score DESC NULLS LAST
         SQL;
 
         $linkRows = $this->connection->fetchAllAssociative($linkSql, [
@@ -738,11 +738,11 @@ class PassageRepository
             FROM word_links wl
             JOIN translation_words tw  ON tw.id = wl.translation_word_id
             JOIN translation_verses tv ON tv.id = tw.verse_id
-            JOIN link_confidence lc    ON lc.link_id = wl.id
+            LEFT JOIN link_confidence lc    ON lc.link_id = wl.id
             WHERE tv.translation_id IN (:translation_ids)
               AND tv.book_id = :book_id
               AND tv.chapter = :chapter
-            ORDER BY tv.translation_id, tv.verse, wl.hebrew_word_id, tw.id, lc.score DESC
+            ORDER BY tv.translation_id, tv.verse, wl.hebrew_word_id, tw.id, lc.score DESC NULLS LAST
         SQL;
 
         $linkRows = $this->connection->fetchAllAssociative($linkSql, [
@@ -806,9 +806,9 @@ class PassageRepository
             LEFT JOIN LATERAL (
                 SELECT lc2.method, lc2.score
                 FROM word_links wl2
-                JOIN link_confidence lc2 ON lc2.link_id = wl2.id
+                LEFT JOIN link_confidence lc2 ON lc2.link_id = wl2.id
                 WHERE wl2.translation_word_id = tw.id
-                ORDER BY lc2.score DESC LIMIT 1
+                ORDER BY lc2.score DESC NULLS LAST LIMIT 1
             ) wl_best ON true
             LEFT JOIN LATERAL (
                 SELECT itl.method, itl.confidence::float / 100.0 AS score
