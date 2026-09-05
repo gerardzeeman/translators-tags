@@ -145,6 +145,16 @@ export default class extends Controller {
     // ── Link / unlink with optimistic UI + undo toast ───────────────────────
 
     async #link(wordAId, wordBId) {
+        // A word can legitimately have more than one link (1:n/n:1), so an
+        // existing link is never auto-removed here -- but if this word had
+        // some OTHER link before this one, it's often a stale auto-suggestion
+        // the user meant to replace. Flag it instead of silently leaving it.
+        const hadOtherLinkBefore = this.#links.some(
+            (l) => !this.#sameEdge(l, wordAId, wordBId)
+                && (String(l.word_a_id) === String(wordAId) || String(l.word_b_id) === String(wordAId)
+                 || String(l.word_a_id) === String(wordBId) || String(l.word_b_id) === String(wordBId))
+        )
+
         const optimistic = { id: `tmp-${wordAId}-${wordBId}`, word_a_id: wordAId, word_b_id: wordBId, method: 'manual', score: 1.0 }
         this.#links.push(optimistic)
         this.#refresh()
@@ -156,7 +166,10 @@ export default class extends Controller {
             this.#showToast(`Kon niet koppelen: ${data?.error ?? 'onbekende fout'}`)
             return
         }
-        this.#showToast('Koppeling opgeslagen.', () => this.#unlink(wordAId, wordBId))
+        const message = hadOtherLinkBefore
+            ? 'Koppeling opgeslagen. Een van beide woorden had al een andere lijn — klik die lijn aan om ze te verwijderen als hij niet meer klopt.'
+            : 'Koppeling opgeslagen.'
+        this.#showToast(message, () => this.#unlink(wordAId, wordBId))
     }
 
     async #unlink(wordAId, wordBId) {
