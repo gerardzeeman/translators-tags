@@ -4280,7 +4280,13 @@ a:hover { text-decoration: underline; }
 /* Rijen = één per SV1657-woord (HistoricalAlignmentRowBuilder); elke kolom
    toont het/de gekoppelde woord(en) in diezelfde rij, zodat overeenkomstige
    woorden onder elkaar staan i.p.v. los per kolom doorlopen. */
-.hist-align-table { position: relative; z-index: 2; width: 100%; min-width: 900px; border-collapse: collapse; table-layout: auto; }
+/* width: auto (not 100%) so table-layout: auto sizes each column to its own
+   widest word instead of stretching every column to fill .hist-align-columns
+   -- a short verse in a wide viewport would otherwise get needlessly wide
+   columns with lots of empty space around each word. min-width keeps very
+   short verses from looking cramped; overflow-x: auto on the wrapper (not
+   here) handles verses wide enough to need horizontal scroll. */
+.hist-align-table { position: relative; z-index: 2; width: auto; min-width: 900px; border-collapse: collapse; table-layout: auto; }
 .hist-align-table th,
 .hist-align-table td { border-left: 1px solid var(--color-border); padding: .35rem .6rem; vertical-align: top; }
 .hist-align-table th:first-child,
