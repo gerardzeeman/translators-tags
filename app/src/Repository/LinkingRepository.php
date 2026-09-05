@@ -1056,6 +1056,12 @@ class LinkingRepository
      * so the user can confirm them with a single Save click.
      *
      * link_id is NULL for suggestions (no real word_links row yet).
+     *
+     * Robust (multi-hop): walks inter_translation_links however many hops it
+     * takes to reach $translationId, not just one -- see
+     * PassageRepository::fetchPropagatedLinksForVerseBatch()'s docblock for
+     * why a single JOIN silently misses anything only reachable transitively
+     * (e.g. a chain-topology translation two hops from the authority).
      */
     public function fetchPassageForLinkingWithPropagation(
         int $bookId, int $chapter, int $verse,
@@ -1068,29 +1074,47 @@ class LinkingRepository
         $sourceIdCol = $testament === 'OT' ? 'hebrew_word_id' : 'greek_word_id';
 
         $sql = <<<SQL
-            SELECT
-                wl_auth.{$sourceIdCol} AS source_word_id,
-                tw_t.id                AS tw_id,
+            WITH RECURSIVE authority_links AS (
+                SELECT wl_auth.{$sourceIdCol} AS source_word_id, tw_auth.id AS auth_tw_id
+                FROM word_links wl_auth
+                JOIN translation_words tw_auth  ON tw_auth.id = wl_auth.translation_word_id
+                JOIN translation_verses tv_auth ON tv_auth.id = tw_auth.verse_id
+                    AND tv_auth.translation_id = :authority_id
+                    AND tv_auth.book_id        = :book_id
+                    AND tv_auth.chapter        = :chapter
+                    AND tv_auth.verse          = :verse
+            ),
+            reachable(source_word_id, tw_id, method, confidence, depth, visited) AS (
+                SELECT al.source_word_id, al.auth_tw_id, NULL::varchar, NULL::smallint, 0, ARRAY[al.auth_tw_id]
+                FROM authority_links al
+
+                UNION ALL
+
+                SELECT
+                    r.source_word_id,
+                    CASE WHEN itl.word_a_id = r.tw_id THEN itl.word_b_id ELSE itl.word_a_id END,
+                    itl.method,
+                    itl.confidence,
+                    r.depth + 1,
+                    r.visited || (CASE WHEN itl.word_a_id = r.tw_id THEN itl.word_b_id ELSE itl.word_a_id END)
+                FROM reachable r
+                JOIN inter_translation_links itl
+                    ON (itl.word_a_id = r.tw_id OR itl.word_b_id = r.tw_id)
+                   AND itl.method != 'manual_empty'
+                WHERE r.depth < :max_hops
+                  AND NOT (CASE WHEN itl.word_a_id = r.tw_id THEN itl.word_b_id ELSE itl.word_a_id END = ANY (r.visited))
+            )
+            SELECT DISTINCT ON (r.source_word_id, r.tw_id)
+                r.source_word_id,
+                tw_t.id AS tw_id,
                 tw_t.word_position,
-                itl.method,
-                itl.confidence
-            FROM word_links wl_auth
-            JOIN translation_words tw_auth  ON tw_auth.id = wl_auth.translation_word_id
-            JOIN translation_verses tv_auth ON tv_auth.id = tw_auth.verse_id
-                AND tv_auth.translation_id = :authority_id
-                AND tv_auth.book_id        = :book_id
-                AND tv_auth.chapter        = :chapter
-                AND tv_auth.verse          = :verse
-            JOIN inter_translation_links itl
-                ON (itl.word_a_id = tw_auth.id OR itl.word_b_id = tw_auth.id)
-               AND itl.method != 'manual_empty'
-            JOIN translation_words tw_t
-                ON tw_t.id = CASE
-                    WHEN itl.word_a_id = tw_auth.id THEN itl.word_b_id
-                    ELSE itl.word_a_id END
-            JOIN translation_verses tv_t ON tv_t.id = tw_t.verse_id
-                AND tv_t.translation_id = :target_id
-            ORDER BY wl_auth.{$sourceIdCol}, tw_t.word_position
+                r.method,
+                r.confidence
+            FROM reachable r
+            JOIN translation_words tw_t ON tw_t.id = r.tw_id
+            JOIN translation_verses tv_t ON tv_t.id = tw_t.verse_id AND tv_t.translation_id = :target_id
+            WHERE r.depth > 0
+            ORDER BY r.source_word_id, r.tw_id, r.depth ASC, tw_t.word_position
         SQL;
 
         $rows = $this->connection->fetchAllAssociative($sql, [
@@ -1099,6 +1123,7 @@ class LinkingRepository
             'book_id'      => $bookId,
             'chapter'      => $chapter,
             'verse'        => $verse,
+            'max_hops'     => 4,
         ]);
 
         // Group propagated rows by source_word_id

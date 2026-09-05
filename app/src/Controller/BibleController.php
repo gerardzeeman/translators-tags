@@ -75,12 +75,13 @@ class BibleController extends AbstractController
         }
 
         $allTranslations = $this->translationRepository->findAllForDisplay();
+        $authorityCode   = $this->translationRepository->findSourceLangAuthorityCode();
 
         $svTranslation       = null;
         $translationIdToCode = [];
         foreach ($allTranslations as $t) {
             $translationIdToCode[$t->getId()] = $t->getCode();
-            if ($t->getCode() === 'SV') {
+            if ($t->getCode() === $authorityCode) {
                 $svTranslation = $t;
             }
         }
@@ -105,7 +106,7 @@ class BibleController extends AbstractController
         if ($svTranslation) {
             $targetIds = array_values(array_filter(
                 $allTranslationIds,
-                fn($id) => $translationIdToCode[$id] !== 'SV'
+                fn($id) => $translationIdToCode[$id] !== $authorityCode
             ));
             $propagatedByVerse = $this->passageRepository->fetchPropagatedLinksForChapterBatch(
                 $book->getId(), $chapter, $testament,
@@ -143,7 +144,10 @@ class BibleController extends AbstractController
 
                 foreach ($allTranslations as $trans) {
                     $code = $trans->getCode();
-                    if ($code === 'SV') {
+                    if ($code === $authorityCode) {
+                        // Key stays 'links_sv' regardless of which translation is
+                        // currently the authority -- chapter_view.html.twig reads
+                        // that literal key.
                         $word['links_sv'] = $svData['source_words'][$i]['dutch_links'] ?? [];
                     } else {
                         $direct    = $dataByTid[$trans->getId()]['source_words'][$i]['dutch_links'] ?? [];
@@ -219,13 +223,14 @@ class BibleController extends AbstractController
         }
 
         $allTranslations = $this->translationRepository->findAllForDisplay();
+        $authorityCode   = $this->translationRepository->findSourceLangAuthorityCode();
 
-        // Build translation ID ↔ code maps and find SV
+        // Build translation ID ↔ code maps and find the source-lang authority
         $svTranslation      = null;
         $translationIdToCode = [];
         foreach ($allTranslations as $t) {
             $translationIdToCode[$t->getId()] = $t->getCode();
-            if ($t->getCode() === 'SV') {
+            if ($t->getCode() === $authorityCode) {
                 $svTranslation = $t;
             }
         }
@@ -240,15 +245,15 @@ class BibleController extends AbstractController
             $allPassages[$translationIdToCode[$tid]] = $data;
         }
 
-        // SV is the canonical source for testament + Hebrew/Greek word list
-        $basePassage = $allPassages['SV'] ?? reset($allPassages);
+        // The authority translation is the canonical source for testament + Hebrew/Greek word list
+        $basePassage = $allPassages[$authorityCode] ?? reset($allPassages);
 
-        // Propagate SV source links to all non-SV translations in 1 query instead of N-1
+        // Propagate the authority's source links to all other translations in 1 query instead of N-1
         $propagatedLinks = [];
         if ($svTranslation) {
             $targetIds = array_values(array_filter(
                 $allTranslationIds,
-                fn($id) => $translationIdToCode[$id] !== 'SV'
+                fn($id) => $translationIdToCode[$id] !== $authorityCode
             ));
             $propagatedByTid = $this->passageRepository->fetchPropagatedLinksForVerseBatch(
                 $book->getId(), $chapter, $verse,
@@ -274,8 +279,11 @@ class BibleController extends AbstractController
             // Add per-translation link arrays (e.g. links_sv, links_hsv)
             foreach ($allTranslations as $trans) {
                 $code = $trans->getCode();
-                if ($code === 'SV') {
-                    $word['links_sv'] = $allPassages['SV']['source_words'][$i]['dutch_links'] ?? [];
+                if ($code === $authorityCode) {
+                    // Key stays 'links_sv' regardless of which translation is
+                    // currently the authority -- verse_frame.html.twig reads
+                    // that literal key.
+                    $word['links_sv'] = $allPassages[$authorityCode]['source_words'][$i]['dutch_links'] ?? [];
                 } else {
                     // Prefer direct word_links (e.g. manually linked HSV words).
                     // Fall back to ITL-propagated links when no direct links exist.
