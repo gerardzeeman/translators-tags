@@ -88,17 +88,25 @@ class LinkTranslationsAutoCommand extends Command
 
         // Start each full historical recompute from a clean alignment_note
         // slate so particle_drop/prefix_drop flags don't go stale across
-        // runs (see LinkingRepository::clearAlignmentNotesForPivotScope()).
-        // In star topology every pair shares the same id_a (the pivot); in
-        // chain topology each pair's id_a is a DIFFERENT translation (its
-        // own "src" side), so every distinct one needs its own clear.
+        // runs (see LinkingRepository::clearAlignmentNotesForTranslation()).
+        // markAlignmentNote() only ever marks the CURRENT pair's id_a side
+        // (see processHistoricalPair()), but which translation that is
+        // depends on topology: star always has id_a = the pivot, chain
+        // rotates id_a through every translation in the chain. A note set
+        // by one topology's run is therefore never on id_a for the OTHER
+        // topology's pairs, so clearing must cover every translation that
+        // appears as id_a OR id_b across the pairs actually being
+        // processed now -- clearing only id_a left the non-pivot side's
+        // notes permanently stale whenever star and chain topology were
+        // ever both run against the same verse.
         if ($engine === 'historical' && !$dryRun) {
             $clearedIds = [];
             foreach ($pairs as $pair) {
-                $srcId = (int) $pair['id_a'];
-                if (!isset($clearedIds[$srcId])) {
-                    $this->linkingRepo->clearAlignmentNotesForPivotScope($srcId, $book, $chapter, $verse);
-                    $clearedIds[$srcId] = true;
+                foreach ([(int) $pair['id_a'], (int) $pair['id_b']] as $id) {
+                    if (!isset($clearedIds[$id])) {
+                        $this->linkingRepo->clearAlignmentNotesForTranslation($id, $book, $chapter, $verse);
+                        $clearedIds[$id] = true;
+                    }
                 }
             }
         }

@@ -1353,23 +1353,28 @@ class LinkingRepository
     }
 
     /**
-     * Clears alignment_note (particle_drop/prefix_drop) for the pivot
+     * Clears alignment_note (particle_drop/prefix_drop) for one
      * translation's words in the given scope, so a fresh recompute can
-     * re-derive it cleanly across all three of its pairs (particle_drop is
-     * pair-independent so always converges the same either way, but
-     * prefix_drop can vary per pair -- see markAlignmentNote()'s
-     * $onlyIfUnset union semantics). Call once per full recompute run,
-     * before processing any pair.
+     * re-derive it cleanly (particle_drop is pair-independent so always
+     * converges the same either way, but prefix_drop can vary per pair --
+     * see markAlignmentNote()'s $onlyIfUnset union semantics). Call once per
+     * distinct translation touched by the run (every id_a AND id_b across
+     * the pairs being processed -- see LinkTranslationsAutoCommand), before
+     * processing any pair: markAlignmentNote() only ever marks a pair's
+     * id_a side, and which translation that is depends on topology (star:
+     * always the pivot; chain: rotates through every translation), so a
+     * note set under one topology is never cleared by the other topology's
+     * run unless every translation actually involved gets cleared here.
      */
-    public function clearAlignmentNotesForPivotScope(int $pivotTranslationId, ?string $book, ?int $chapter, ?int $verse): int
+    public function clearAlignmentNotesForTranslation(int $translationId, ?string $book, ?int $chapter, ?int $verse): int
     {
         $sql = "UPDATE translation_words tw
                 SET alignment_note = NULL
                 FROM translation_verses tv, books b
                 WHERE tw.verse_id = tv.id AND tv.book_id = b.id
-                  AND tv.translation_id = :pivotId
+                  AND tv.translation_id = :translationId
                   AND tw.alignment_note IS NOT NULL";
-        $params = ['pivotId' => $pivotTranslationId];
+        $params = ['translationId' => $translationId];
 
         if ($book !== null) {
             $sql .= ' AND b.usfm_code = :usfm';
