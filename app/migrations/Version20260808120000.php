@@ -21,7 +21,7 @@ final class Version20260808120000 extends AbstractMigration
 
     public function up(Schema $schema): void
     {
-        $this->addSql('ALTER TABLE translations ADD abbreviation VARCHAR(20) DEFAULT NULL');
+        $this->addSql('ALTER TABLE translations ADD COLUMN IF NOT EXISTS abbreviation VARCHAR(20) DEFAULT NULL');
     }
 
     public function down(Schema $schema): void

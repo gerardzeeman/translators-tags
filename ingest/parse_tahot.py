@@ -60,6 +60,8 @@ BOOK_MAP: dict[str, int] = {
     "Zec": 38, "Mal": 39,
     # Ruth is sometimes "Rut" in STEPBible
     "Rth": 8,
+    # STEPBible's TAHOT files use "Nam" (not the more common "Nah") for Nahum
+    "Nam": 34,
 }
 
 # ── Regex patterns ────────────────────────────────────────────────────────────
@@ -67,7 +69,7 @@ BOOK_MAP: dict[str, int] = {
 # Matches the reference column: Book.chapter.verse#wordnum=TYPE
 # TYPE can be: L, Q, K, R, X, or L with variants like Q(K), K(Q+B) etc.
 REF_RE = re.compile(
-    r"^([A-Z][A-Za-z0-9]+)"   # book code
+    r"^(\d?[A-Z][A-Za-z0-9]*)"  # book code (optionally numeral-prefixed, e.g. 1Sa, 2Ch)
     r"\.(\d+)"                 # chapter
     r"\.(\d+)"                 # verse  (may have suffix like .36a)
     r"#(\d+)"                  # word number
