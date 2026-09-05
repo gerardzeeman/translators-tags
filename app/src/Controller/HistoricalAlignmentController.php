@@ -197,6 +197,7 @@ class HistoricalAlignmentController extends AbstractController
             'translations' => $data['translations'],
             'words' => $data['words'],
             'links' => $data['links'],
+            'strongs' => $data['strongs'],
             'rows' => $rows,
             'backbone_code' => $data['backbone_code'],
             'score' => $score,

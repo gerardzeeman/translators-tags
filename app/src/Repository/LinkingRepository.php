@@ -1457,10 +1457,11 @@ class LinkingRepository
      * All data the historical-alignment review page needs for one verse:
      * the family's translations (ordered per $topology), their words
      * (including alignment_note), every inter_translation_links row
-     * touching any of those words, and the topology facts needed to score
-     * and lay out the page (see resolveAlignmentTopology()).
+     * touching any of those words, any Strong's numbers linked to those
+     * words via word_links, and the topology facts needed to score and lay
+     * out the page (see resolveAlignmentTopology()).
      *
-     * @return array{translations: list<array>, words: array<string, list<array>>, links: list<array>, pairs: list<array{0:string,1:string}>, backbone_code: string}
+     * @return array{translations: list<array>, words: array<string, list<array>>, links: list<array>, strongs: array<int, list<string>>, pairs: list<array{0:string,1:string}>, backbone_code: string}
      */
     public function fetchHistoricalAlignmentVerseData(int $bookId, int $chapter, int $verse, string $topology = 'star'): array
     {
@@ -1509,10 +1510,35 @@ class LinkingRepository
             );
         }
 
+        // Strong's numbers, keyed by translation_word_id -- checked across
+        // ALL four editions' words, not just the source_lang_authority one
+        // (SV/Jongbloed): word_links is where this normally lives, but the
+        // review screen shouldn't assume which edition happens to carry it.
+        // A list per word since a compound Hebrew/Greek match can link more
+        // than one source word to the same translation word.
+        $strongsByWordId = [];
+        if ($allIds) {
+            $strongsRows = $this->connection->fetchAllAssociative(
+                "SELECT wl.translation_word_id, COALESCE(hw.strongs, gw.strongs) AS strongs
+                 FROM word_links wl
+                 LEFT JOIN hebrew_words hw ON hw.id = wl.hebrew_word_id
+                 LEFT JOIN greek_words gw ON gw.id = wl.greek_word_id
+                 WHERE wl.translation_word_id IN (:ids)",
+                ['ids' => $allIds],
+                ['ids' => ArrayParameterType::INTEGER]
+            );
+            foreach ($strongsRows as $r) {
+                if ($r['strongs'] !== null) {
+                    $strongsByWordId[(int) $r['translation_word_id']][] = $r['strongs'];
+                }
+            }
+        }
+
         return [
             'translations' => $translations,
             'words' => $wordsByCode,
             'links' => $links,
+            'strongs' => $strongsByWordId,
             'pairs' => $topologyInfo['pairs'],
             'backbone_code' => $topologyInfo['backbone_code'],
         ];

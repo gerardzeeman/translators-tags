@@ -94,17 +94,29 @@
                         : (is_backbone ? 'Basistekst: ' ~ backbone_label : (t.source_lang_authority ? 'Basistekst voor de Hebreeuws/Grieks-koppeling (bronkoppeling)' : null)) %}
                     <th class="panel-{{ t.code|lower }}">{{ t.abbreviation }}{% if pivot_title %} <span class="hist-align-pivot-badge" title="{{ pivot_title }}">basis</span>{% endif %}</th>
                     {% endfor %}
+                    <th class="hist-align-strongs-col">Strongs</th>
                     <th class="hist-align-context-col">Context</th>
                 </tr>
             </thead>
             <tbody>
                 {% for rowIdx, row in rows %}
+                {% set row_strongs = [] %}
+                {% for t in translations %}
+                    {% for w in row[t.code] %}
+                        {% for s in strongs[w.id] ?? [] %}
+                            {% if s not in row_strongs %}{% set row_strongs = row_strongs|merge([s]) %}{% endif %}
+                        {% endfor %}
+                    {% endfor %}
+                {% endfor %}
                 <tr>
                     {% for t in translations %}
                     <td class="panel-{{ t.code|lower }}">
                         {% for w in row[t.code] %}{{ _self.word_chip(w, t.code, rowIdx) }}{% endfor %}
                     </td>
                     {% endfor %}
+                    <td class="hist-align-strongs-col">
+                        {% for s in row_strongs %}<a href="{{ path('app_strongs', {number: s}) }}" target="_blank" rel="noopener">{{ s }}</a>{% if not loop.last %}, {% endif %}{% endfor %}
+                    </td>
                     <td class="hist-align-context-col" data-historical-alignment-target="context" data-row="{{ rowIdx }}"></td>
                 </tr>
                 {% endfor %}

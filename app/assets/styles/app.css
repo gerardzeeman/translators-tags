@@ -4304,6 +4304,20 @@ a:hover { text-decoration: underline; }
     padding: .5rem .6rem;
     border-bottom: 1px solid var(--color-border);
 }
+/* Strong's column: shows the Strong's number(s) linked (via word_links) to
+   any word in the row, across all four editions -- usually only SV/Jongbloed
+   carries a direct word_links row, but this checks every edition's words
+   rather than assuming which one. Narrow and non-wrapping since it's just a
+   short comma-separated list of codes like "H1234, G5678". */
+.hist-align-strongs-col {
+    width: 130px;
+    max-width: 130px;
+    white-space: normal;
+    font-family: var(--font-mono);
+    font-size: .8rem;
+}
+.hist-align-strongs-col a { color: var(--col-label); }
+
 /* Context column: unlike the word-chip columns (auto-sized to their widest
    word), this one holds a short run of prose, so it gets a fixed width and
    normal wrapping instead of shrinking/growing with word length. One empty
