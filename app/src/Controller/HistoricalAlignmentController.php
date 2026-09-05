@@ -3,9 +3,11 @@
 namespace App\Controller;
 
 use App\Entity\User;
+use App\Repository\AlignmentLibraryRepository;
 use App\Repository\BookRepository;
 use App\Repository\LinkingRepository;
 use App\Repository\PassageRepository;
+use App\Service\Alignment\AlignmentLibraryService;
 use App\Service\Alignment\HistoricalAlignmentRowBuilder;
 use App\Service\Alignment\HistoricalAlignmentScoreService;
 use Symfony\Bundle\FrameworkBundle\Console\Application;
@@ -36,6 +38,8 @@ class HistoricalAlignmentController extends AbstractController
         private readonly PassageRepository $passageRepo,
         private readonly HistoricalAlignmentScoreService $scoreService,
         private readonly HistoricalAlignmentRowBuilder $rowBuilder,
+        private readonly AlignmentLibraryRepository $libraryRepo,
+        private readonly AlignmentLibraryService $libraryService,
     ) {
     }
 
@@ -46,6 +50,16 @@ class HistoricalAlignmentController extends AbstractController
     {
         return $this->render('linking/historical_books.html.twig', [
             'books' => $this->bookRepo->findAllOrderedById(),
+        ]);
+    }
+
+    // ── Library overview: manually-promoted lexicon/synonym rules ───────────
+
+    #[Route('/library', name: 'app_hist_align_library')]
+    public function library(): Response
+    {
+        return $this->render('linking/historical_library.html.twig', [
+            'entries' => $this->libraryRepo->listEntries(),
         ]);
     }
 
@@ -219,6 +233,33 @@ class HistoricalAlignmentController extends AbstractController
         return $this->json(['success' => true]);
     }
 
+    // ── API: promote a manual link into a lexicon/synonym library entry ─────
+
+    #[Route('/api/library/add', name: 'app_hist_align_api_library_add', methods: ['POST'])]
+    public function apiLibraryAdd(Request $request): JsonResponse
+    {
+        $csrfError = $this->checkCsrf($request);
+        if ($csrfError) {
+            return $csrfError;
+        }
+
+        $data = json_decode($request->getContent(), true) ?? [];
+        $wordAId = (int) ($data['word_a_id'] ?? 0);
+        $wordBId = (int) ($data['word_b_id'] ?? 0);
+        $kind = (string) ($data['kind'] ?? '');
+
+        if ($wordAId <= 0 || $wordBId <= 0 || $wordAId === $wordBId) {
+            return $this->json(['success' => false, 'error' => 'Invalid word IDs'], 422);
+        }
+        if (!$this->linkingRepo->wordsShareVerseInAlignmentFamily($wordAId, $wordBId)) {
+            return $this->json(['success' => false, 'error' => 'Words do not share a verse'], 422);
+        }
+
+        $result = $this->libraryService->addToLibrary($wordAId, $wordBId, $kind);
+
+        return $this->json(['success' => !in_array($result['status'], ['conflict', 'error'], true)] + $result);
+    }
+
     // ── API: delete a link ───────────────────────────────────────────────────
 
     #[Route('/api/unlink', name: 'app_hist_align_api_unlink', methods: ['POST'])]
@@ -240,6 +281,29 @@ class HistoricalAlignmentController extends AbstractController
         $this->linkingRepo->deleteInterTranslationLink($wordAId, $wordBId);
 
         return $this->json(['success' => true]);
+    }
+
+    // ── API: delete a library entry ──────────────────────────────────────────
+
+    #[Route('/api/library/delete', name: 'app_hist_align_api_library_delete', methods: ['POST'])]
+    public function apiLibraryDelete(Request $request): JsonResponse
+    {
+        $csrfError = $this->checkCsrf($request);
+        if ($csrfError) {
+            return $csrfError;
+        }
+
+        $data = json_decode($request->getContent(), true) ?? [];
+        $kind = (string) ($data['kind'] ?? '');
+        $id = (int) ($data['id'] ?? 0);
+
+        if ($id <= 0) {
+            return $this->json(['success' => false, 'error' => 'Invalid id'], 422);
+        }
+
+        $deleted = $this->libraryRepo->deleteEntry($kind, $id);
+
+        return $this->json(['success' => $deleted]);
     }
 
     // ── API: approve verse (all links -> manual) ─────────────────────────────

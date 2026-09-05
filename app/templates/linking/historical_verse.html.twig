@@ -25,6 +25,7 @@
      data-controller="historical-alignment review-lock"
      data-historical-alignment-link-url-value="{{ path('app_hist_align_api_link') }}"
      data-historical-alignment-unlink-url-value="{{ path('app_hist_align_api_unlink') }}"
+     data-historical-alignment-library-add-url-value="{{ path('app_hist_align_api_library_add') }}"
      data-historical-alignment-approve-url-value="{{ path('app_hist_align_api_approve') }}"
      data-historical-alignment-recompute-url-value="{{ path('app_hist_align_api_recompute') }}"
      data-historical-alignment-usfm-value="{{ usfm }}"
@@ -60,6 +61,7 @@
                 {{ topology == 'chain' ? 'Keten' : 'Basis' }}-topologie
             </a>
             <button type="button" class="btn btn-sm" data-action="click->historical-alignment#recompute">Herbereken dit vers</button>
+            <a class="btn btn-sm" href="{{ path('app_hist_align_library') }}">Bibliotheek</a>
             <button type="button" class="btn btn-sm btn-primary" data-action="click->historical-alignment#approve">Goedkeuren (A)</button>
         </div>
     </div>

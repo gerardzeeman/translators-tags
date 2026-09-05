@@ -20,6 +20,7 @@ export default class extends Controller {
     static values = {
         linkUrl:      String,
         unlinkUrl:    String,
+        libraryAddUrl: String,
         approveUrl:   String,
         recomputeUrl: String,
         usfm:         String,
@@ -171,7 +172,11 @@ export default class extends Controller {
         const message = hadOtherLinkBefore
             ? 'Koppeling opgeslagen. Een van beide woorden had al een andere lijn — klik die lijn aan om ze te verwijderen als hij niet meer klopt.'
             : 'Koppeling opgeslagen.'
-        this.#showToast(message, () => this.#unlink(wordAId, wordBId))
+        this.#showToast(message, [
+            { label: 'Ongedaan maken', onClick: () => this.#unlink(wordAId, wordBId) },
+            { label: '+ Lexicon', onClick: () => this.#addToLibrary(wordAId, wordBId, 'lexicon') },
+            { label: '+ Synoniem', onClick: () => this.#addToLibrary(wordAId, wordBId, 'synonym') },
+        ])
     }
 
     async #unlink(wordAId, wordBId) {
@@ -187,7 +192,18 @@ export default class extends Controller {
             this.#showToast('Kon koppeling niet verwijderen.')
             return
         }
-        this.#showToast('Koppeling verwijderd.', () => this.#link(wordAId, wordBId))
+        this.#showToast('Koppeling verwijderd.', [{ label: 'Ongedaan maken', onClick: () => this.#link(wordAId, wordBId) }])
+    }
+
+    // ── Promote a manual link into a lexicon/synonym library entry ─────────
+
+    async #addToLibrary(wordAId, wordBId, kind) {
+        const data = await this.#postJson(this.libraryAddUrlValue, { word_a_id: wordAId, word_b_id: wordBId, kind })
+        if (!data) {
+            this.#showToast('Kon niet toevoegen: netwerkfout.')
+            return
+        }
+        this.#showToast(data.message ?? (data.success ? 'Toegevoegd.' : 'Kon niet toevoegen.'))
     }
 
     #sameEdge(link, a, b) {
@@ -361,17 +377,20 @@ export default class extends Controller {
         }
     }
 
-    #showToast(message, undo) {
+    // `buttons` is an array of { label, onClick }, rendered left to right
+    // after the message (used for the undo button, and for the "Lexicon" /
+    // "Synoniem" library-add prompt shown after creating a manual link).
+    #showToast(message, buttons = []) {
         clearTimeout(this.#toastTimer)
         const el = this.toastTarget
         el.textContent = `${message} `
-        if (undo) {
+        for (const { label, onClick } of buttons) {
             const btn = document.createElement('button')
             btn.type = 'button'
-            btn.className = 'hist-align-toast-undo'
-            btn.textContent = 'Ongedaan maken'
+            btn.className = 'hist-align-toast-btn'
+            btn.textContent = label
             btn.addEventListener('click', () => {
-                undo()
+                onClick()
                 this.#hideToast()
             })
             el.appendChild(btn)

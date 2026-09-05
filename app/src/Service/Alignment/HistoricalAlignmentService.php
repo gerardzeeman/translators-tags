@@ -2,6 +2,8 @@
 
 namespace App\Service\Alignment;
 
+use App\Repository\AlignmentLibraryRepository;
+
 /**
  * PHP port of `align.py` (historical-dutch-bible-alignment): word-for-word
  * alignment between two Dutch Bible-translation editions across spelling
@@ -30,9 +32,42 @@ namespace App\Service\Alignment;
  */
 class HistoricalAlignmentService
 {
+    /** @var array<string, string> */
+    private readonly array $lexicon;
+    /** @var array<string, string[]> */
+    private readonly array $synonymBridge;
+    /** @var array<string, string[]> */
+    private readonly array $multiSynonymBridge;
+    /** @var list<array{0: string[], 1: string[]}> */
+    private readonly array $phraseBridge;
+
+    /**
+     * $libraryRepo is optional (and omitted by every unit test that
+     * constructs this service directly): without it, matching behaves
+     * exactly as before this table -> DB extension was added, using only
+     * the hardcoded DEFAULT_* constants below. When provided (real app
+     * usage, autowired), rows added via the alignment-library UI
+     * (App\Service\Alignment\AlignmentLibraryService) are merged on top.
+     */
     public function __construct(
         private readonly HungarianAlgorithm $hungarian = new HungarianAlgorithm(),
+        ?AlignmentLibraryRepository $libraryRepo = null,
     ) {
+        $this->lexicon = $libraryRepo
+            ? array_merge(self::DEFAULT_LEXICON, $libraryRepo->loadLexicon())
+            : self::DEFAULT_LEXICON;
+
+        $this->synonymBridge = $libraryRepo
+            ? array_merge_recursive(self::DEFAULT_SYNONYM_BRIDGE, $libraryRepo->loadSynonymBridge())
+            : self::DEFAULT_SYNONYM_BRIDGE;
+
+        $this->multiSynonymBridge = $libraryRepo
+            ? array_merge(self::DEFAULT_MULTI_SYNONYM_BRIDGE, $libraryRepo->loadMultiSynonymBridge())
+            : self::DEFAULT_MULTI_SYNONYM_BRIDGE;
+
+        $this->phraseBridge = $libraryRepo
+            ? [...self::DEFAULT_PHRASE_BRIDGE, ...$libraryRepo->loadPhraseBridge()]
+            : self::DEFAULT_PHRASE_BRIDGE;
     }
 
     // ── 1. Normalisation ──────────────────────────────────────────────────
@@ -58,7 +93,7 @@ class HistoricalAlignmentService
     ];
 
     /** Vangnet-laag voor lexicale/morfologische verschillen die geen char-regel vangt. */
-    private const LEXICON = [
+    private const DEFAULT_LEXICON = [
         'ende' => 'en',
         'vleeschs' => 'vlees',
         'vleses' => 'vlees',
@@ -130,7 +165,7 @@ class HistoricalAlignmentService
     /** Tussenwoordjes die in een samentrekking zelf verdwijnen. */
     private const GLUE_WORDS = ['te' => true, 'ge' => true];
 
-    private const SYNONYM_BRIDGE = [
+    private const DEFAULT_SYNONYM_BRIDGE = [
         'want' => ['omdat'],
         'opdat' => ['dat'],
         'gelijk' => ['zoals'],
@@ -140,12 +175,12 @@ class HistoricalAlignmentService
         'alle' => ['elke'],
     ];
 
-    private const MULTI_SYNONYM_BRIDGE = [
+    private const DEFAULT_MULTI_SYNONYM_BRIDGE = [
         'doodsloeg' => ['sloeg', 'dood'],
         'openbaar' => ['te', 'herkennen'],
     ];
 
-    private const PHRASE_BRIDGE = [
+    private const DEFAULT_PHRASE_BRIDGE = [
         [['de', 'beginne'], ['het', 'begin']],
         [['om', 'wat', 'oorzaak'], ['waarom']],
         [['hier', 'in'], ['hieraan']],
@@ -157,17 +192,30 @@ class HistoricalAlignmentService
     /** Bekende gevallen van geïsoleerd wegvallende voorvoegsels. */
     private const PREFIX_DROP_WORDS = ['op' => true];
 
-    public function normalize(string $token): string
+    /**
+     * Lowercase + diacritic-strip + non-word-strip only -- the part of
+     * normalize() that runs before the lexicon/char-rule lookups. This is
+     * the key form new alignment_lexicon entries are stored under (see
+     * AlignmentLibraryService), so a manually-added entry takes effect
+     * immediately for this exact historical spelling regardless of what the
+     * char-rules would otherwise have done with it.
+     */
+    public function rawForm(string $token): string
     {
         $w = mb_strtolower($token, 'UTF-8');
         $w = \Normalizer::normalize($w, \Normalizer::FORM_KD) ?: $w;
         $w = preg_replace('/\p{Mn}/u', '', $w);
-        $w = preg_replace('/(*UCP)[^\w]/u', '', $w);
+        return preg_replace('/(*UCP)[^\w]/u', '', $w);
+    }
+
+    public function normalize(string $token): string
+    {
+        $w = $this->rawForm($token);
         if ($w === '') {
             return '';
         }
-        if (isset(self::LEXICON[$w])) {
-            return self::LEXICON[$w];
+        if (isset($this->lexicon[$w])) {
+            return $this->lexicon[$w];
         }
         if (isset(self::RULE_EXEMPT[$w])) {
             return $w;
@@ -176,7 +224,7 @@ class HistoricalAlignmentService
             $w = preg_replace($pattern, $replacement, $w);
         }
 
-        return self::LEXICON[$w] ?? $w;
+        return $this->lexicon[$w] ?? $w;
     }
 
     /**
@@ -619,7 +667,7 @@ class HistoricalAlignmentService
             }
         }
 
-        foreach (self::PHRASE_BRIDGE as [$srcPhrase, $tgtPhrase]) {
+        foreach ($this->phraseBridge as [$srcPhrase, $tgtPhrase]) {
             $n = count($srcPhrase);
             $m = count($tgtPhrase);
 
@@ -713,14 +761,14 @@ class HistoricalAlignmentService
         [$usedSrc, $usedTgt] = $this->usedSets($links);
 
         foreach ($src as $i => $sw) {
-            if ($sw === '' || isset($usedSrc[$i]) || !isset(self::SYNONYM_BRIDGE[$sw])) {
+            if ($sw === '' || isset($usedSrc[$i]) || !isset($this->synonymBridge[$sw])) {
                 continue;
             }
             foreach ($tgt as $j => $tw) {
                 if ($tw === '' || isset($usedTgt[$j])) {
                     continue;
                 }
-                if (in_array($tw, self::SYNONYM_BRIDGE[$sw], true)) {
+                if (in_array($tw, $this->synonymBridge[$sw], true)) {
                     $links[] = new AlignmentLink($i, [$j], 0.99, 'synonym');
                     $usedTgt[$j] = true;
                     break;
@@ -742,12 +790,12 @@ class HistoricalAlignmentService
         [$usedSrc, $usedTgt] = $this->usedSets($links);
 
         foreach ($src as $i => $sw) {
-            if ($sw === '' || isset($usedSrc[$i]) || !isset(self::MULTI_SYNONYM_BRIDGE[$sw])) {
+            if ($sw === '' || isset($usedSrc[$i]) || !isset($this->multiSynonymBridge[$sw])) {
                 continue;
             }
             $found = [];
             $claimed = $usedTgt;
-            foreach (self::MULTI_SYNONYM_BRIDGE[$sw] as $needed) {
+            foreach ($this->multiSynonymBridge[$sw] as $needed) {
                 $j = null;
                 foreach ($tgt as $jj => $tw) {
                     if ($tw === $needed && !isset($claimed[$jj])) {

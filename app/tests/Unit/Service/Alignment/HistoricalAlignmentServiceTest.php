@@ -82,6 +82,51 @@ class HistoricalAlignmentServiceTest extends TestCase
         }
     }
 
+    /**
+     * rawForm() is the pre-lexicon/pre-char-rule half of normalize() --
+     * AlignmentLibraryService stores new lexicon entries under this exact
+     * key (see its addLexicon()), so it must stay in lock-step with
+     * normalize()'s own first step.
+     */
+    public function testRawFormIsThePreLexiconPreCharRuleStep(): void
+    {
+        $this->assertSame('oogen', $this->service->rawForm('Oógen!'));
+        $this->assertSame('oog', $this->service->normalize('oogen')); // lexicon then kicks in
+        $this->assertSame('den', $this->service->rawForm('den'));
+        $this->assertSame('de', $this->service->normalize('den'));
+    }
+
+    /**
+     * Without a library repository (every other test in this class, and
+     * every construction site that predates the alignment-library feature),
+     * behaviour is 100% unchanged: only the hardcoded DEFAULT_* tables apply.
+     */
+    public function testWithoutLibraryRepositoryOnlyDefaultsApply(): void
+    {
+        $service = new HistoricalAlignmentService();
+        $this->assertSame('oog', $service->normalize('oogen'));
+        $this->assertSame('nietbestaandwoord', $service->normalize('nietbestaandwoord'));
+    }
+
+    /**
+     * With a library repository, DB-loaded rows extend (not replace) the
+     * hardcoded defaults -- a new lexicon entry for a brand-new historical
+     * spelling takes effect, while existing default entries keep working.
+     */
+    public function testLibraryRepositoryEntriesExtendTheDefaults(): void
+    {
+        $repo = $this->createMock(\App\Repository\AlignmentLibraryRepository::class);
+        $repo->method('loadLexicon')->willReturn(['nieuwespelling' => 'modernwoord']);
+        $repo->method('loadSynonymBridge')->willReturn(['nieuwesyn' => ['anderwoord']]);
+        $repo->method('loadMultiSynonymBridge')->willReturn([]);
+        $repo->method('loadPhraseBridge')->willReturn([]);
+
+        $service = new HistoricalAlignmentService(libraryRepo: $repo);
+
+        $this->assertSame('modernwoord', $service->normalize('nieuwespelling'));
+        $this->assertSame('oog', $service->normalize('oogen')); // default still works
+    }
+
     #[DataProvider('pairProvider')]
     public function testAlignPairMatchesAlignPyGroundTruth(string $otherKey): void
     {

@@ -1,0 +1,42 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Historische alignment · bibliotheek{% endblock %}
+
+{% block head %}<meta name="csrf-token" content="{{ csrf_token('historical_align_api') }}">{% endblock %}
+
+{% block body %}
+{% set kind_labels = {'lexicon': 'Lexicon', 'bridge': 'Synoniem', 'multi': 'Multi-synoniem', 'phrase': 'Frase'} %}
+<div class="hist-align-screen" data-controller="historical-library" data-historical-library-delete-url-value="{{ path('app_hist_align_api_library_delete') }}">
+    <div class="hist-align-topbar">
+        <div class="hist-align-breadcrumb">
+            <a href="{{ path('app_hist_align_home') }}">Historische alignment</a> · <strong>Bibliotheek</strong>
+        </div>
+    </div>
+
+    <p class="hist-align-help">
+        Regels die zijn toegevoegd vanuit handmatige koppelingen in de reviewscherm. Deze werken direct mee bij
+        de eerstvolgende "Herbereken"-actie, voor alle vertalingen en toekomstige verzen.
+    </p>
+
+    {% if entries is empty %}
+        <p class="hist-align-help">Nog geen bibliotheek-items toegevoegd.</p>
+    {% else %}
+    <table class="hist-align-overview-table">
+        <thead>
+            <tr><th>Type</th><th>Bron</th><th>Doel</th><th>Toegevoegd</th><th></th></tr>
+        </thead>
+        <tbody>
+            {% for e in entries %}
+            <tr data-historical-library-target="row" data-kind="{{ e.kind }}" data-id="{{ e.id }}">
+                <td>{{ kind_labels[e.kind] ?? e.kind }}</td>
+                <td>{{ e.source }}</td>
+                <td>{{ e.target }}</td>
+                <td>{{ e.created_at|date('Y-m-d H:i') }}</td>
+                <td><button type="button" class="btn btn-xs" data-action="click->historical-library#delete">Verwijderen</button></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+</div>
+{% endblock %}

@@ -4232,7 +4232,7 @@ a:hover { text-decoration: underline; }
     align-items: center;
     gap: .75rem;
 }
-.hist-align-toast-undo {
+.hist-align-toast-btn {
     background: transparent;
     border: 1px solid currentColor;
     color: inherit;

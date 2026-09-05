@@ -233,6 +233,53 @@ CREATE TABLE IF NOT EXISTS inter_translation_links (
 -- `doctrine:migrations:migrate`; schema.sql alone is not a complete bootstrap.
 
 -- ─────────────────────────────────────────────────────────────────────────────
+-- Alignment library: manual links promoted into reusable matching rules
+-- ─────────────────────────────────────────────────────────────────────────────
+
+-- These mirror HistoricalAlignmentService's hardcoded DEFAULT_LEXICON /
+-- DEFAULT_SYNONYM_BRIDGE / DEFAULT_MULTI_SYNONYM_BRIDGE / DEFAULT_PHRASE_BRIDGE
+-- constants and start empty -- the constants are the tested baseline, these
+-- tables only hold user-contributed additions, merged on top at construction
+-- time. See Version20260905140000 for the full rationale.
+-- created_by_user_id (-> users(id)) is migration-only, same reason as above.
+
+CREATE TABLE IF NOT EXISTS alignment_lexicon (
+    id             SERIAL PRIMARY KEY,
+    source_form    VARCHAR(100) NOT NULL,
+    target_form    VARCHAR(100) NOT NULL,
+    source_link_id INTEGER REFERENCES inter_translation_links(id) ON DELETE SET NULL,
+    created_at     TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    UNIQUE (source_form)
+);
+
+CREATE TABLE IF NOT EXISTS alignment_synonym_bridge (
+    id             SERIAL PRIMARY KEY,
+    source_form    VARCHAR(100) NOT NULL,
+    target_form    VARCHAR(100) NOT NULL,
+    source_link_id INTEGER REFERENCES inter_translation_links(id) ON DELETE SET NULL,
+    created_at     TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    UNIQUE (source_form, target_form)
+);
+
+CREATE TABLE IF NOT EXISTS alignment_multi_synonym_bridge (
+    id             SERIAL PRIMARY KEY,
+    source_form    VARCHAR(100) NOT NULL,
+    target_forms   TEXT[]       NOT NULL,
+    source_link_id INTEGER REFERENCES inter_translation_links(id) ON DELETE SET NULL,
+    created_at     TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    UNIQUE (source_form)
+);
+
+CREATE TABLE IF NOT EXISTS alignment_phrase_bridge (
+    id             SERIAL PRIMARY KEY,
+    source_forms   TEXT[]       NOT NULL,
+    target_forms   TEXT[]       NOT NULL,
+    source_link_id INTEGER REFERENCES inter_translation_links(id) ON DELETE SET NULL,
+    created_at     TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    UNIQUE (source_forms, target_forms)
+);
+
+-- ─────────────────────────────────────────────────────────────────────────────
 -- Indexes
 -- ─────────────────────────────────────────────────────────────────────────────
 
