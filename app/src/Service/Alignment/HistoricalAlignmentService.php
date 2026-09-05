@@ -890,7 +890,17 @@ class HistoricalAlignmentService
                     if (in_array($srcRaw[$k], $boundary, true) || ($src[$k] === 'en' && $k !== $i)) {
                         break;
                     }
-                    if (isset($negatorSpan[$src[$k]]) && $steps <= $negatorSpan[$src[$k]]) {
+                    // $steps > 0 excludes 'en'/'geen'/'niet' immediately
+                    // adjacent with zero gap (e.g. "en geen ergernis is" =
+                    // ordinary "and no offense", not archaic en...V doubled
+                    // negation): genuine "en ... V ... niet/geen" doubling
+                    // always has at least the finite verb between 'en' and
+                    // the negator, so steps is >=1 there; a bare "en
+                    // niet/geen" is coordinating "en" immediately followed by
+                    // an unrelated negative noun/adverb phrase, which the
+                    // backward-scanning branch above already handles
+                    // correctly for the real "geen ... en is" shape.
+                    if (isset($negatorSpan[$src[$k]]) && $steps > 0 && $steps <= $negatorSpan[$src[$k]]) {
                         $found = true;
                         break;
                     }

@@ -250,4 +250,34 @@ class HistoricalAlignmentServiceTest extends TestCase
 
         $this->assertSame([], $particles);
     }
+
+    /**
+     * Regression for a real report: recomputing 1 John 2:10 failed to link
+     * the "ende"/"en"/"en"/"en" chain (all four editions' conjunction "and")
+     * at all. Root cause: 'geen'/'niet' immediately following 'en' with zero
+     * words in between ("en geen ergernis is" = ordinary "and no offense")
+     * was wrongly treated the same as genuine archaic "geen ... en is"
+     * doubled negation, wiping out the ordinary conjunction on every
+     * edition simultaneously so nothing was left to anchor.
+     */
+    public function testFindNegationParticlesDoesNotFlagOrdinaryEnImmediatelyBeforeGeen(): void
+    {
+        // SV1657: "...licht, ende geen ergernisse en is in hem" -- 'ende'
+        // (index 4, ordinary "and") must NOT be flagged; 'en' (index 7,
+        // genuine "geen ... en is" doubling) still must be.
+        $srcRaw = ['blijft', 'in', 'het', 'licht', 'ende', 'geen', 'ergernisse', 'en', 'is', 'in', 'hem'];
+        $src = array_map($this->service->normalize(...), $srcRaw);
+        $particles = $this->service->findNegationParticles($src, $srcRaw);
+
+        $this->assertSame([7], $particles, 'only the genuine "geen ... en is" doubling (index 7) should be flagged');
+    }
+
+    public function testFindNegationParticlesDoesNotFlagOrdinaryEnImmediatelyBeforeNiet(): void
+    {
+        $srcRaw = ['hij', 'zong', 'en', 'niet', 'danste'];
+        $src = array_map($this->service->normalize(...), $srcRaw);
+        $particles = $this->service->findNegationParticles($src, $srcRaw);
+
+        $this->assertSame([], $particles);
+    }
 }
