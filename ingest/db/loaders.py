@@ -136,8 +136,8 @@ def insert_link_confidence(link_id: int, method: str, score: float,
             cur.execute(
                 """
                 INSERT INTO link_confidence
-                    (link_id, method, score, created_by_user_id, notes)
-                VALUES (%s, %s, %s, %s, %s)
+                    (link_id, method, score, created_at, created_by_user_id, notes)
+                VALUES (%s, %s, %s, NOW(), %s, %s)
                 ON CONFLICT (link_id, method) DO UPDATE
                     SET score = EXCLUDED.score,
                         notes = EXCLUDED.notes
