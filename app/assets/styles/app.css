@@ -4298,6 +4298,31 @@ a:hover { text-decoration: underline; }
     padding: .5rem .6rem;
     border-bottom: 1px solid var(--color-border);
 }
+/* Context column: unlike the word-chip columns (auto-sized to their widest
+   word), this one holds a short run of prose, so it gets a fixed width and
+   normal wrapping instead of shrinking/growing with word length. One empty
+   cell per row; only the currently-hovered word's row gets filled in, so the
+   context appears at that word's height instead of pinned to the top. */
+.hist-align-context-col {
+    width: 320px;
+    max-width: 320px;
+    white-space: normal;
+    font-size: .9rem;
+    line-height: 1.5;
+}
+.hist-align-context-label {
+    display: inline-block;
+    font-family: var(--font-mono);
+    font-size: .7rem;
+    font-weight: 600;
+    color: var(--col-label);
+    border: 1px solid var(--color-border);
+    border-radius: 3px;
+    padding: 0 .3rem;
+    margin-right: .35rem;
+    vertical-align: middle;
+}
+
 .hist-align-pivot-badge {
     font-size: .65rem;
     font-weight: 400;

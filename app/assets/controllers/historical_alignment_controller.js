@@ -16,7 +16,7 @@ function csrfToken() {
 }
 
 export default class extends Controller {
-    static targets = ['columns', 'svg', 'scoreDisplay', 'gapWarning', 'toast', 'word']
+    static targets = ['columns', 'svg', 'scoreDisplay', 'gapWarning', 'toast', 'word', 'context']
     static values = {
         linkUrl:      String,
         unlinkUrl:    String,
@@ -30,7 +30,12 @@ export default class extends Controller {
         wordIds:      Array,
         links:        Array,
         topology:     String,
+        words:        Object,
+        abbreviations: Object,
     }
+
+    // A few words of natural-reading context on each side of the hovered word.
+    static CONTEXT_SPAN = 4
 
     #links = []
     #adjacency = new Map()
@@ -84,7 +89,9 @@ export default class extends Controller {
     // ── Hover: highlight the whole chain across all four columns ───────────
 
     hoverWord(event) {
-        this.#highlightChain(event.currentTarget.dataset.wordId)
+        const { wordId, code, row } = event.currentTarget.dataset
+        this.#highlightChain(wordId)
+        this.#updateContext(wordId, code, row)
     }
 
     unhoverWord() {
@@ -289,6 +296,49 @@ export default class extends Controller {
         this.element.classList.remove('hist-align-hovering')
         this.wordTargets.forEach((el) => el.classList.remove('hist-align-word-chain'))
         this.svgTarget.querySelectorAll('.hist-align-line-chain').forEach((el) => el.classList.remove('hist-align-line-chain'))
+    }
+
+    // ── Context column: one (empty) cell per row, only the row of the
+    //    currently-hovered word gets filled in -- so the context appears at
+    //    that word's height instead of always pinned to the top. Shows a
+    //    few words around it, in its own translation, with the hovered word
+    //    itself bold. Left showing the last hover on mouseleave (not
+    //    cleared) so it doesn't flicker away while moving the mouse between
+    //    words in the same row.
+
+    #updateContext(wordId, code, rowIdx) {
+        const target = this.contextTargets.find((el) => el.dataset.row === rowIdx)
+        if (!target) return
+        const verseWords = this.wordsValue[code]
+        const idx = verseWords?.findIndex((w) => String(w.id) === String(wordId))
+        if (!verseWords || idx === undefined || idx === -1) return
+
+        this.contextTargets.forEach((el) => { if (el !== target) el.replaceChildren() })
+
+        const span = this.constructor.CONTEXT_SPAN
+        const from = Math.max(0, idx - span)
+        const to = Math.min(verseWords.length, idx + span + 1)
+
+        const el = target
+        el.replaceChildren()
+
+        const label = document.createElement('span')
+        label.className = 'hist-align-context-label'
+        label.textContent = this.abbreviationsValue[code] ?? code
+        el.appendChild(label)
+        el.appendChild(document.createTextNode(' '))
+
+        for (let i = from; i < to; i++) {
+            if (i > from) el.appendChild(document.createTextNode(' '))
+            const w = verseWords[i]
+            if (i === idx) {
+                const strong = document.createElement('strong')
+                strong.textContent = w.word_text
+                el.appendChild(strong)
+            } else {
+                el.appendChild(document.createTextNode(w.word_text))
+            }
+        }
     }
 
     // ── Keyboard focus movement ──────────────────────────────────────────────
