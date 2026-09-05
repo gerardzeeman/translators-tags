@@ -4,7 +4,12 @@ namespace App\Service\Alignment;
 
 /**
  * Implements the plan sectie 4 scoring formula for the 4-way historical
- * alignment review UI.
+ * alignment review UI. Topology-agnostic: it takes the actual list of pairs
+ * that were aligned (star: pivot-X for every other translation X; chain:
+ * adjacent editions) and scores each pair independently, so a word's total
+ * weight is simply "how many pairs does it appear in" -- 3 for a star pivot,
+ * 1 for a star target, 2 for a middle-of-chain translation, 1 for a
+ * chain end. No topology-specific logic lives here at all.
  *
  *   woord_score = 1.0  if manual
  *               = 0.0  if unlinked (including a word whose only relation is
@@ -15,91 +20,65 @@ namespace App\Service\Alignment;
  *
  *   "systematisch weggelaten" (translation_words.alignment_note:
  *   particle_drop / prefix_drop) counts NOWHERE -- not in the numerator,
- *   not in the denominator.
+ *   not in the denominator -- regardless of which pair(s) that word
+ *   belongs to.
  *
- *   Every word position in every translation contributes separately: a
- *   pivot word appears as the source word in three pairs (pivot-X, for each
- *   of the three other translations X) and so yields three separate scores,
- *   one per pair -- not one averaged score. A target-translation word
- *   appears in exactly one pair (its own with the pivot) and so yields
- *   exactly one score.
+ *   Every word position contributes once PER PAIR it appears in: a word
+ *   shared by two pairs (a star pivot relative to two targets, or a
+ *   middle-of-chain translation relative to its two neighbours) yields one
+ *   score per pair, not one averaged score.
  *
- *   vers_score (%) = sum(all word_scores, across all four texts and all
- *                    three pairs, excluding systematically-excluded) /
- *                    (counted word positions x 1.0) x 100
+ *   vers_score (%) = sum(all word_scores, across every pair) /
+ *                    (counted word-position-per-pair instances x 1.0) x 100
  */
 class HistoricalAlignmentScoreService
 {
     /**
      * @param array<string, list<array{id:int, word_position:int, word_text:string, alignment_note?: ?string}>> $wordsByCode
-     *   keyed by translation code (must include $pivotCode and at least one other)
+     *   keyed by translation code
      * @param list<array{word_a_id:int, word_b_id:int, method:string, score: float|string|null}> $links
      *   every inter_translation_links row touching any word in $wordsByCode
+     * @param list<array{0: string, 1: string}> $pairs the translation-code pairs that were
+     *   actually aligned (e.g. [['SV','SV1657'],['SV','SVGBS'],['SV','HSV']] for a star
+     *   pivoted on SV, or [['SV1657','SV'],['SV','SVGBS'],['SVGBS','HSV']] for a chain)
      * @return array{
      *   percent: float,
      *   counted_positions: int,
      *   total_score: float,
-     *   pivot_word_scores: array<int, array<string, float>>,
-     *   target_word_scores: array<int, float>,
+     *   word_scores: array<int, array<string, float>>,
      *   unlinked_word_ids: array<int, true>,
      * }
      */
-    public function computeVerseScore(array $wordsByCode, array $links, string $pivotCode): array
+    public function computeVerseScore(array $wordsByCode, array $links, array $pairs): array
     {
-        $pivotWords = $wordsByCode[$pivotCode] ?? [];
-        $targetCodes = array_values(array_filter(array_keys($wordsByCode), fn($c) => $c !== $pivotCode));
-
         $linksByWordId = $this->indexLinksByWordId($links);
 
-        $pivotWordScores = [];
-        $targetWordScores = [];
-        $unlinkedWordIds = [];
+        $wordScores = [];
+        $everLinked = [];
+        $everAppeared = [];
         $totalScore = 0.0;
         $countedPositions = 0;
 
-        $pivotWordIds = array_map(static fn($w) => (int) $w['id'], $pivotWords);
-        $pivotWordIdSet = array_flip($pivotWordIds);
+        $idSetByCode = [];
+        foreach ($wordsByCode as $code => $words) {
+            $idSetByCode[$code] = array_flip(array_map(static fn($w) => (int) $w['id'], $words));
+        }
 
-        $targetWordIdSetByCode = [];
-        foreach ($targetCodes as $targetCode) {
-            $targetWordIdSetByCode[$targetCode] = array_flip(
-                array_map(static fn($w) => (int) $w['id'], $wordsByCode[$targetCode] ?? [])
+        foreach ($pairs as [$codeA, $codeB]) {
+            $this->scoreOneSide(
+                $wordsByCode[$codeA] ?? [], $codeB, $idSetByCode[$codeB] ?? [], $linksByWordId,
+                $wordScores, $everLinked, $everAppeared, $totalScore, $countedPositions,
+            );
+            $this->scoreOneSide(
+                $wordsByCode[$codeB] ?? [], $codeA, $idSetByCode[$codeA] ?? [], $linksByWordId,
+                $wordScores, $everLinked, $everAppeared, $totalScore, $countedPositions,
             );
         }
 
-        // Pivot words: a word is only "unlinked" if it has no link in ANY of
-        // its three pairs -- a real gap against just one target (e.g. SVGBS)
-        // while linked fine against the other two is normal, not a gap.
-        foreach ($pivotWords as $pw) {
-            if (!empty($pw['alignment_note'])) {
-                continue;
-            }
-            $pid = (int) $pw['id'];
-            $pivotHasAnyLink = false;
-            foreach ($targetCodes as $targetCode) {
-                [$score, $linked] = $this->bestScoreAgainst($linksByWordId[$pid] ?? [], $targetWordIdSetByCode[$targetCode]);
-                $pivotWordScores[$pid][$targetCode] = $score;
-                $totalScore += $score;
-                $countedPositions++;
-                $pivotHasAnyLink = $pivotHasAnyLink || $linked;
-            }
-            if (!$pivotHasAnyLink) {
-                $unlinkedWordIds[$pid] = true;
-            }
-        }
-
-        foreach ($targetCodes as $targetCode) {
-            $targetWords = $wordsByCode[$targetCode] ?? [];
-
-            foreach ($targetWords as $tw) {
-                $tid = (int) $tw['id'];
-                [$score, $linked] = $this->bestScoreAgainst($linksByWordId[$tid] ?? [], $pivotWordIdSet);
-                $targetWordScores[$tid] = $score;
-                $totalScore += $score;
-                $countedPositions++;
-                if (!$linked) {
-                    $unlinkedWordIds[$tid] = true;
-                }
+        $unlinkedWordIds = [];
+        foreach ($everAppeared as $id => $true) {
+            if (!isset($everLinked[$id])) {
+                $unlinkedWordIds[$id] = true;
             }
         }
 
@@ -109,10 +88,49 @@ class HistoricalAlignmentScoreService
             'percent' => $percent,
             'counted_positions' => $countedPositions,
             'total_score' => $totalScore,
-            'pivot_word_scores' => $pivotWordScores,
-            'target_word_scores' => $targetWordScores,
+            'word_scores' => $wordScores,
             'unlinked_word_ids' => $unlinkedWordIds,
         ];
+    }
+
+    /**
+     * Scores every (non-excluded) word in $words against the counterpart
+     * set for ONE pair-relationship, accumulating into the by-reference
+     * totals. Called twice per pair (once per direction) by
+     * computeVerseScore().
+     *
+     * @param list<array{id:int, alignment_note?: ?string}> $words
+     * @param array<int, int> $counterpartIdSet
+     * @param array<int, list<array{other:int, method:string, score:?float}>> $linksByWordId
+     * @param array<int, array<string, float>> $wordScores
+     * @param array<int, true> $everLinked
+     * @param array<int, true> $everAppeared
+     */
+    private function scoreOneSide(
+        array $words,
+        string $counterpartCode,
+        array $counterpartIdSet,
+        array $linksByWordId,
+        array &$wordScores,
+        array &$everLinked,
+        array &$everAppeared,
+        float &$totalScore,
+        int &$countedPositions,
+    ): void {
+        foreach ($words as $w) {
+            if (!empty($w['alignment_note'])) {
+                continue;
+            }
+            $id = (int) $w['id'];
+            [$score, $linked] = $this->bestScoreAgainst($linksByWordId[$id] ?? [], $counterpartIdSet);
+            $wordScores[$id][$counterpartCode] = $score;
+            $everAppeared[$id] = true;
+            if ($linked) {
+                $everLinked[$id] = true;
+            }
+            $totalScore += $score;
+            $countedPositions++;
+        }
     }
 
     /**

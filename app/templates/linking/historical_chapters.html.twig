@@ -5,6 +5,7 @@
 {% block head %}<meta name="csrf-token" content="{{ csrf_token('historical_align_api') }}">{% endblock %}
 
 {% block body %}
+{% set topo_param = topology == 'chain' ? {topology: 'chain'} : {} %}
 <div class="hist-align-screen">
     <div class="hist-align-topbar">
         <div class="hist-align-breadcrumb">
@@ -14,10 +15,15 @@
              data-controller="historical-recompute"
              data-historical-recompute-url-value="{{ path('app_hist_align_api_recompute') }}"
              data-historical-recompute-scope-type-value="book"
-             data-historical-recompute-usfm-value="{{ usfm }}">
+             data-historical-recompute-usfm-value="{{ usfm }}"
+             data-historical-recompute-topology-value="{{ topology }}">
             <span data-historical-recompute-target="status"></span>
+            <a class="btn btn-sm" href="{{ path('app_hist_align_book', {usfm: usfm, topology: topology == 'chain' ? null : 'chain'}) }}"
+               title="Topologie: {{ topology == 'chain' ? 'keten (SV1657↔SV↔SVGBS↔HSV)' : 'basis (alles via één pivot)' }} — klik om te wisselen">
+                {{ topology == 'chain' ? 'Keten' : 'Basis' }}-topologie
+            </a>
             <button type="button" class="btn btn-sm" data-action="click->historical-recompute#recompute">Herbereken dit hele boek</button>
-            <a class="btn btn-sm btn-primary" href="{{ path('app_hist_align_verse', {usfm: usfm, chapter: first_gap_chapter, verse: first_gap_verse}) }}">Review dit boek</a>
+            <a class="btn btn-sm btn-primary" href="{{ path('app_hist_align_verse', {usfm: usfm, chapter: first_gap_chapter, verse: first_gap_verse}|merge(topo_param)) }}">Review dit boek</a>
         </div>
     </div>
 
@@ -37,8 +43,8 @@
                     </div>
                 </td>
                 <td>
-                    <a class="btn btn-xs" href="{{ path('app_hist_align_chapter', {usfm: usfm, chapter: ch}) }}">Verzen</a>
-                    <a class="btn btn-xs btn-primary" href="{{ path('app_hist_align_verse', {usfm: usfm, chapter: ch, verse: c.first_gap_verse}) }}">Review</a>
+                    <a class="btn btn-xs" href="{{ path('app_hist_align_chapter', {usfm: usfm, chapter: ch}|merge(topo_param)) }}">Verzen</a>
+                    <a class="btn btn-xs btn-primary" href="{{ path('app_hist_align_verse', {usfm: usfm, chapter: ch, verse: c.first_gap_verse}|merge(topo_param)) }}">Review</a>
                 </td>
             </tr>
             {% endfor %}

@@ -52,14 +52,15 @@ class HistoricalAlignmentController extends AbstractController
     // ── Book overview: chapters with score % ─────────────────────────────────
 
     #[Route('/{usfm<[A-Za-z0-9]{2,8}>}', name: 'app_hist_align_book')]
-    public function book(string $usfm): Response
+    public function book(string $usfm, Request $request): Response
     {
         $book = $this->bookRepo->findByUsfmCode($usfm);
         if (!$book) {
             throw $this->createNotFoundException("Book '{$usfm}' not found.");
         }
+        $topology = $this->resolveTopologyParam($request);
 
-        $data = $this->linkingRepo->fetchHistoricalAlignmentScopeData($book->getId());
+        $data = $this->linkingRepo->fetchHistoricalAlignmentScopeData($book->getId(), null, $topology);
 
         $chapters = [];
         foreach ($data['verse_list'] as $row) {
@@ -69,7 +70,7 @@ class HistoricalAlignmentController extends AbstractController
             $score = $this->scoreService->computeVerseScore(
                 $data['words_by_verse'][$key] ?? [],
                 $data['links_by_verse'][$key] ?? [],
-                $data['pivot_code']
+                $data['pairs']
             );
 
             $chapters[$ch]['verse_count'] = ($chapters[$ch]['verse_count'] ?? 0) + 1;
@@ -102,20 +103,22 @@ class HistoricalAlignmentController extends AbstractController
             'chapters' => $chapters,
             'first_gap_chapter' => $firstGapChapter,
             'first_gap_verse' => $firstGapVerse,
+            'topology' => $topology,
         ]);
     }
 
     // ── Chapter overview: verses with score % ───────────────────────────────
 
     #[Route('/{usfm<[A-Za-z0-9]{2,8}>}/{chapter<\d+>}', name: 'app_hist_align_chapter')]
-    public function chapter(string $usfm, int $chapter): Response
+    public function chapter(string $usfm, int $chapter, Request $request): Response
     {
         $book = $this->bookRepo->findByUsfmCode($usfm);
         if (!$book) {
             throw $this->createNotFoundException("Book '{$usfm}' not found.");
         }
+        $topology = $this->resolveTopologyParam($request);
 
-        $data = $this->linkingRepo->fetchHistoricalAlignmentScopeData($book->getId(), $chapter);
+        $data = $this->linkingRepo->fetchHistoricalAlignmentScopeData($book->getId(), $chapter, $topology);
         if (!$data['verse_list']) {
             throw $this->createNotFoundException("Chapter {$chapter} not found for '{$usfm}'.");
         }
@@ -127,7 +130,7 @@ class HistoricalAlignmentController extends AbstractController
             $verses[$vs] = $this->scoreService->computeVerseScore(
                 $data['words_by_verse'][$key] ?? [],
                 $data['links_by_verse'][$key] ?? [],
-                $data['pivot_code']
+                $data['pairs']
             );
         }
         ksort($verses, SORT_NUMERIC);
@@ -146,29 +149,31 @@ class HistoricalAlignmentController extends AbstractController
             'chapter' => $chapter,
             'verses' => $verses,
             'first_gap_verse' => $firstGapVerse,
+            'topology' => $topology,
         ]);
     }
 
     // ── Verse review screen ─────────────────────────────────────────────────
 
     #[Route('/{usfm<[A-Za-z0-9]{2,8}>}/{chapter<\d+>}/{verse<\d+>}', name: 'app_hist_align_verse')]
-    public function verse(string $usfm, int $chapter, int $verse): Response
+    public function verse(string $usfm, int $chapter, int $verse, Request $request): Response
     {
         $book = $this->bookRepo->findByUsfmCode($usfm);
         if (!$book) {
             throw $this->createNotFoundException("Book '{$usfm}' not found.");
         }
+        $topology = $this->resolveTopologyParam($request);
 
-        $data = $this->linkingRepo->fetchHistoricalAlignmentVerseData($book->getId(), $chapter, $verse);
-        if ($data['pivot_code'] === '' || empty($data['words'][$data['pivot_code']])) {
-            throw $this->createNotFoundException("Verse not found or has no {$data['pivot_code']} (pivot) text.");
+        $data = $this->linkingRepo->fetchHistoricalAlignmentVerseData($book->getId(), $chapter, $verse, $topology);
+        if ($data['backbone_code'] === '' || empty($data['words'][$data['backbone_code']])) {
+            throw $this->createNotFoundException("Verse not found or has no {$data['backbone_code']} (backbone) text.");
         }
 
-        $score = $this->scoreService->computeVerseScore($data['words'], $data['links'], $data['pivot_code']);
-        $rows = $this->rowBuilder->buildRows($data['words'], $data['links'], $data['pivot_code']);
+        $score = $this->scoreService->computeVerseScore($data['words'], $data['links'], $data['pairs']);
+        $rows = $this->rowBuilder->buildRows($data['words'], $data['links'], $data['backbone_code']);
 
         $chapterCounts = $this->passageRepo->getChapterVerseCounts($book->getId());
-        $nav = $this->buildNav($chapter, $verse, $usfm, $chapterCounts);
+        $nav = $this->buildNav($chapter, $verse, $usfm, $chapterCounts, $topology);
 
         return $this->render('linking/historical_verse.html.twig', [
             'book' => $book,
@@ -179,9 +184,10 @@ class HistoricalAlignmentController extends AbstractController
             'words' => $data['words'],
             'links' => $data['links'],
             'rows' => $rows,
-            'pivot_code' => $data['pivot_code'],
+            'backbone_code' => $data['backbone_code'],
             'score' => $score,
             'nav' => $nav,
+            'topology' => $topology,
         ]);
     }
 
@@ -279,7 +285,12 @@ class HistoricalAlignmentController extends AbstractController
             return $this->json(['success' => false, 'error' => 'Invalid scope'], 422);
         }
 
-        $options = ['command' => 'app:link:translations:auto', '--engine' => 'historical', '--no-interaction' => true];
+        $topology = (string) ($data['topology'] ?? 'star');
+        if (!in_array($topology, ['star', 'chain'], true)) {
+            $topology = 'star';
+        }
+
+        $options = ['command' => 'app:link:translations:auto', '--engine' => 'historical', '--topology' => $topology, '--no-interaction' => true];
         if ($scopeType === 'verse' && $chapter !== null && $verse !== null) {
             $options['--verse'] = "{$usfm}.{$chapter}.{$verse}";
         } elseif ($scopeType === 'chapter' && $chapter !== null) {
@@ -298,12 +309,17 @@ class HistoricalAlignmentController extends AbstractController
 
     // ── Nav helper (mirrors TranslationLinkingController::buildNav) ─────────
 
-    private function buildNav(int $chapter, int $verse, string $usfm, array $counts): array
+    private function buildNav(int $chapter, int $verse, string $usfm, array $counts, string $topology): array
     {
         $verseCount = $this->collectVerseCount($counts, $chapter);
 
         $prev = $next = null;
         $params = ['usfm' => $usfm];
+        // Only carry a non-default topology in the URL, keeping star-mode
+        // links exactly as before (no stray ?topology=star everywhere).
+        if ($topology !== 'star') {
+            $params['topology'] = $topology;
+        }
 
         if ($verse > 1) {
             $prev = $params + ['chapter' => $chapter, 'verse' => $verse - 1];
@@ -319,6 +335,13 @@ class HistoricalAlignmentController extends AbstractController
         }
 
         return ['prev' => $prev, 'next' => $next, 'verse_count' => $verseCount, 'chapter_count' => count($counts)];
+    }
+
+    private function resolveTopologyParam(Request $request): string
+    {
+        $topology = (string) $request->query->get('topology', 'star');
+
+        return in_array($topology, ['star', 'chain'], true) ? $topology : 'star';
     }
 
     private function collectVerseCount(array $counts, int $chapter): int

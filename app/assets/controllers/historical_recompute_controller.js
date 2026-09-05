@@ -19,6 +19,7 @@ export default class extends Controller {
         scopeType: String,
         usfm:      String,
         chapter:   String,
+        topology:  String,
     }
 
     async recompute(event) {
@@ -34,6 +35,7 @@ export default class extends Controller {
                     scope_type: this.scopeTypeValue,
                     usfm:       this.usfmValue,
                     chapter:    this.chapterValue || null,
+                    topology:   this.topologyValue,
                 }),
             })
             const data = await resp.json()

@@ -1201,6 +1201,46 @@ class LinkingRepository
     }
 
     /**
+     * Translation pairs for the CHAIN-topology alternative to
+     * fetchHistoricalAlignmentPairs(): adjacent editions linked directly to
+     * each other (SV1657<->SV<->SVGBS<->HSV, by `alignment_sequence`)
+     * instead of everything pivoting through one central translation. Both
+     * topologies can coexist; `--topology=star|chain` on
+     * app:link:translations:auto picks which one runs. See migration
+     * Version20260905090000.
+     *
+     * `id_a` is always the lower-sequence (older-spelling) side of the pair,
+     * matching HistoricalAlignmentService's src/tgt convention -- alignment
+     * always runs from older to more modern spelling.
+     */
+    public function fetchChainAlignmentPairs(): array
+    {
+        return $this->connection->fetchAllAssociative(
+            "SELECT
+                ta.id   AS id_a,  ta.code  AS code_a,  ta.name AS name_a,  COALESCE(ta.abbreviation, ta.code) AS abbreviation_a,
+                tb.id   AS id_b,  tb.code  AS code_b,  tb.name AS name_b,  COALESCE(tb.abbreviation, tb.code) AS abbreviation_b,
+                ta.family
+             FROM translations ta
+             JOIN translations tb ON tb.family = ta.family AND tb.alignment_sequence = ta.alignment_sequence + 1
+             WHERE ta.alignment_sequence IS NOT NULL
+             ORDER BY ta.family, ta.alignment_sequence"
+        );
+    }
+
+    /**
+     * The chain order (codes only, ascending alignment_sequence) for a
+     * family -- e.g. ['SV1657', 'SV', 'SVGBS', 'HSV']. Used by the review UI
+     * to pick column order and the row-builder's backbone when in chain mode.
+     */
+    public function fetchChainSequenceCodes(string $family): array
+    {
+        return $this->connection->fetchFirstColumn(
+            'SELECT code FROM translations WHERE family = :family AND alignment_sequence IS NOT NULL ORDER BY alignment_sequence',
+            ['family' => $family]
+        );
+    }
+
+    /**
      * Batch-fetches everything the book-/chapter-overview pages need to
      * compute a HistoricalAlignmentScoreService score per verse, in as few
      * queries as possible: one for the pivot's own verse list (authoritative
@@ -1212,21 +1252,23 @@ class LinkingRepository
      * verse, which matters for a book like Psalms (~2500 verses).
      *
      * @return array{
-     *   pivot_code: string,
+     *   pairs: list<array{0:string,1:string}>,
+     *   backbone_code: string,
      *   verse_list: list<array{chapter: int, verse: int}>,
      *   words_by_verse: array<string, array<string, list<array>>>,
      *   links_by_verse: array<string, list<array>>,
      * }
      */
-    public function fetchHistoricalAlignmentScopeData(int $bookId, ?int $chapter = null): array
+    public function fetchHistoricalAlignmentScopeData(int $bookId, ?int $chapter = null, string $topology = 'star'): array
     {
-        $pivot = $this->connection->fetchAssociative(
-            'SELECT id, code FROM translations WHERE is_alignment_pivot = TRUE LIMIT 1'
+        $topologyInfo = $this->resolveAlignmentTopology($topology);
+        $backboneCode = $topologyInfo['backbone_code'];
+        $backboneId = (int) $this->connection->fetchOne(
+            'SELECT id FROM translations WHERE code = :code',
+            ['code' => $backboneCode]
         );
-        $pivotId = (int) $pivot['id'];
-        $pivotCode = (string) $pivot['code'];
 
-        $verseListParams = ['pivotId' => $pivotId, 'bookId' => $bookId];
+        $verseListParams = ['pivotId' => $backboneId, 'bookId' => $bookId];
         $verseListSql = 'SELECT chapter, verse FROM translation_verses WHERE translation_id = :pivotId AND book_id = :bookId';
         if ($chapter !== null) {
             $verseListSql .= ' AND chapter = :chapter';
@@ -1277,7 +1319,8 @@ class LinkingRepository
         }
 
         return [
-            'pivot_code' => $pivotCode,
+            'pairs' => $topologyInfo['pairs'],
+            'backbone_code' => $backboneCode,
             'verse_list' => $verseList,
             'words_by_verse' => $wordsByVerse,
             'links_by_verse' => $linksByVerse,
@@ -1343,30 +1386,71 @@ class LinkingRepository
     }
 
     /**
-     * All data the historical-alignment review page needs for one verse:
-     * the four translations (in fixed SV1657/SV/SVGBS/HSV display order),
-     * their words (including alignment_note), and every
-     * inter_translation_links row touching any of those words.
+     * Resolves a display/scoring topology to concrete facts the review UI
+     * and HistoricalAlignmentScoreService need: which translation-code
+     * pairs were (or should be) aligned, which code anchors row position
+     * (HistoricalAlignmentRowBuilder's backbone), and the left-to-right
+     * column display order. Star and chain can coexist in the DB at once
+     * (is_alignment_pivot and alignment_sequence are independent columns);
+     * this is what picks between them for a given request.
      *
-     * @return array{translations: list<array>, words: array<string, list<array>>, links: list<array>, pivot_code: string}
+     * @return array{pairs: list<array{0:string,1:string}>, backbone_code: string, ordered_codes: list<string>}
      */
-    public function fetchHistoricalAlignmentVerseData(int $bookId, int $chapter, int $verse): array
+    public function resolveAlignmentTopology(string $topology): array
     {
-        $translations = $this->connection->fetchAllAssociative(
+        if ($topology === 'chain') {
+            $chainPairs = $this->fetchChainAlignmentPairs();
+            $family = $chainPairs[0]['family'] ?? 'SV';
+            $orderedCodes = $this->fetchChainSequenceCodes($family);
+
+            return [
+                'pairs' => array_map(static fn($p) => [$p['code_a'], $p['code_b']], $chainPairs),
+                'backbone_code' => $orderedCodes[0] ?? '',
+                'ordered_codes' => $orderedCodes,
+            ];
+        }
+
+        $starPairs = $this->fetchHistoricalAlignmentPairs();
+        $backboneCode = $starPairs[0]['code_a'] ?? '';
+        $displayOrder = ['SV1657' => 0, 'SVGBS' => 1, 'SV' => 2, 'HSV' => 3];
+        $orderedCodes = array_merge([$backboneCode], array_column($starPairs, 'code_b'));
+        usort($orderedCodes, static fn($a, $b) => ($displayOrder[$a] ?? 99) <=> ($displayOrder[$b] ?? 99));
+
+        return [
+            'pairs' => array_map(static fn($p) => [$p['code_a'], $p['code_b']], $starPairs),
+            'backbone_code' => $backboneCode,
+            'ordered_codes' => $orderedCodes,
+        ];
+    }
+
+    /**
+     * All data the historical-alignment review page needs for one verse:
+     * the family's translations (ordered per $topology), their words
+     * (including alignment_note), every inter_translation_links row
+     * touching any of those words, and the topology facts needed to score
+     * and lay out the page (see resolveAlignmentTopology()).
+     *
+     * @return array{translations: list<array>, words: array<string, list<array>>, links: list<array>, pairs: list<array{0:string,1:string}>, backbone_code: string}
+     */
+    public function fetchHistoricalAlignmentVerseData(int $bookId, int $chapter, int $verse, string $topology = 'star'): array
+    {
+        $topologyInfo = $this->resolveAlignmentTopology($topology);
+
+        $allTranslations = $this->connection->fetchAllAssociative(
             "SELECT id, code, name, COALESCE(abbreviation, code) AS abbreviation, is_alignment_pivot, source_lang_authority
              FROM translations
              WHERE family = (SELECT family FROM translations WHERE is_alignment_pivot = TRUE LIMIT 1)"
         );
+        $byCode = [];
+        foreach ($allTranslations as $t) {
+            $byCode[$t['code']] = $t;
+        }
+        $translations = array_values(array_filter(
+            array_map(static fn($code) => $byCode[$code] ?? null, $topologyInfo['ordered_codes']),
+        ));
 
-        $displayOrder = ['SV1657' => 0, 'SVGBS' => 1, 'SV' => 2, 'HSV' => 3];
-        usort($translations, static fn($a, $b) => ($displayOrder[$a['code']] ?? 99) <=> ($displayOrder[$b['code']] ?? 99));
-
-        $pivotCode = null;
         $wordsByCode = [];
         foreach ($translations as $t) {
-            if ($t['is_alignment_pivot']) {
-                $pivotCode = $t['code'];
-            }
             $wordsByCode[$t['code']] = $this->connection->fetchAllAssociative(
                 "SELECT tw.id, tw.word_position, tw.word_text, tw.is_filler, tw.alignment_note
                  FROM translation_words tw
@@ -1395,7 +1479,13 @@ class LinkingRepository
             );
         }
 
-        return ['translations' => $translations, 'words' => $wordsByCode, 'links' => $links, 'pivot_code' => (string) $pivotCode];
+        return [
+            'translations' => $translations,
+            'words' => $wordsByCode,
+            'links' => $links,
+            'pairs' => $topologyInfo['pairs'],
+            'backbone_code' => $topologyInfo['backbone_code'],
+        ];
     }
 
     /**

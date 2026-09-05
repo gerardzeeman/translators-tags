@@ -37,19 +37,25 @@ class LinkTranslationsAutoCommand extends Command
             ->addOption('book',    null, InputOption::VALUE_OPTIONAL, 'Only process this book USFM code', null)
             ->addOption('chapter', null, InputOption::VALUE_OPTIONAL, 'Only process this chapter, e.g. GEN.1', null)
             ->addOption('verse',   null, InputOption::VALUE_OPTIONAL, 'Only process this verse, e.g. GEN.1.1', null)
-            ->addOption('engine',  null, InputOption::VALUE_OPTIONAL, 'Which pipeline to run: "pairwise" (default, legacy source-pivot/sequence/positional passes) or "historical" (HistoricalAlignmentService, pivoted on whichever translation has is_alignment_pivot=TRUE)', 'pairwise');
+            ->addOption('engine',  null, InputOption::VALUE_OPTIONAL, 'Which pipeline to run: "pairwise" (default, legacy source-pivot/sequence/positional passes) or "historical" (HistoricalAlignmentService)', 'pairwise')
+            ->addOption('topology', null, InputOption::VALUE_OPTIONAL, 'Historical engine only: "star" (default, everything pivots through the is_alignment_pivot translation) or "chain" (adjacent editions linked directly to each other by alignment_sequence, e.g. SV1657<->SV<->SVGBS<->HSV)', 'star');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $io     = new SymfonyStyle($input, $output);
-        $dryRun = (bool) $input->getOption('dry-run');
-        $reset  = (bool) $input->getOption('reset');
-        $family = $input->getOption('family');
-        $engine = $input->getOption('engine');
+        $io       = new SymfonyStyle($input, $output);
+        $dryRun   = (bool) $input->getOption('dry-run');
+        $reset    = (bool) $input->getOption('reset');
+        $family   = $input->getOption('family');
+        $engine   = $input->getOption('engine');
+        $topology = $input->getOption('topology');
 
         if (!in_array($engine, ['pairwise', 'historical'], true)) {
             $io->error("Ongeldige --engine waarde '{$engine}'. Gebruik 'pairwise' of 'historical'.");
+            return Command::FAILURE;
+        }
+        if (!in_array($topology, ['star', 'chain'], true)) {
+            $io->error("Ongeldige --topology waarde '{$topology}'. Gebruik 'star' of 'chain'.");
             return Command::FAILURE;
         }
 
@@ -63,11 +69,13 @@ class LinkTranslationsAutoCommand extends Command
             return Command::FAILURE;
         }
 
-        $io->title($engine === 'historical' ? 'Auto-link historical alignment (is_alignment_pivot)' : 'Auto-link translation pairs');
+        $io->title($engine === 'historical' ? "Auto-link historical alignment ({$topology} topology)" : 'Auto-link translation pairs');
 
-        $pairs = $engine === 'historical'
-            ? $this->linkingRepo->fetchHistoricalAlignmentPairs()
-            : $this->linkingRepo->fetchTranslationPairs();
+        $pairs = match (true) {
+            $engine === 'historical' && $topology === 'chain' => $this->linkingRepo->fetchChainAlignmentPairs(),
+            $engine === 'historical' => $this->linkingRepo->fetchHistoricalAlignmentPairs(),
+            default => $this->linkingRepo->fetchTranslationPairs(),
+        };
 
         if ($family) {
             $pairs = array_filter($pairs, fn($p) => $p['family'] === $family);
@@ -81,8 +89,18 @@ class LinkTranslationsAutoCommand extends Command
         // Start each full historical recompute from a clean alignment_note
         // slate so particle_drop/prefix_drop flags don't go stale across
         // runs (see LinkingRepository::clearAlignmentNotesForPivotScope()).
+        // In star topology every pair shares the same id_a (the pivot); in
+        // chain topology each pair's id_a is a DIFFERENT translation (its
+        // own "src" side), so every distinct one needs its own clear.
         if ($engine === 'historical' && !$dryRun) {
-            $this->linkingRepo->clearAlignmentNotesForPivotScope((int) $pairs[0]['id_a'], $book, $chapter, $verse);
+            $clearedIds = [];
+            foreach ($pairs as $pair) {
+                $srcId = (int) $pair['id_a'];
+                if (!isset($clearedIds[$srcId])) {
+                    $this->linkingRepo->clearAlignmentNotesForPivotScope($srcId, $book, $chapter, $verse);
+                    $clearedIds[$srcId] = true;
+                }
+            }
         }
 
         foreach ($pairs as $pair) {

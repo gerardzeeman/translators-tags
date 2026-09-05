@@ -37,6 +37,11 @@ CREATE TABLE IF NOT EXISTS translations (
                                                             --   distinct concept -- Hebrew/Greek
                                                             --   word_links propagation vs. the
                                                             --   4-way spelling-alignment pivot).
+    alignment_sequence    SMALLINT                          -- position in the CHAIN-topology
+                                                            --   alignment order within this family
+                                                            --   (1=oldest spelling), the alternative
+                                                            --   to the is_alignment_pivot star
+                                                            --   topology. NULL if not chained.
 );
 
 -- Versification difference mapping (OT: Hebrew tradition vs Dutch)
@@ -242,6 +247,7 @@ CREATE INDEX IF NOT EXISTS idx_wl_gr       ON word_links              (greek_wor
 CREATE INDEX IF NOT EXISTS idx_wl_tw       ON word_links              (translation_word_id);
 CREATE INDEX IF NOT EXISTS idx_itl_word_a  ON inter_translation_links (word_a_id);
 CREATE INDEX IF NOT EXISTS idx_itl_word_b  ON inter_translation_links (word_b_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_translations_alignment_sequence ON translations (family, alignment_sequence) WHERE alignment_sequence IS NOT NULL;
 
 -- Partial unique indexes: at most one link per source word + Dutch word pair
 CREATE UNIQUE INDEX IF NOT EXISTS idx_wl_he_tw ON word_links (hebrew_word_id, translation_word_id) WHERE hebrew_word_id IS NOT NULL;
@@ -367,15 +373,16 @@ ON CONFLICT (id) DO NOTHING;
 -- Seed data: translation records
 -- SV (Jongbloed) is the source_lang_authority: its word_links to Hebrew/Greek
 -- propagate to all other SV-family translations via inter_translation_links.
-INSERT INTO translations (id, code, name, abbreviation, language, direction, family, source_lang_authority, is_alignment_pivot) VALUES
-    (1, 'SV',    'Statenvertaling (Jongbloed)', 'SV(JB)',  'nld', 'LTR', 'SV', TRUE,  TRUE),
-    (2, 'HSV',   'Herziene Statenvertaling',   'HSV',      'nld', 'LTR', 'SV', FALSE, FALSE),
-    (3, 'SVGBS', 'Statenvertaling (GBS)',      'SV(GBS)',  'nld', 'LTR', 'SV', FALSE, FALSE),
-    (4, 'SV1657','Statenvertaling (1657)',     'SV(1657)', 'nld', 'LTR', 'SV', FALSE, FALSE)
+INSERT INTO translations (id, code, name, abbreviation, language, direction, family, source_lang_authority, is_alignment_pivot, alignment_sequence) VALUES
+    (1, 'SV',    'Statenvertaling (Jongbloed)', 'SV(JB)',  'nld', 'LTR', 'SV', TRUE,  TRUE,  2),
+    (2, 'HSV',   'Herziene Statenvertaling',   'HSV',      'nld', 'LTR', 'SV', FALSE, FALSE, 4),
+    (3, 'SVGBS', 'Statenvertaling (GBS)',      'SV(GBS)',  'nld', 'LTR', 'SV', FALSE, FALSE, 3),
+    (4, 'SV1657','Statenvertaling (1657)',     'SV(1657)', 'nld', 'LTR', 'SV', FALSE, FALSE, 1)
 ON CONFLICT (id) DO UPDATE SET
     code                  = EXCLUDED.code,
     name                  = EXCLUDED.name,
     abbreviation          = EXCLUDED.abbreviation,
     family                = EXCLUDED.family,
     source_lang_authority = EXCLUDED.source_lang_authority,
-    is_alignment_pivot    = EXCLUDED.is_alignment_pivot;
+    is_alignment_pivot    = EXCLUDED.is_alignment_pivot,
+    alignment_sequence    = EXCLUDED.alignment_sequence;

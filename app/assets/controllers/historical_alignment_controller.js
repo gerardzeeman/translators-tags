@@ -28,6 +28,7 @@ export default class extends Controller {
         nextUrl:      String,
         wordIds:      Array,
         links:        Array,
+        topology:     String,
     }
 
     #links = []
@@ -133,6 +134,7 @@ export default class extends Controller {
             usfm:       this.usfmValue,
             chapter:    this.chapterValue,
             verse:      this.verseValue,
+            topology:   this.topologyValue,
         })
         if (!data?.success) {
             this.#showToast('Herberekenen mislukt.')

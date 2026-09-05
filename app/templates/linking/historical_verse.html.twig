@@ -33,6 +33,7 @@
      data-historical-alignment-next-url-value="{{ nav.next ? path('app_hist_align_verse', nav.next) : '' }}"
      data-historical-alignment-word-ids-value="{{ all_word_ids|json_encode }}"
      data-historical-alignment-links-value="{{ links|json_encode }}"
+     data-historical-alignment-topology-value="{{ topology }}"
      data-review-lock-scope-type-value="verse"
      data-review-lock-scope-id-value="{{ usfm }}.{{ chapter }}.{{ verse }}"
      data-review-lock-acquire-url-value="{{ path('app_review_lock_acquire') }}"
@@ -54,6 +55,10 @@
             <span class="hist-align-score-detail">({{ score.counted_positions }} posities)</span>
         </div>
         <div class="hist-align-actions">
+            <a class="btn btn-sm" href="{{ path('app_hist_align_verse', {usfm: usfm, chapter: chapter, verse: verse, topology: topology == 'chain' ? null : 'chain'}) }}"
+               title="Topologie: {{ topology == 'chain' ? 'keten (SV1657↔SV↔SVGBS↔HSV)' : 'basis (alles via één pivot)' }} — klik om te wisselen">
+                {{ topology == 'chain' ? 'Keten' : 'Basis' }}-topologie
+            </a>
             <button type="button" class="btn btn-sm" data-action="click->historical-alignment#recompute">Herbereken dit vers</button>
             <button type="button" class="btn btn-sm btn-primary" data-action="click->historical-alignment#approve">Goedkeuren (A)</button>
         </div>
@@ -76,9 +81,11 @@
             <thead>
                 <tr>
                     {% for t in translations %}
-                    {% set pivot_title = t.is_alignment_pivot and t.source_lang_authority
-                        ? 'Basistekst: pivot voor deze alignment én voor de Hebreeuws/Grieks-bronkoppeling'
-                        : (t.is_alignment_pivot ? 'Basistekst / pivot voor deze alignment' : (t.source_lang_authority ? 'Basistekst voor de Hebreeuws/Grieks-koppeling (bronkoppeling)' : null)) %}
+                    {% set is_backbone = t.code == backbone_code %}
+                    {% set backbone_label = topology == 'chain' ? 'basis / keten-startpunt' : 'basis / pivot voor deze alignment' %}
+                    {% set pivot_title = is_backbone and t.source_lang_authority
+                        ? 'Basistekst: ' ~ backbone_label ~ ' én voor de Hebreeuws/Grieks-bronkoppeling'
+                        : (is_backbone ? 'Basistekst: ' ~ backbone_label : (t.source_lang_authority ? 'Basistekst voor de Hebreeuws/Grieks-koppeling (bronkoppeling)' : null)) %}
                     <th class="panel-{{ t.code|lower }}">{{ t.abbreviation }}{% if pivot_title %} <span class="hist-align-pivot-badge" title="{{ pivot_title }}">basis</span>{% endif %}</th>
                     {% endfor %}
                 </tr>
