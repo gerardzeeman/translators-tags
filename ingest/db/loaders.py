@@ -106,44 +106,59 @@ def bulk_insert_translation_words(rows: list[dict]) -> None:
 
 
 def insert_word_link(source_language: str, source_word_id: int,
-                     translation_word_id: int) -> int:
-    """Insert a word_links row, return its id."""
+                     translation_word_id: int, cur=None) -> int:
+    """Insert a word_links row, return its id.
+
+    Pass an open `cur` (cursor) to run this on an existing connection/
+    transaction instead of opening a brand-new one — essential in any loop
+    that calls this per word, since opening a fresh DB connection per call
+    is pure network/auth overhead, not computation (see align_heuristic.py's
+    main loop, which was the ~17 words/sec bottleneck before this was added).
+    Without `cur`, behaves as before: opens its own auto-committing connection.
+    """
     col = "hebrew_word_id" if source_language == "HE" else "greek_word_id"
+    sql = f"""
+        INSERT INTO word_links
+            (source_language, {col}, translation_word_id)
+        VALUES (%s, %s, %s)
+        RETURNING id
+        """
+    params = (source_language, source_word_id, translation_word_id)
+    if cur is not None:
+        cur.execute(sql, params)
+        return cur.fetchone()[0]
     with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                f"""
-                INSERT INTO word_links
-                    (source_language, {col}, translation_word_id)
-                VALUES (%s, %s, %s)
-                RETURNING id
-                """,
-                (source_language, source_word_id, translation_word_id),
-            )
-            return cur.fetchone()[0]
+        with conn.cursor() as owned_cur:
+            owned_cur.execute(sql, params)
+            return owned_cur.fetchone()[0]
 
 
 def insert_link_confidence(link_id: int, method: str, score: float,
                             created_by_user_id: int | None = None,
-                            notes: str | None = None) -> None:
+                            notes: str | None = None, cur=None) -> None:
     # created_by_user_id is an FK to users(id); automated links (the only
     # kind this ingest pipeline creates) leave it NULL — matches the column
     # name added by a later Doctrine migration on the app side (the schema
     # used to call this `created_by TEXT`; see git history if that's
     # confusing).
+    #
+    # Pass an open `cur` to reuse an existing connection/transaction — see
+    # insert_word_link() above for why this matters in a per-word loop.
+    sql = """
+        INSERT INTO link_confidence
+            (link_id, method, score, created_at, created_by_user_id, notes)
+        VALUES (%s, %s, %s, NOW(), %s, %s)
+        ON CONFLICT (link_id, method) DO UPDATE
+            SET score = EXCLUDED.score,
+                notes = EXCLUDED.notes
+        """
+    params = (link_id, method, score, created_by_user_id, notes)
+    if cur is not None:
+        cur.execute(sql, params)
+        return
     with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                INSERT INTO link_confidence
-                    (link_id, method, score, created_at, created_by_user_id, notes)
-                VALUES (%s, %s, %s, NOW(), %s, %s)
-                ON CONFLICT (link_id, method) DO UPDATE
-                    SET score = EXCLUDED.score,
-                        notes = EXCLUDED.notes
-                """,
-                (link_id, method, score, created_by_user_id, notes),
-            )
+        with conn.cursor() as owned_cur:
+            owned_cur.execute(sql, params)
 
 
 def bulk_insert_cross_references(rows: list[dict]) -> None:
