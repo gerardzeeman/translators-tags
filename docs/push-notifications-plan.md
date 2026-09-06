@@ -68,18 +68,19 @@ app-eigen content naast de Bijbel/Institutio DBAL-tabellen).
 PushSubscription
 ├── id            int, PK
 ├── user          ManyToOne → User
-├── endpoint      text, unique              — browser push-endpoint-URL
+├── endpoint      text                      — browser push-endpoint-URL, uniek per (user, endpoint) — zie §5.1
 ├── p256dhKey     string(255)               — encryptiesleutel uit PushSubscription.toJSON()
 ├── authKey       string(255)               — auth-secret uit PushSubscription.toJSON()
 ├── userAgent     string(255), nullable     — voor beheer/debug
 ├── createdAt     datetime_immutable
 └── lastFailureAt datetime_immutable, nullable
+    UNIQUE (user_id, endpoint)
 
 NewsDigest
 ├── id            int, PK
 ├── title         string(255)
 ├── body          text
-├── url           string(255), nullable    — link die de melding opent bij klik
+├── url           string(255), nullable    — relatief same-origin pad, gevalideerd bij ontvangst — zie §5.2
 ├── sentAt        datetime_immutable
 ├── successCount  int
 └── failureCount  int
@@ -184,6 +185,38 @@ subscriptions te kunnen opruimen.
 Beveiliging: gewone sessie-firewall + CSRF-token (zelfde patroon als
 `AdminUserController` — `isCsrfTokenValid`).
 
+**Eigenaarscontrole (verplicht, geen losse vervolgstap):** zowel abonneren als
+opzeggen scopen altijd op de ingelogde gebruiker, nooit alleen op `endpoint`:
+
+```php
+// opzeggen
+$subscription = $repository->findOneBy(['endpoint' => $endpoint, 'user' => $this->getUser()]);
+if ($subscription === null) {
+    return $this->json(['status' => 'ok']); // stil niets doen — geen bevestiging
+}                                             // of ontkenning dat de endpoint elders bestaat
+$em->remove($subscription);
+$em->flush();
+
+// abonneren (upsert)
+$subscription = $repository->findOneBy(['endpoint' => $endpoint, 'user' => $this->getUser()])
+    ?? new PushSubscription($this->getUser(), $endpoint);
+$subscription->setKeys($p256dh, $auth);
+$em->persist($subscription);
+$em->flush();
+```
+
+Een `endpoint` die al aan een **andere** gebruiker hoort, wordt bij abonneren
+dus niet overgenomen (geen reassignment) — de upsert-`WHERE` bevat altijd
+`user = :current_user`, dus dat scenario resulteert simpelweg in een nieuwe
+rij voor de huidige gebruiker met dezelfde endpoint-string. Omdat `endpoint`
+uniek is over de hele tabel (zie §1), moet de kolom daarom **niet**
+`unique: true` zijn maar een samengestelde unique-constraint op
+`(user, endpoint)` — anders gooit de tweede gebruiker een DB-fout in plaats
+van gewoon een eigen rij te krijgen. (In de praktijk genereert dezelfde
+browser/device na een eerdere `unsubscribe()` meestal een nieuwe endpoint bij
+een volgende `subscribe()`, maar de constraint moet dit randgeval hoe dan ook
+correct afhandelen in plaats van op een DB-exceptie te vertrouwen.)
+
 ### 5.2 Binnenkomend webhook (machine-naar-machine, geen sessie)
 
 `src/Controller/NewsDigestWebhookController.php`:
@@ -191,6 +224,28 @@ Beveiliging: gewone sessie-firewall + CSRF-token (zelfde patroon als
 | Route | Methode | Doel |
 |-------|---------|------|
 | `/api/nieuwsoverzicht/push` | POST | Body: `{title, body, url?}`. Header `Authorization: Bearer <NEWS_DIGEST_WEBHOOK_TOKEN>`, vergeleken met `hash_equals()` (timing-safe). Bij mismatch: `403` zonder verdere verwerking. |
+
+**`url`-validatie (verplicht, geen losse vervolgstap):** vóórdat de
+`NewsDigest`-rij wordt opgeslagen of er iets gedispatcht wordt, wordt `url`
+gecontroleerd op een relatief, same-origin pad. Alles anders wordt verworpen
+met `422`, niet stilzwijgend genegeerd of ongevalideerd doorgezet:
+
+```php
+private function isValidRelativePath(?string $url): bool
+{
+    if ($url === null || $url === '') {
+        return true; // optioneel veld, sw.js valt terug op '/'
+    }
+    // moet beginnen met exact één '/': geen 'https://...' (absoluut),
+    // geen '//evil.tld' (protocol-relative), geen 'javascript:'/'data:'
+    return (bool) preg_match('#^/(?!/)[A-Za-z0-9/_\-.]*$#', $url);
+}
+```
+
+Bij een ongeldige `url` faalt het hele verzoek (`422`) — er wordt geen
+`NewsDigest` met een afgekeurde of leeggemaakte `url` opgeslagen, zodat de
+scheduled task de fout direct terugziet in plaats van dat de melding stilzwijgend
+zonder klikbare link verstuurd wordt.
 
 Bij een geldig verzoek: slaat een `NewsDigest`-rij op, dispatcht daarna een
 Messenger-bericht `SendNewsDigestPush` (huidige `sync://`-transport is
@@ -277,35 +332,39 @@ Eén link "Meldingen" toevoegen aan de bestaande navigatie
 
 | Ernst  | Aantal |
 |--------|--------|
-| Hoog   | 2      |
+| Hoog   | 2 (✅ beide verwerkt in het plan) |
 | Medium | 3      |
 | Laag   | 2      |
 | Info   | 3      |
 
-### HOOG — Ongevalideerde `url` opent willekeurige bestemming bij klik op de melding
+### ✅ VERWERKT — HOOG — Ongevalideerde `url` opent willekeurige bestemming bij klik op de melding
 
 **Locatie:** §5.2 (webhook-body `{title, body, url?}`), §6.1 (`sw.js`
 `notificationclick` → `clients.openWindow(event.notification.data.url)`)
+**Fix opgenomen in:** §5.2 (`isValidRelativePath()`, `422` bij afwijzing), §1 (kolomomschrijving)
 
-Er is geen validatie op `url` voorzien. Als het webhook-token ooit lekt (zie
-Info-bevinding hieronder) kan een aanvaller een melding pushen die er voor elke
+Er was geen validatie op `url` voorzien. Als het webhook-token ooit lekt (zie
+Info-bevinding hieronder) kon een aanvaller een melding pushen die er voor elke
 abonnee uitziet als een vertrouwde melding van Alef-Omega, maar bij een klik
-een externe phishingpagina opent. **Fix:** valideer server-side dat `url`
-een relatief, same-origin pad is (bv. regex `^/(?!/)`) en verwerp absolute
-URL's (`http:`, `https:`, `javascript:`, `data:`) vóórdat de `NewsDigest`-rij
-wordt opgeslagen.
+een externe phishingpagina opent. §5.2 valideert nu server-side dat `url`
+een relatief, same-origin pad is en verwerpt absolute URL's (`http:`,
+`https:`, `javascript:`, `data:`, protocol-relative `//`) met een `422`,
+vóórdat de `NewsDigest`-rij wordt opgeslagen.
 
-### HOOG — Ontbrekende eigenaarscontrole op `/account/meldingen/opzeggen`
+### ✅ VERWERKT — HOOG — Ontbrekende eigenaarscontrole op `/account/meldingen/opzeggen`
 
 **Locatie:** §5.1
+**Fix opgenomen in:** §5.1 (query gescopet op `user = :current_user`), §1 (samengestelde unique-constraint)
 
-Een gebruiker met `ROLE_NEWS_SUBSCRIBER` kan een willekeurige `endpoint`-string
-meesturen; zonder expliciete check verwijdert dit elke `PushSubscription`-rij
-met die endpoint, ongeacht van wie. Dat is een IDOR: elke abonnee kan zo het
-abonnement van een andere abonnee opzeggen. **Fix:** de query moet altijd
-scopen op `WHERE endpoint = :endpoint AND user = :current_user` (en dus niets
-doen — geen foutmelding die verklapt of de endpoint bij iemand anders hoorde —
-als er geen match is).
+Een gebruiker met `ROLE_NEWS_SUBSCRIBER` kon een willekeurige `endpoint`-string
+meesturen; zonder expliciete check verwijderde dit elke `PushSubscription`-rij
+met die endpoint, ongeacht van wie — een IDOR waarmee elke abonnee het
+abonnement van een andere abonnee kon opzeggen. §5.1 scopet abonneren én
+opzeggen nu altijd op `(endpoint, user = huidige gebruiker)`; een niet-match
+bij opzeggen doet stil niets (geen foutmelding die verklapt of de endpoint bij
+iemand anders hoorde). Dit vereiste ook een aanpassing van de unique-
+constraint op `PushSubscription` (§1): niet los op `endpoint`, maar
+samengesteld op `(user, endpoint)`.
 
 ### MEDIUM — Geen rate limiting of kill switch op de webhook, los van het token
 
@@ -393,14 +452,15 @@ dit kanaal ooit verbreedt naar gevoeligere inhoud.
 2. Rol `ROLE_NEWS_SUBSCRIBER` in `security.yaml` + `AdminUserController`.
 3. `composer require minishlink/web-push`, VAPID-sleutels genereren, env-vars
    wiren (root `.env.local`, `docker-compose.yml`, `config/services.yaml`).
-4. `NewsDigestWebhookController` + `SendNewsDigestPushHandler` (Messenger) —
-   inclusief vanaf het begin: `url`-validatie (relatief, same-origin), rate
-   limiting via `symfony/rate-limiter`, en de idempotentiesleutel-check (zie
-   §8, HOOG/MEDIUM-bevindingen — dit zijn geen losse vervolgstappen, maar
-   onderdeel van deze stap).
-5. `PushSubscriptionController` + `/account/meldingen`-pagina — inclusief
-   eigenaarscontrole op opzeggen en een cap op subscriptions per gebruiker
-   (§8, HOOG/LAAG-bevindingen).
+4. `NewsDigestWebhookController` + `SendNewsDigestPushHandler` (Messenger),
+   inclusief de `url`-validatie uit §5.2 (al onderdeel van het endpoint-
+   ontwerp, geen losse vervolgstap) — vul hierbij nog de openstaande
+   MEDIUM-bevindingen uit §8 aan: rate limiting via `symfony/rate-limiter`
+   en de idempotentiesleutel-check.
+5. `PushSubscriptionController` + `/account/meldingen`-pagina, inclusief de
+   eigenaarscontrole uit §5.1 (al onderdeel van het endpoint-ontwerp) — vul
+   hierbij de LAAG-bevinding uit §8 aan: cap + formaatvalidatie op nieuwe
+   subscriptions.
 6. `public/sw.js` + `push_subscribe_controller.js` + navigatielink.
 7. Handmatig testen: eigen account de rol geven, abonneren in de browser,
    `curl` naar `/api/nieuwsoverzicht/push` met testtoken, melding checken;
