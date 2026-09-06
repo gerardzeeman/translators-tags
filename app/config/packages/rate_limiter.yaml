@@ -1,2 +1,6 @@
 framework:
-    rate_limiter: []
+    rate_limiter:
+        news_digest_push:
+            policy: fixed_window
+            limit: 10
+            interval: '1 hour'

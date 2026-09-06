@@ -1,7 +1,18 @@
+parameters:
+    app.vapid_public_key: '%env(VAPID_PUBLIC_KEY)%'
+    app.vapid_private_key: '%env(VAPID_PRIVATE_KEY)%'
+    app.news_digest_webhook_token: '%env(NEWS_DIGEST_WEBHOOK_TOKEN)%'
+    app.news_digest_push_enabled: '%env(bool:NEWS_DIGEST_PUSH_ENABLED)%'
+
 services:
     _defaults:
         autowire: true
         autoconfigure: true
+        bind:
+            string $vapidPublicKey: '%app.vapid_public_key%'
+            string $vapidPrivateKey: '%app.vapid_private_key%'
+            string $newsDigestWebhookToken: '%app.news_digest_webhook_token%'
+            bool $newsDigestPushEnabled: '%app.news_digest_push_enabled%'
 
     App\:
         resource: '../src/'
