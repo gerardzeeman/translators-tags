@@ -26,8 +26,22 @@ CREATE TABLE IF NOT EXISTS translations (
     language              CHAR(3)     NOT NULL,             -- ISO 639-3: 'nld'
     direction             VARCHAR(3)  NOT NULL DEFAULT 'LTR' CHECK (direction IN ('LTR', 'RTL')),
     family                VARCHAR(20),                      -- e.g. 'SV' groups SV editions + HSV
-    source_lang_authority BOOLEAN     NOT NULL DEFAULT FALSE -- TRUE: this translation's word_links
+    source_lang_authority BOOLEAN     NOT NULL DEFAULT FALSE,-- TRUE: this translation's word_links
                                                             --   are the anchor for propagation
+    is_alignment_pivot    BOOLEAN     NOT NULL DEFAULT FALSE -- TRUE: this translation is the pivot
+                                                            --   for the 4-way historical-spelling
+                                                            --   alignment pipeline (SV/Jongbloed).
+                                                            --   Kept as a separate column from
+                                                            --   source_lang_authority (same row as
+                                                            --   of Version20260904140000, but a
+                                                            --   distinct concept -- Hebrew/Greek
+                                                            --   word_links propagation vs. the
+                                                            --   4-way spelling-alignment pivot).
+    alignment_sequence    SMALLINT                          -- position in the CHAIN-topology
+                                                            --   alignment order within this family
+                                                            --   (1=oldest spelling), the alternative
+                                                            --   to the is_alignment_pivot star
+                                                            --   topology. NULL if not chained.
 );
 
 -- Versification difference mapping (OT: Hebrew tradition vs Dutch)
@@ -100,6 +114,11 @@ CREATE TABLE IF NOT EXISTS translation_words (
                                                  -- TRUE for HSV cursive/"add" words:
                                                  -- no direct source-language backing;
                                                  -- excluded from source-link propagation
+    alignment_note  VARCHAR(20) CHECK (alignment_note IN ('particle_drop', 'prefix_drop')),
+                                                 -- set by HistoricalAlignmentService on
+                                                 -- SV1657-side words that are systematically
+                                                 -- excluded from the alignment; see migration
+                                                 -- Version20260904130000
     UNIQUE (verse_id, word_position)
 );
 
@@ -193,13 +212,71 @@ CREATE TABLE IF NOT EXISTS inter_translation_links (
     word_b_id   INTEGER      NOT NULL REFERENCES translation_words(id) ON DELETE CASCADE,
     method      VARCHAR(30)  NOT NULL DEFAULT 'auto_source_pivot'
                     CHECK (method IN (
-                        'auto_source_pivot', 'auto_sequence', 'auto_positional',
-                        'manual', 'manual_empty'
+                        'auto_source_pivot', 'auto_sequence', 'auto_positional', 'manual', 'manual_empty',
+                        'anchor', 'window', 'compound', 'phrase', 'moved', 'one_to_many', 'synonym',
+                        'particle_drop', 'prefix_drop'
                     )),
     confidence  SMALLINT     CHECK (confidence BETWEEN 0 AND 100),
+    score       REAL         CHECK (score BETWEEN 0 AND 1),   -- 0-1 confidence for the
+                                                                -- HistoricalAlignmentService pipeline
+    updated_at  TIMESTAMPTZ,
     created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
     CONSTRAINT itl_ordered CHECK (word_a_id < word_b_id),
     UNIQUE (word_a_id, word_b_id)
+);
+
+-- NOTE: inter_translation_links.updated_by (-> users(id)) and the review_lock
+-- table (also -> users(id)) are added by migration Version20260904120000, not
+-- here -- this file has no `users` table of its own (same reason
+-- inter_translation_links.created_by_user_id is migration-only, see
+-- Version20260624120000/130000). Always apply schema.sql *and then* run
+-- `doctrine:migrations:migrate`; schema.sql alone is not a complete bootstrap.
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Alignment library: manual links promoted into reusable matching rules
+-- ─────────────────────────────────────────────────────────────────────────────
+
+-- These mirror HistoricalAlignmentService's hardcoded DEFAULT_LEXICON /
+-- DEFAULT_SYNONYM_BRIDGE / DEFAULT_MULTI_SYNONYM_BRIDGE / DEFAULT_PHRASE_BRIDGE
+-- constants and start empty -- the constants are the tested baseline, these
+-- tables only hold user-contributed additions, merged on top at construction
+-- time. See Version20260905140000 for the full rationale.
+-- created_by_user_id (-> users(id)) is migration-only, same reason as above.
+
+CREATE TABLE IF NOT EXISTS alignment_lexicon (
+    id             SERIAL PRIMARY KEY,
+    source_form    VARCHAR(100) NOT NULL,
+    target_form    VARCHAR(100) NOT NULL,
+    source_link_id INTEGER REFERENCES inter_translation_links(id) ON DELETE SET NULL,
+    created_at     TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    UNIQUE (source_form)
+);
+
+CREATE TABLE IF NOT EXISTS alignment_synonym_bridge (
+    id             SERIAL PRIMARY KEY,
+    source_form    VARCHAR(100) NOT NULL,
+    target_form    VARCHAR(100) NOT NULL,
+    source_link_id INTEGER REFERENCES inter_translation_links(id) ON DELETE SET NULL,
+    created_at     TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    UNIQUE (source_form, target_form)
+);
+
+CREATE TABLE IF NOT EXISTS alignment_multi_synonym_bridge (
+    id             SERIAL PRIMARY KEY,
+    source_form    VARCHAR(100) NOT NULL,
+    target_forms   TEXT[]       NOT NULL,
+    source_link_id INTEGER REFERENCES inter_translation_links(id) ON DELETE SET NULL,
+    created_at     TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    UNIQUE (source_form)
+);
+
+CREATE TABLE IF NOT EXISTS alignment_phrase_bridge (
+    id             SERIAL PRIMARY KEY,
+    source_forms   TEXT[]       NOT NULL,
+    target_forms   TEXT[]       NOT NULL,
+    source_link_id INTEGER REFERENCES inter_translation_links(id) ON DELETE SET NULL,
+    created_at     TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    UNIQUE (source_forms, target_forms)
 );
 
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -217,6 +294,7 @@ CREATE INDEX IF NOT EXISTS idx_wl_gr       ON word_links              (greek_wor
 CREATE INDEX IF NOT EXISTS idx_wl_tw       ON word_links              (translation_word_id);
 CREATE INDEX IF NOT EXISTS idx_itl_word_a  ON inter_translation_links (word_a_id);
 CREATE INDEX IF NOT EXISTS idx_itl_word_b  ON inter_translation_links (word_b_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_translations_alignment_sequence ON translations (family, alignment_sequence) WHERE alignment_sequence IS NOT NULL;
 
 -- Partial unique indexes: at most one link per source word + Dutch word pair
 CREATE UNIQUE INDEX IF NOT EXISTS idx_wl_he_tw ON word_links (hebrew_word_id, translation_word_id) WHERE hebrew_word_id IS NOT NULL;
@@ -342,14 +420,16 @@ ON CONFLICT (id) DO NOTHING;
 -- Seed data: translation records
 -- SV (Jongbloed) is the source_lang_authority: its word_links to Hebrew/Greek
 -- propagate to all other SV-family translations via inter_translation_links.
-INSERT INTO translations (id, code, name, abbreviation, language, direction, family, source_lang_authority) VALUES
-    (1, 'SV',    'Statenvertaling (Jongbloed)', 'SV(JB)',  'nld', 'LTR', 'SV', TRUE),
-    (2, 'HSV',   'Herziene Statenvertaling',   'HSV',      'nld', 'LTR', 'SV', FALSE),
-    (3, 'SVGBS', 'Statenvertaling (GBS)',      'SV(GBS)',  'nld', 'LTR', 'SV', FALSE),
-    (4, 'SV1657','Statenvertaling (1657)',     'SV(1657)', 'nld', 'LTR', 'SV', FALSE)
+INSERT INTO translations (id, code, name, abbreviation, language, direction, family, source_lang_authority, is_alignment_pivot, alignment_sequence) VALUES
+    (1, 'SV',    'Statenvertaling (Jongbloed)', 'SV(JB)',  'nld', 'LTR', 'SV', TRUE,  TRUE,  2),
+    (2, 'HSV',   'Herziene Statenvertaling',   'HSV',      'nld', 'LTR', 'SV', FALSE, FALSE, 4),
+    (3, 'SVGBS', 'Statenvertaling (GBS)',      'SV(GBS)',  'nld', 'LTR', 'SV', FALSE, FALSE, 3),
+    (4, 'SV1657','Statenvertaling (1657)',     'SV(1657)', 'nld', 'LTR', 'SV', FALSE, FALSE, 1)
 ON CONFLICT (id) DO UPDATE SET
     code                  = EXCLUDED.code,
     name                  = EXCLUDED.name,
     abbreviation          = EXCLUDED.abbreviation,
     family                = EXCLUDED.family,
-    source_lang_authority = EXCLUDED.source_lang_authority;
+    source_lang_authority = EXCLUDED.source_lang_authority,
+    is_alignment_pivot    = EXCLUDED.is_alignment_pivot,
+    alignment_sequence    = EXCLUDED.alignment_sequence;

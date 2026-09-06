@@ -13,6 +13,16 @@ use Symfony\Contracts\Cache\CacheInterface;
  */
 class PassageRepository
 {
+    /**
+     * Bound on how many inter_translation_links hops the source-language
+     * propagation queries will walk from the authority translation to reach
+     * a target word. The family only ever has a handful of translations
+     * (4 today), so this is a generous safety margin, not a real limit --
+     * it exists to keep the recursive CTE from ever running away, not
+     * because 4 hops is expected to matter in practice.
+     */
+    private const MAX_PROPAGATION_HOPS = 4;
+
     public function __construct(
         private readonly Connection     $connection,
         private readonly CacheInterface $cache,
@@ -101,10 +111,10 @@ class PassageRepository
                 FROM word_links wl
                 JOIN translation_words tw  ON tw.id = wl.translation_word_id
                 JOIN translation_verses tv ON tv.id = tw.verse_id
-                JOIN link_confidence lc    ON lc.link_id = wl.id
+                LEFT JOIN link_confidence lc    ON lc.link_id = wl.id
                 WHERE wl.hebrew_word_id = hw.id
                   AND tv.translation_id = :translation_id
-                ORDER BY tw.id, lc.score DESC
+                ORDER BY tw.id, lc.score DESC NULLS LAST
             ) best ON true
             WHERE hw.book_id = :book_id
               AND hw.chapter = :chapter
@@ -161,10 +171,10 @@ class PassageRepository
                 FROM word_links wl
                 JOIN translation_words tw  ON tw.id = wl.translation_word_id
                 JOIN translation_verses tv ON tv.id = tw.verse_id
-                JOIN link_confidence lc    ON lc.link_id = wl.id
+                LEFT JOIN link_confidence lc    ON lc.link_id = wl.id
                 WHERE wl.greek_word_id = gw.id
                   AND tv.translation_id = :translation_id
-                ORDER BY tw.id, lc.score DESC
+                ORDER BY tw.id, lc.score DESC NULLS LAST
             ) best ON true
             WHERE gw.book_id = :book_id
               AND gw.chapter = :chapter
@@ -204,9 +214,9 @@ class PassageRepository
             LEFT JOIN LATERAL (
                 SELECT lc2.method, lc2.score
                 FROM word_links wl2
-                JOIN link_confidence lc2 ON lc2.link_id = wl2.id
+                LEFT JOIN link_confidence lc2 ON lc2.link_id = wl2.id
                 WHERE wl2.translation_word_id = tw.id
-                ORDER BY lc2.score DESC
+                ORDER BY lc2.score DESC NULLS LAST
                 LIMIT 1
             ) wl_best ON true
             LEFT JOIN LATERAL (
@@ -329,12 +339,12 @@ class PassageRepository
             FROM word_links wl
             JOIN translation_words tw ON tw.id = wl.translation_word_id
             JOIN translation_verses tv ON tv.id = tw.verse_id
-            JOIN link_confidence lc ON lc.link_id = wl.id
+            LEFT JOIN link_confidence lc ON lc.link_id = wl.id
             WHERE tv.translation_id IN (:translation_ids)
               AND tv.book_id = :book_id
               AND tv.chapter = :chapter
               AND tv.verse   = :verse
-            ORDER BY tv.translation_id, wl.hebrew_word_id, tw.id, lc.score DESC
+            ORDER BY tv.translation_id, wl.hebrew_word_id, tw.id, lc.score DESC NULLS LAST
         SQL;
 
         $linkRows = $this->connection->fetchAllAssociative($linkSql, [
@@ -394,12 +404,12 @@ class PassageRepository
             FROM word_links wl
             JOIN translation_words tw ON tw.id = wl.translation_word_id
             JOIN translation_verses tv ON tv.id = tw.verse_id
-            JOIN link_confidence lc ON lc.link_id = wl.id
+            LEFT JOIN link_confidence lc ON lc.link_id = wl.id
             WHERE tv.translation_id IN (:translation_ids)
               AND tv.book_id = :book_id
               AND tv.chapter = :chapter
               AND tv.verse   = :verse
-            ORDER BY tv.translation_id, wl.greek_word_id, tw.id, lc.score DESC
+            ORDER BY tv.translation_id, wl.greek_word_id, tw.id, lc.score DESC NULLS LAST
         SQL;
 
         $linkRows = $this->connection->fetchAllAssociative($linkSql, [
@@ -453,9 +463,9 @@ class PassageRepository
             LEFT JOIN LATERAL (
                 SELECT lc2.method, lc2.score
                 FROM word_links wl2
-                JOIN link_confidence lc2 ON lc2.link_id = wl2.id
+                LEFT JOIN link_confidence lc2 ON lc2.link_id = wl2.id
                 WHERE wl2.translation_word_id = tw.id
-                ORDER BY lc2.score DESC LIMIT 1
+                ORDER BY lc2.score DESC NULLS LAST LIMIT 1
             ) wl_best ON true
             LEFT JOIN LATERAL (
                 SELECT itl.method, itl.confidence::float / 100.0 AS score
@@ -498,8 +508,17 @@ class PassageRepository
     }
 
     /**
-     * Batch version of fetchPropagatedLinksForVerse for multiple target translations.
+     * Source-language link propagation for one verse, batched across multiple
+     * target translations in a single query.
      * Returns [targetTranslationId => [sourceWordId => [links]]].
+     *
+     * Robust (multi-hop): walks inter_translation_links however many hops it
+     * takes to reach a target word, not just one. A single JOIN here used to
+     * mean a translation only got a suggestion if it was linked DIRECTLY to
+     * the authority translation -- silently producing nothing for anything
+     * reachable only transitively (e.g. a chain-topology translation two
+     * hops away, see HistoricalAlignmentRowBuilder). See
+     * self::MAX_PROPAGATION_HOPS for the bound.
      *
      * @param int[] $targetTranslationIds
      */
@@ -518,7 +537,7 @@ class PassageRepository
         $sourceIdCol = $testament === 'OT' ? 'hebrew_word_id' : 'greek_word_id';
 
         $sql = <<<SQL
-            WITH authority_links AS (
+            WITH RECURSIVE authority_links AS (
                 SELECT wl.{$sourceIdCol} AS source_word_id, tw_auth.id AS auth_tw_id
                 FROM word_links wl
                 JOIN translation_words tw_auth ON tw_auth.id = wl.translation_word_id
@@ -527,24 +546,37 @@ class PassageRepository
                   AND tv_auth.book_id = :book_id
                   AND tv_auth.chapter = :chapter
                   AND tv_auth.verse   = :verse
+            ),
+            reachable(source_word_id, tw_id, method, confidence, depth, visited) AS (
+                SELECT al.source_word_id, al.auth_tw_id, NULL::varchar, NULL::smallint, 0, ARRAY[al.auth_tw_id]
+                FROM authority_links al
+
+                UNION ALL
+
+                SELECT
+                    r.source_word_id,
+                    CASE WHEN itl.word_a_id = r.tw_id THEN itl.word_b_id ELSE itl.word_a_id END,
+                    itl.method,
+                    itl.confidence,
+                    r.depth + 1,
+                    r.visited || (CASE WHEN itl.word_a_id = r.tw_id THEN itl.word_b_id ELSE itl.word_a_id END)
+                FROM reachable r
+                JOIN inter_translation_links itl
+                    ON (itl.word_a_id = r.tw_id OR itl.word_b_id = r.tw_id)
+                   AND itl.method != 'manual_empty'
+                WHERE r.depth < :max_hops
+                  AND NOT (CASE WHEN itl.word_a_id = r.tw_id THEN itl.word_b_id ELSE itl.word_a_id END = ANY (r.visited))
             )
-            SELECT
-                al.source_word_id,
+            SELECT DISTINCT ON (r.source_word_id, tv_t.translation_id, r.tw_id)
+                r.source_word_id,
                 tv_t.translation_id,
                 tw_t.id AS tw_id, tw_t.word_text, tw_t.word_position,
-                itl.method AS itl_method, itl.confidence
-            FROM authority_links al
-            JOIN inter_translation_links itl
-                ON (itl.word_a_id = al.auth_tw_id OR itl.word_b_id = al.auth_tw_id)
-               AND itl.method != 'manual_empty'
-            JOIN translation_words tw_t
-                ON tw_t.id = CASE
-                    WHEN itl.word_a_id = al.auth_tw_id THEN itl.word_b_id
-                    ELSE itl.word_a_id
-                END
-            JOIN translation_verses tv_t ON tv_t.id = tw_t.verse_id
-                AND tv_t.translation_id IN (:target_ids)
-            ORDER BY tv_t.translation_id, al.source_word_id, tw_t.word_position
+                r.method AS itl_method, r.confidence
+            FROM reachable r
+            JOIN translation_words tw_t ON tw_t.id = r.tw_id
+            JOIN translation_verses tv_t ON tv_t.id = tw_t.verse_id AND tv_t.translation_id IN (:target_ids)
+            WHERE r.depth > 0
+            ORDER BY r.source_word_id, tv_t.translation_id, r.tw_id, r.depth ASC, tw_t.word_position
         SQL;
 
         $rows = $this->connection->fetchAllAssociative($sql, [
@@ -553,6 +585,7 @@ class PassageRepository
             'book_id'      => $bookId,
             'chapter'      => $chapter,
             'verse'        => $verse,
+            'max_hops'     => self::MAX_PROPAGATION_HOPS,
         ], ['target_ids' => ArrayParameterType::INTEGER]);
 
         $result = [];
@@ -567,79 +600,6 @@ class PassageRepository
                 'score'     => $row['confidence'] !== null ? (float) $row['confidence'] / 100.0 : null,
             ];
         }
-        return $result;
-    }
-
-    /**
-     * Fetch source-language link propagation for a non-authority translation.
-     *
-     * Walks the chain: source_word → word_links → authority_tw → inter_translation_links → target_tw
-     * Returns a map of source_word_id → [array of link arrays].
-     */
-    public function fetchPropagatedLinksForVerse(
-        int    $bookId,
-        int    $chapter,
-        int    $verse,
-        string $testament,
-        int    $authorityTranslationId,
-        int    $targetTranslationId,
-    ): array {
-        $sourceIdCol = $testament === 'OT' ? 'hebrew_word_id' : 'greek_word_id';
-
-        $sql = <<<SQL
-            WITH authority_links AS (
-                SELECT
-                    wl.{$sourceIdCol}   AS source_word_id,
-                    tw_auth.id          AS auth_tw_id
-                FROM word_links wl
-                JOIN translation_words tw_auth  ON tw_auth.id = wl.translation_word_id
-                JOIN translation_verses tv_auth ON tv_auth.id = tw_auth.verse_id
-                WHERE tv_auth.translation_id = :authority_id
-                  AND tv_auth.book_id = :book_id
-                  AND tv_auth.chapter = :chapter
-                  AND tv_auth.verse   = :verse
-            )
-            SELECT
-                al.source_word_id,
-                tw_t.id            AS tw_id,
-                tw_t.word_text,
-                tw_t.word_position,
-                itl.method         AS itl_method,
-                itl.confidence
-            FROM authority_links al
-            JOIN inter_translation_links itl
-                ON (itl.word_a_id = al.auth_tw_id OR itl.word_b_id = al.auth_tw_id)
-               AND itl.method != 'manual_empty'
-            JOIN translation_words tw_t
-                ON tw_t.id = CASE
-                    WHEN itl.word_a_id = al.auth_tw_id THEN itl.word_b_id
-                    ELSE itl.word_a_id
-                END
-            JOIN translation_verses tv_t ON tv_t.id = tw_t.verse_id
-                AND tv_t.translation_id = :target_id
-            ORDER BY al.source_word_id, tw_t.word_position
-        SQL;
-
-        $rows = $this->connection->fetchAllAssociative($sql, [
-            'authority_id' => $authorityTranslationId,
-            'target_id'    => $targetTranslationId,
-            'book_id'      => $bookId,
-            'chapter'      => $chapter,
-            'verse'        => $verse,
-        ]);
-
-        $result = [];
-        foreach ($rows as $row) {
-            $srcId            = $row['source_word_id'];
-            $result[$srcId][] = [
-                'tw_id'     => $row['tw_id'],
-                'word_text' => $row['word_text'],
-                'word_pos'  => (int) $row['word_position'],
-                'method'    => $row['itl_method'],
-                'score'     => $row['confidence'] !== null ? (float) $row['confidence'] / 100.0 : null,
-            ];
-        }
-
         return $result;
     }
 
@@ -706,11 +666,11 @@ class PassageRepository
             FROM word_links wl
             JOIN translation_words tw  ON tw.id = wl.translation_word_id
             JOIN translation_verses tv ON tv.id = tw.verse_id
-            JOIN link_confidence lc    ON lc.link_id = wl.id
+            LEFT JOIN link_confidence lc    ON lc.link_id = wl.id
             WHERE tv.translation_id IN (:translation_ids)
               AND tv.book_id = :book_id
               AND tv.chapter = :chapter
-            ORDER BY tv.translation_id, tv.verse, wl.greek_word_id, tw.id, lc.score DESC
+            ORDER BY tv.translation_id, tv.verse, wl.greek_word_id, tw.id, lc.score DESC NULLS LAST
         SQL;
 
         $linkRows = $this->connection->fetchAllAssociative($linkSql, [
@@ -778,11 +738,11 @@ class PassageRepository
             FROM word_links wl
             JOIN translation_words tw  ON tw.id = wl.translation_word_id
             JOIN translation_verses tv ON tv.id = tw.verse_id
-            JOIN link_confidence lc    ON lc.link_id = wl.id
+            LEFT JOIN link_confidence lc    ON lc.link_id = wl.id
             WHERE tv.translation_id IN (:translation_ids)
               AND tv.book_id = :book_id
               AND tv.chapter = :chapter
-            ORDER BY tv.translation_id, tv.verse, wl.hebrew_word_id, tw.id, lc.score DESC
+            ORDER BY tv.translation_id, tv.verse, wl.hebrew_word_id, tw.id, lc.score DESC NULLS LAST
         SQL;
 
         $linkRows = $this->connection->fetchAllAssociative($linkSql, [
@@ -846,9 +806,9 @@ class PassageRepository
             LEFT JOIN LATERAL (
                 SELECT lc2.method, lc2.score
                 FROM word_links wl2
-                JOIN link_confidence lc2 ON lc2.link_id = wl2.id
+                LEFT JOIN link_confidence lc2 ON lc2.link_id = wl2.id
                 WHERE wl2.translation_word_id = tw.id
-                ORDER BY lc2.score DESC LIMIT 1
+                ORDER BY lc2.score DESC NULLS LAST LIMIT 1
             ) wl_best ON true
             LEFT JOIN LATERAL (
                 SELECT itl.method, itl.confidence::float / 100.0 AS score
@@ -895,6 +855,9 @@ class PassageRepository
      * Propagated links for an entire chapter across multiple target translations.
      * Returns [verseNumber => [targetTranslationId => [sourceWordId => [links]]]].
      *
+     * Robust (multi-hop) -- see fetchPropagatedLinksForVerseBatch()'s docblock;
+     * same recursive-CTE fix, scoped per verse rather than a single one.
+     *
      * @param int[] $targetTranslationIds
      */
     public function fetchPropagatedLinksForChapterBatch(
@@ -911,7 +874,7 @@ class PassageRepository
         $sourceIdCol = $testament === 'OT' ? 'hebrew_word_id' : 'greek_word_id';
 
         $sql = <<<SQL
-            WITH authority_links AS (
+            WITH RECURSIVE authority_links AS (
                 SELECT wl.{$sourceIdCol} AS source_word_id,
                        tw_auth.id        AS auth_tw_id,
                        tv_auth.verse
@@ -921,25 +884,38 @@ class PassageRepository
                 WHERE tv_auth.translation_id = :authority_id
                   AND tv_auth.book_id = :book_id
                   AND tv_auth.chapter = :chapter
+            ),
+            reachable(source_word_id, verse, tw_id, method, confidence, depth, visited) AS (
+                SELECT al.source_word_id, al.verse, al.auth_tw_id, NULL::varchar, NULL::smallint, 0, ARRAY[al.auth_tw_id]
+                FROM authority_links al
+
+                UNION ALL
+
+                SELECT
+                    r.source_word_id, r.verse,
+                    CASE WHEN itl.word_a_id = r.tw_id THEN itl.word_b_id ELSE itl.word_a_id END,
+                    itl.method,
+                    itl.confidence,
+                    r.depth + 1,
+                    r.visited || (CASE WHEN itl.word_a_id = r.tw_id THEN itl.word_b_id ELSE itl.word_a_id END)
+                FROM reachable r
+                JOIN inter_translation_links itl
+                    ON (itl.word_a_id = r.tw_id OR itl.word_b_id = r.tw_id)
+                   AND itl.method != 'manual_empty'
+                WHERE r.depth < :max_hops
+                  AND NOT (CASE WHEN itl.word_a_id = r.tw_id THEN itl.word_b_id ELSE itl.word_a_id END = ANY (r.visited))
             )
-            SELECT
-                al.verse,
-                al.source_word_id,
+            SELECT DISTINCT ON (r.source_word_id, tv_t.translation_id, r.tw_id)
+                r.verse,
+                r.source_word_id,
                 tv_t.translation_id,
                 tw_t.id AS tw_id, tw_t.word_text, tw_t.word_position,
-                itl.method AS itl_method, itl.confidence
-            FROM authority_links al
-            JOIN inter_translation_links itl
-                ON (itl.word_a_id = al.auth_tw_id OR itl.word_b_id = al.auth_tw_id)
-               AND itl.method != 'manual_empty'
-            JOIN translation_words tw_t
-                ON tw_t.id = CASE
-                    WHEN itl.word_a_id = al.auth_tw_id THEN itl.word_b_id
-                    ELSE itl.word_a_id
-                END
-            JOIN translation_verses tv_t ON tv_t.id = tw_t.verse_id
-                AND tv_t.translation_id IN (:target_ids)
-            ORDER BY al.verse, tv_t.translation_id, al.source_word_id, tw_t.word_position
+                r.method AS itl_method, r.confidence
+            FROM reachable r
+            JOIN translation_words tw_t ON tw_t.id = r.tw_id
+            JOIN translation_verses tv_t ON tv_t.id = tw_t.verse_id AND tv_t.translation_id IN (:target_ids)
+            WHERE r.depth > 0
+            ORDER BY r.source_word_id, tv_t.translation_id, r.tw_id, r.depth ASC, tw_t.word_position
         SQL;
 
         $rows = $this->connection->fetchAllAssociative($sql, [
@@ -947,6 +923,7 @@ class PassageRepository
             'target_ids'   => $targetTranslationIds,
             'book_id'      => $bookId,
             'chapter'      => $chapter,
+            'max_hops'     => self::MAX_PROPAGATION_HOPS,
         ], ['target_ids' => ArrayParameterType::INTEGER]);
 
         $result = [];

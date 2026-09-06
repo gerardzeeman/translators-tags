@@ -34,6 +34,7 @@
     --color-auto-pivot:      #2e5c8a;
     --color-auto-sequence:   #5c7a2e;
     --color-auto-positional: #7a6b2e;
+    --color-gap:             #b3403f;
 
     /* Lettertypen */
     --font-ui:     'Cormorant Garamond', Georgia, 'Book Antiqua', Palatino, serif;
@@ -4166,3 +4167,304 @@ a:hover { text-decoration: underline; }
     cursor: text;
 }
 .lemma-variant-form { font-family: var(--font-serif); font-style: italic; }
+
+/* ─── Historische alignment reviewpagina (SV1657/SV/SVGBS/HSV) ────────────
+   Vier kolommen met klikbare woord-"chips" en een SVG-laag die gebogen
+   verbindingslijnen tekent tussen gekoppelde woorden. Lijnkleur = methode;
+   zie legend hieronder voor de exacte toewijzing. ────────────────────── */
+
+.hist-align-screen { max-width: 100%; padding: 1rem 1.5rem 3rem; }
+/* This page needs real width for four side-by-side columns of Dutch words
+   -- .site-main's normal 1400px reading-width cap (fine for flowing Bible
+   text) leaves each column too cramped. Widen only when this screen is
+   present, so other pages keep their narrower reading width. */
+.site-main:has(.hist-align-screen) { max-width: 1800px; }
+
+.hist-align-topbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 1rem;
+    padding: .75rem 1rem;
+    background: var(--card-warm);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    margin-bottom: .75rem;
+}
+.hist-align-breadcrumb { font-size: 1.1rem; }
+.hist-align-nav { display: flex; align-items: center; gap: .6rem; }
+.hist-align-nav .nav-pos { font-family: var(--font-mono); font-size: .85rem; color: var(--color-ink-muted); }
+.hist-align-score { font-family: var(--font-mono); font-size: .9rem; }
+.hist-align-score-detail { color: var(--color-ink-muted); font-size: .8rem; }
+.hist-align-actions { display: flex; gap: .5rem; margin-left: auto; }
+
+.hist-align-lock-banner,
+.hist-align-gap-warning {
+    padding: .5rem .9rem;
+    border-radius: var(--radius);
+    margin-bottom: .75rem;
+    font-size: .9rem;
+}
+.hist-align-lock-banner {
+    background: rgba(179, 64, 63, 0.12);
+    border: 1px solid var(--color-gap);
+    color: var(--color-gap);
+}
+.hist-align-gap-warning {
+    background: rgba(122, 107, 46, 0.12);
+    border: 1px solid var(--color-auto-positional);
+    color: var(--color-auto-positional);
+}
+
+.hist-align-toast {
+    position: fixed;
+    left: 50%;
+    bottom: 1.5rem;
+    transform: translateX(-50%);
+    background: var(--nav);
+    color: var(--nav-text);
+    padding: .6rem 1rem;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    z-index: 50;
+    font-size: .9rem;
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+}
+.hist-align-toast-btn {
+    background: transparent;
+    border: 1px solid currentColor;
+    color: inherit;
+    border-radius: var(--radius);
+    padding: .15rem .6rem;
+    font-size: .8rem;
+    cursor: pointer;
+}
+
+.hist-align-columns {
+    position: relative;
+    overflow-x: auto;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    background: var(--bg);
+}
+.hist-align-svg {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    /* Above the table (z-index 2): a real click on empty cell space must
+       reach the line-hit paths underneath it, not be swallowed by the <td>
+       first. The <svg> itself stays click-through everywhere except the
+       line-hit paths, which opt back in via pointer-events: stroke. */
+    z-index: 3;
+}
+.hist-align-line { fill: none; stroke-width: 1.5; opacity: .85; }
+.hist-align-line-hit { fill: none; stroke: transparent; stroke-width: 12; pointer-events: stroke; cursor: pointer; }
+.hist-align-line-chain { stroke-width: 3; opacity: 1; }
+
+.hist-align-line.method-anchor              { stroke: var(--color-auto-pivot); stroke-width: 2.5; }
+.hist-align-line.method-window,
+.hist-align-line.method-compound,
+.hist-align-line.method-phrase              { stroke: var(--color-auto-sequence); }
+.hist-align-line.method-synonym,
+.hist-align-line.method-moved,
+.hist-align-line.method-one_to_many         { stroke: var(--color-auto-positional); }
+.hist-align-line.method-manual              { stroke: var(--color-manual); stroke-width: 2.5; }
+.hist-align-line.method-particle_drop,
+.hist-align-line.method-prefix_drop         { stroke: var(--color-ink-muted); stroke-dasharray: 4 3; }
+
+/* Rijen = één per SV1657-woord (HistoricalAlignmentRowBuilder); elke kolom
+   toont het/de gekoppelde woord(en) in diezelfde rij, zodat overeenkomstige
+   woorden onder elkaar staan i.p.v. los per kolom doorlopen. */
+/* width: auto (not 100%) so table-layout: auto sizes each column to its own
+   widest word instead of stretching every column to fill .hist-align-columns
+   -- a short verse in a wide viewport would otherwise get needlessly wide
+   columns with lots of empty space around each word. min-width keeps very
+   short verses from looking cramped; overflow-x: auto on the wrapper (not
+   here) handles verses wide enough to need horizontal scroll. */
+.hist-align-table { position: relative; z-index: 2; width: auto; min-width: 900px; border-collapse: collapse; table-layout: auto; }
+.hist-align-table th,
+.hist-align-table td { border-left: 1px solid var(--color-border); padding: .35rem .6rem; vertical-align: top; }
+.hist-align-table th:first-child,
+.hist-align-table td:first-child { border-left: none; }
+.hist-align-table tbody tr:nth-child(even) { background: color-mix(in srgb, var(--card-warm) 45%, transparent); }
+.hist-align-table thead th {
+    position: sticky;
+    top: 0;
+    background: var(--card-warm);
+    font-family: var(--font-mono);
+    font-size: .85rem;
+    font-weight: 600;
+    color: var(--col-label);
+    text-align: left;
+    padding: .5rem .6rem;
+    border-bottom: 1px solid var(--color-border);
+}
+/* Strong's column: shows the Strong's number(s) linked (via word_links) to
+   any word in the row, across all four editions -- usually only SV/Jongbloed
+   carries a direct word_links row, but this checks every edition's words
+   rather than assuming which one. Narrow and non-wrapping since it's just a
+   short comma-separated list of codes like "H1234, G5678". */
+.hist-align-strongs-col {
+    width: 130px;
+    max-width: 130px;
+    white-space: normal;
+    font-family: var(--font-mono);
+    font-size: .8rem;
+}
+.hist-align-strongs-col a { color: var(--col-label); }
+
+/* Context column: unlike the word-chip columns (auto-sized to their widest
+   word), this one holds a short run of prose, so it gets a fixed width and
+   normal wrapping instead of shrinking/growing with word length. One empty
+   cell per row; only the currently-hovered word's row gets filled in, so the
+   context appears at that word's height instead of pinned to the top. */
+.hist-align-context-col {
+    width: 320px;
+    max-width: 320px;
+    white-space: normal;
+    font-size: .9rem;
+    line-height: 1.5;
+}
+.hist-align-context-label {
+    display: inline-block;
+    font-family: var(--font-mono);
+    font-size: .7rem;
+    font-weight: 600;
+    color: var(--col-label);
+    border: 1px solid var(--color-border);
+    border-radius: 3px;
+    padding: 0 .3rem;
+    margin-right: .35rem;
+    vertical-align: middle;
+}
+
+.hist-align-pivot-badge {
+    font-size: .65rem;
+    font-weight: 400;
+    color: var(--color-auto-pivot);
+    border: 1px solid var(--color-auto-pivot);
+    border-radius: 3px;
+    padding: 0 .3rem;
+    vertical-align: middle;
+}
+
+.hist-align-word {
+    display: inline-block;
+    cursor: pointer;
+    padding: .15rem .45rem;
+    margin: 0 .2rem .2rem 0;
+    border-radius: var(--radius);
+    border: 1px solid transparent;
+    background: transparent;
+    transition: background .12s, border-color .12s, opacity .12s;
+    user-select: none;
+    overflow-wrap: anywhere;
+}
+.hist-align-word:hover,
+.hist-align-word:focus-visible {
+    background: var(--hover-warm);
+    border-color: var(--color-border);
+    outline: none;
+}
+.hist-align-word-pending {
+    background: var(--color-accent-2) !important;
+    color: #fff !important;
+    border-color: var(--color-accent-2) !important;
+}
+.hist-align-word-chain { background: var(--hover-warm); border-color: var(--color-auto-pivot); }
+.hist-align-word.word-note { color: var(--color-ink-muted); border-style: dashed; border-color: var(--color-border); }
+
+.hist-align-screen.hist-align-hovering .hist-align-word:not(.hist-align-word-chain):not(.hist-align-word-pending) { opacity: .4; }
+.hist-align-screen.hist-align-hovering .hist-align-line:not(.hist-align-line-chain) { opacity: .12; }
+
+.hist-align-screen.review-lock-readonly .hist-align-word { pointer-events: none; }
+.hist-align-screen.review-lock-readonly .hist-align-actions button { pointer-events: none; opacity: .5; }
+
+.hist-align-legend { display: flex; flex-wrap: wrap; gap: 1rem; margin-top: 1rem; font-size: .85rem; color: var(--color-ink-light); }
+.legend-item { display: flex; align-items: center; gap: .4rem; }
+.legend-line { display: inline-block; width: 22px; height: 0; border-top-width: 2.5px; border-top-style: solid; }
+.legend-line.legend-anchor      { border-color: var(--color-auto-pivot); }
+.legend-line.legend-derived     { border-color: var(--color-auto-sequence); }
+.legend-line.legend-last-resort { border-color: var(--color-auto-positional); }
+.legend-line.legend-manual      { border-color: var(--color-manual); }
+.legend-line.legend-note        { border-color: var(--color-ink-muted); border-top-style: dashed; }
+.legend-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--color-gap); }
+
+.hist-align-help { margin-top: .75rem; font-size: .8rem; color: var(--color-ink-muted); }
+.hist-align-help kbd {
+    font-family: var(--font-mono);
+    background: var(--card-warm);
+    border: 1px solid var(--color-border);
+    border-radius: 3px;
+    padding: 0 .3rem;
+}
+
+/* ─── Generieke knopklassen (.btn/.btn-sm/.btn-xs) ─────────────────────────
+   .btn-primary bestond al (felle accentknop); dit voegt de neutrale/outline
+   basisstijl en maatvarianten toe die .trans-linking-nav en de historische
+   alignmentpagina's al gebruikten zonder dat er ooit CSS voor bestond. ── */
+.btn {
+    display: inline-block;
+    padding: .5rem 1rem;
+    background: var(--card-warm);
+    color: var(--text);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    font-family: var(--font-serif);
+    font-size: 1rem;
+    cursor: pointer;
+    text-decoration: none;
+}
+.btn:hover { background: var(--hover-warm); text-decoration: none; }
+.btn-sm { padding: .35rem .75rem; font-size: .85rem; }
+.btn-xs { padding: .2rem .55rem; font-size: .75rem; }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+
+/* ─── Historische alignment: boek-/hoofdstukoverzicht ──────────────────── */
+.hist-align-book-grid { display: flex; flex-wrap: wrap; gap: .5rem; margin: .5rem 0 1.5rem; }
+.hist-align-book-card {
+    padding: .4rem .8rem;
+    background: var(--card-warm);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    color: var(--text);
+    text-decoration: none;
+}
+.hist-align-book-card:hover { background: var(--hover-warm); text-decoration: none; }
+
+.hist-align-overview-table { width: 100%; border-collapse: collapse; margin-top: .5rem; }
+.hist-align-overview-table th, .hist-align-overview-table td {
+    text-align: left;
+    padding: .5rem .75rem;
+    border-bottom: 1px solid var(--color-border-light);
+}
+.hist-align-overview-table th { font-family: var(--font-mono); font-size: .8rem; color: var(--color-ink-muted); font-weight: 600; }
+
+.hist-align-score-bar {
+    position: relative;
+    width: 160px;
+    height: 1.3rem;
+    background: var(--card-warm);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    overflow: hidden;
+}
+.hist-align-score-bar-fill {
+    position: absolute;
+    top: 0; left: 0; bottom: 0;
+    background: var(--color-manual);
+    opacity: .35;
+}
+.hist-align-score-bar span {
+    position: relative;
+    display: block;
+    text-align: center;
+    line-height: 1.3rem;
+    font-family: var(--font-mono);
+    font-size: .75rem;
+}

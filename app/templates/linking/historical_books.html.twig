@@ -1,0 +1,26 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Historische alignment · boeken{% endblock %}
+
+{% block body %}
+<div class="hist-align-screen">
+    <h1>Historische alignment (SV1657)</h1>
+    <p class="hist-align-help">
+        Kies een boek om per hoofdstuk de reviewvoortgang te zien.
+        <a class="btn btn-sm" href="{{ path('app_hist_align_library') }}">Bibliotheek (lexicon &amp; synoniemen)</a>
+    </p>
+
+    {% set testaments = {'OT': 'Oude Testament', 'NT': 'Nieuwe Testament', 'APOC': 'Apocriefe boeken (SV1657)'} %}
+    {% for code, label in testaments %}
+        {% set group = books|filter(b => b.testament == code) %}
+        {% if group|length > 0 %}
+        <h2>{{ label }}</h2>
+        <div class="hist-align-book-grid">
+            {% for book in group %}
+            <a class="hist-align-book-card" href="{{ path('app_hist_align_book', {usfm: book.usfmCode}) }}">{{ book.nameNl }}</a>
+            {% endfor %}
+        </div>
+        {% endif %}
+    {% endfor %}
+</div>
+{% endblock %}

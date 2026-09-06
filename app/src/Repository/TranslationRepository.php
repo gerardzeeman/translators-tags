@@ -33,4 +33,20 @@ class TranslationRepository extends ServiceEntityRepository
         );
         return $translations;
     }
+
+    /**
+     * The translation code whose word_links (Hebrew/Greek) are authoritative
+     * and propagate to the rest of its family via inter_translation_links
+     * (currently 'SV'/Jongbloed). Not mapped on the Translation entity
+     * itself (source_lang_authority is a DBAL-only concern, see
+     * LinkingRepository), so this reads it via the raw connection.
+     */
+    public function findSourceLangAuthorityCode(): ?string
+    {
+        $code = $this->getEntityManager()->getConnection()->fetchOne(
+            'SELECT code FROM translations WHERE source_lang_authority = TRUE LIMIT 1'
+        );
+
+        return $code !== false ? (string) $code : null;
+    }
 }

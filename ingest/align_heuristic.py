@@ -306,22 +306,29 @@ def load_unlinked_greek(translation_id: int, book_id: int | None = None) -> list
             return [dict(zip(cols, row)) for row in cur.fetchall()]
 
 
-def load_verse_dutch_words(translation_id: int, book_id: int, chapter: int, verse: int) -> list[dict]:
+def load_verse_dutch_words(translation_id: int, book_id: int, chapter: int, verse: int,
+                            cur=None) -> list[dict]:
+    """Pass an open `cur` to reuse an existing connection — see
+    insert_word_link() in db/loaders.py for why this matters when called
+    once per verse inside a large loop."""
+    sql = """
+        SELECT tw.id, tw.word_position, tw.word_text, tw.word_normalised
+        FROM translation_words tw
+        JOIN translation_verses tv ON tw.verse_id = tv.id
+        WHERE tv.translation_id = %s
+          AND tv.book_id = %s AND tv.chapter = %s AND tv.verse = %s
+        ORDER BY tw.word_position
+        """
+    params = (translation_id, book_id, chapter, verse)
+    if cur is not None:
+        cur.execute(sql, params)
+        cols = [d[0] for d in cur.description]
+        return [dict(zip(cols, row)) for row in cur.fetchall()]
     with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT tw.id, tw.word_position, tw.word_text, tw.word_normalised
-                FROM translation_words tw
-                JOIN translation_verses tv ON tw.verse_id = tv.id
-                WHERE tv.translation_id = %s
-                  AND tv.book_id = %s AND tv.chapter = %s AND tv.verse = %s
-                ORDER BY tw.word_position
-                """,
-                (translation_id, book_id, chapter, verse),
-            )
-            cols = [d[0] for d in cur.description]
-            return [dict(zip(cols, row)) for row in cur.fetchall()]
+        with conn.cursor() as owned_cur:
+            owned_cur.execute(sql, params)
+            cols = [d[0] for d in owned_cur.description]
+            return [dict(zip(cols, row)) for row in owned_cur.fetchall()]
 
 
 def load_verse_source_counts() -> dict[tuple, int]:
@@ -540,85 +547,79 @@ def align_heuristic(translation_id: int, book_id: int | None = None,
 
     dutch_cache: dict[tuple, list[dict]] = {}
 
-    def get_dutch(book_id: int, chapter: int, verse: int) -> list[dict]:
+    def get_dutch(cur, book_id: int, chapter: int, verse: int) -> list[dict]:
         key = (book_id, chapter, verse)
         if key not in dutch_cache:
-            dutch_cache[key] = load_verse_dutch_words(translation_id, book_id, chapter, verse)
+            dutch_cache[key] = load_verse_dutch_words(translation_id, book_id, chapter, verse, cur=cur)
         return dutch_cache[key]
 
     inserted_hint       = 0
     inserted_proper     = 0
     inserted_positional = 0
     skipped_by_hint     = 0
+    failed              = 0
+
+    COMMIT_EVERY = 500  # bound transaction size/duration; not correctness-critical
+
+    def run_pass(words: list[dict], lang: str, desc: str) -> None:
+        nonlocal inserted_hint, inserted_proper, inserted_positional, skipped_by_hint, failed
+        if not words:
+            return
+        current_verse: tuple | None = None
+        used_tw_ids:   set[int]     = set()
+
+        # One shared connection for the whole pass instead of two brand-new
+        # connections per word — the earlier per-word get_connection() calls
+        # were pure network/auth round-trip overhead (~17 words/sec), not
+        # computation. Each word's insert still runs inside its own SAVEPOINT
+        # (conn.transaction()) so one bad row rolls back only that row instead
+        # of aborting the whole in-progress pass.
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                for i, word in enumerate(tqdm(words, desc=desc, unit=" words"), start=1):
+                    verse_key = (word["book_id"], word["chapter"], word["verse"])
+                    if verse_key != current_verse:
+                        current_verse = verse_key
+                        used_tw_ids   = set()
+
+                    dutch = get_dutch(cur, word["book_id"], word["chapter"], word["verse"])
+                    tw_id, score, notes = _align_word(word, lang, dutch, source_counts, manual_hints, used_tw_ids)
+
+                    if notes == "__skip__":
+                        skipped_by_hint += 1
+                        continue
+
+                    if tw_id is not None:
+                        try:
+                            with conn.transaction():
+                                method = "manual_hint" if notes.startswith("manual_hint") else notes
+                                link_id = insert_word_link(lang, word["id"], tw_id, cur=cur)
+                                insert_link_confidence(link_id, method, round(score, 3), notes=notes, cur=cur)
+                            used_tw_ids.add(tw_id)
+                            if method == "manual_hint":
+                                inserted_hint += 1
+                            elif method == "proper_noun":
+                                inserted_proper += 1
+                            else:
+                                inserted_positional += 1
+                        except Exception:
+                            failed += 1
+
+                    if i % COMMIT_EVERY == 0:
+                        conn.commit()
 
     # ── Hebrew ────────────────────────────────────────────────────────────────
-    current_verse: tuple | None = None
-    used_tw_ids:   set[int]     = set()
-
-    for word in tqdm(hebrew_unlinked, desc="  Heuristic HE", unit=" words"):
-        verse_key = (word["book_id"], word["chapter"], word["verse"])
-        if verse_key != current_verse:
-            current_verse = verse_key
-            used_tw_ids   = set()
-
-        dutch = get_dutch(word["book_id"], word["chapter"], word["verse"])
-        tw_id, score, notes = _align_word(word, "HE", dutch, source_counts, manual_hints, used_tw_ids)
-
-        if notes == "__skip__":
-            skipped_by_hint += 1
-            continue
-
-        if tw_id is not None:
-            try:
-                method = "manual_hint" if notes.startswith("manual_hint") else notes
-                link_id = insert_word_link("HE", word["id"], tw_id)
-                insert_link_confidence(link_id, method, round(score, 3), notes=notes)
-                used_tw_ids.add(tw_id)
-                if method == "manual_hint":
-                    inserted_hint += 1
-                elif method == "proper_noun":
-                    inserted_proper += 1
-                else:
-                    inserted_positional += 1
-            except Exception:
-                pass
+    run_pass(hebrew_unlinked, "HE", "  Heuristic HE")
 
     # ── Greek ─────────────────────────────────────────────────────────────────
-    current_verse = None
-    used_tw_ids   = set()
-
-    for word in tqdm(greek_unlinked, desc="  Heuristic GR", unit=" words"):
-        verse_key = (word["book_id"], word["chapter"], word["verse"])
-        if verse_key != current_verse:
-            current_verse = verse_key
-            used_tw_ids   = set()
-
-        dutch = get_dutch(word["book_id"], word["chapter"], word["verse"])
-        tw_id, score, notes = _align_word(word, "GR", dutch, source_counts, manual_hints, used_tw_ids)
-
-        if notes == "__skip__":
-            skipped_by_hint += 1
-            continue
-
-        if tw_id is not None:
-            try:
-                method = "manual_hint" if notes.startswith("manual_hint") else notes
-                link_id = insert_word_link("GR", word["id"], tw_id)
-                insert_link_confidence(link_id, method, round(score, 3), notes=notes)
-                used_tw_ids.add(tw_id)
-                if method == "manual_hint":
-                    inserted_hint += 1
-                elif method == "proper_noun":
-                    inserted_proper += 1
-                else:
-                    inserted_positional += 1
-            except Exception:
-                pass
+    run_pass(greek_unlinked, "GR", "  Heuristic GR")
 
     print(f"  ✓ Manual-hint links:      {inserted_hint:,}")
     print(f"  ✓ Proper-noun links:      {inserted_proper:,}")
     print(f"  ✓ Positional links:       {inserted_positional:,}")
     print(f"  ↷ Skipped (hint: no link): {skipped_by_hint:,}")
+    if failed:
+        print(f"  ✗ Failed inserts:         {failed:,}")
 
 
 if __name__ == "__main__":

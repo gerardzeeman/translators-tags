@@ -1056,6 +1056,12 @@ class LinkingRepository
      * so the user can confirm them with a single Save click.
      *
      * link_id is NULL for suggestions (no real word_links row yet).
+     *
+     * Robust (multi-hop): walks inter_translation_links however many hops it
+     * takes to reach $translationId, not just one -- see
+     * PassageRepository::fetchPropagatedLinksForVerseBatch()'s docblock for
+     * why a single JOIN silently misses anything only reachable transitively
+     * (e.g. a chain-topology translation two hops from the authority).
      */
     public function fetchPassageForLinkingWithPropagation(
         int $bookId, int $chapter, int $verse,
@@ -1068,29 +1074,47 @@ class LinkingRepository
         $sourceIdCol = $testament === 'OT' ? 'hebrew_word_id' : 'greek_word_id';
 
         $sql = <<<SQL
-            SELECT
-                wl_auth.{$sourceIdCol} AS source_word_id,
-                tw_t.id                AS tw_id,
+            WITH RECURSIVE authority_links AS (
+                SELECT wl_auth.{$sourceIdCol} AS source_word_id, tw_auth.id AS auth_tw_id
+                FROM word_links wl_auth
+                JOIN translation_words tw_auth  ON tw_auth.id = wl_auth.translation_word_id
+                JOIN translation_verses tv_auth ON tv_auth.id = tw_auth.verse_id
+                    AND tv_auth.translation_id = :authority_id
+                    AND tv_auth.book_id        = :book_id
+                    AND tv_auth.chapter        = :chapter
+                    AND tv_auth.verse          = :verse
+            ),
+            reachable(source_word_id, tw_id, method, confidence, depth, visited) AS (
+                SELECT al.source_word_id, al.auth_tw_id, NULL::varchar, NULL::smallint, 0, ARRAY[al.auth_tw_id]
+                FROM authority_links al
+
+                UNION ALL
+
+                SELECT
+                    r.source_word_id,
+                    CASE WHEN itl.word_a_id = r.tw_id THEN itl.word_b_id ELSE itl.word_a_id END,
+                    itl.method,
+                    itl.confidence,
+                    r.depth + 1,
+                    r.visited || (CASE WHEN itl.word_a_id = r.tw_id THEN itl.word_b_id ELSE itl.word_a_id END)
+                FROM reachable r
+                JOIN inter_translation_links itl
+                    ON (itl.word_a_id = r.tw_id OR itl.word_b_id = r.tw_id)
+                   AND itl.method != 'manual_empty'
+                WHERE r.depth < :max_hops
+                  AND NOT (CASE WHEN itl.word_a_id = r.tw_id THEN itl.word_b_id ELSE itl.word_a_id END = ANY (r.visited))
+            )
+            SELECT DISTINCT ON (r.source_word_id, r.tw_id)
+                r.source_word_id,
+                tw_t.id AS tw_id,
                 tw_t.word_position,
-                itl.method,
-                itl.confidence
-            FROM word_links wl_auth
-            JOIN translation_words tw_auth  ON tw_auth.id = wl_auth.translation_word_id
-            JOIN translation_verses tv_auth ON tv_auth.id = tw_auth.verse_id
-                AND tv_auth.translation_id = :authority_id
-                AND tv_auth.book_id        = :book_id
-                AND tv_auth.chapter        = :chapter
-                AND tv_auth.verse          = :verse
-            JOIN inter_translation_links itl
-                ON (itl.word_a_id = tw_auth.id OR itl.word_b_id = tw_auth.id)
-               AND itl.method != 'manual_empty'
-            JOIN translation_words tw_t
-                ON tw_t.id = CASE
-                    WHEN itl.word_a_id = tw_auth.id THEN itl.word_b_id
-                    ELSE itl.word_a_id END
-            JOIN translation_verses tv_t ON tv_t.id = tw_t.verse_id
-                AND tv_t.translation_id = :target_id
-            ORDER BY wl_auth.{$sourceIdCol}, tw_t.word_position
+                r.method,
+                r.confidence
+            FROM reachable r
+            JOIN translation_words tw_t ON tw_t.id = r.tw_id
+            JOIN translation_verses tv_t ON tv_t.id = tw_t.verse_id AND tv_t.translation_id = :target_id
+            WHERE r.depth > 0
+            ORDER BY r.source_word_id, r.tw_id, r.depth ASC, tw_t.word_position
         SQL;
 
         $rows = $this->connection->fetchAllAssociative($sql, [
@@ -1099,6 +1123,7 @@ class LinkingRepository
             'book_id'      => $bookId,
             'chapter'      => $chapter,
             'verse'        => $verse,
+            'max_hops'     => 4,
         ]);
 
         // Group propagated rows by source_word_id
@@ -1172,6 +1197,423 @@ class LinkingRepository
              JOIN translations tb ON tb.family = ta.family AND tb.id != ta.id
              WHERE ta.source_lang_authority = TRUE
              ORDER BY ta.family, CASE tb.code WHEN 'SV1657' THEN 1 WHEN 'SVGBS' THEN 2 WHEN 'HSV' THEN 3 ELSE 4 END, tb.code"
+        );
+    }
+
+    /**
+     * Translation pairs for the 4-way historical-spelling alignment pipeline:
+     * every translation sharing a family with the `is_alignment_pivot` one
+     * (currently SV/Jongbloed, see migration Version20260904140000), pivoted
+     * on it. Deliberately a separate query/column from
+     * fetchTranslationPairs()'s `source_lang_authority` pivot -- the two
+     * happen to currently point at the same translation, but they're
+     * unrelated concepts (this one is the 4-way spelling-alignment pivot;
+     * that one anchors Hebrew/Greek word_links propagation) and are free to
+     * diverge again. See migration Version20260904120000.
+     */
+    public function fetchHistoricalAlignmentPairs(): array
+    {
+        return $this->connection->fetchAllAssociative(
+            "SELECT
+                ta.id   AS id_a,  ta.code  AS code_a,  ta.name AS name_a,  COALESCE(ta.abbreviation, ta.code) AS abbreviation_a,
+                tb.id   AS id_b,  tb.code  AS code_b,  tb.name AS name_b,  COALESCE(tb.abbreviation, tb.code) AS abbreviation_b,
+                ta.family
+             FROM translations ta
+             JOIN translations tb ON tb.family = ta.family AND tb.id != ta.id
+             WHERE ta.is_alignment_pivot = TRUE
+             ORDER BY ta.family, tb.code"
+        );
+    }
+
+    /**
+     * Translation pairs for the CHAIN-topology alternative to
+     * fetchHistoricalAlignmentPairs(): adjacent editions linked directly to
+     * each other (SV1657<->SV<->SVGBS<->HSV, by `alignment_sequence`)
+     * instead of everything pivoting through one central translation. Both
+     * topologies can coexist; `--topology=star|chain` on
+     * app:link:translations:auto picks which one runs. See migration
+     * Version20260905090000.
+     *
+     * `id_a` is always the lower-sequence (older-spelling) side of the pair,
+     * matching HistoricalAlignmentService's src/tgt convention -- alignment
+     * always runs from older to more modern spelling.
+     */
+    public function fetchChainAlignmentPairs(): array
+    {
+        return $this->connection->fetchAllAssociative(
+            "SELECT
+                ta.id   AS id_a,  ta.code  AS code_a,  ta.name AS name_a,  COALESCE(ta.abbreviation, ta.code) AS abbreviation_a,
+                tb.id   AS id_b,  tb.code  AS code_b,  tb.name AS name_b,  COALESCE(tb.abbreviation, tb.code) AS abbreviation_b,
+                ta.family
+             FROM translations ta
+             JOIN translations tb ON tb.family = ta.family AND tb.alignment_sequence = ta.alignment_sequence + 1
+             WHERE ta.alignment_sequence IS NOT NULL
+             ORDER BY ta.family, ta.alignment_sequence"
+        );
+    }
+
+    /**
+     * The chain order (codes only, ascending alignment_sequence) for a
+     * family -- e.g. ['SV1657', 'SV', 'SVGBS', 'HSV']. Used by the review UI
+     * to pick column order and the row-builder's backbone when in chain mode.
+     */
+    public function fetchChainSequenceCodes(string $family): array
+    {
+        return $this->connection->fetchFirstColumn(
+            'SELECT code FROM translations WHERE family = :family AND alignment_sequence IS NOT NULL ORDER BY alignment_sequence',
+            ['family' => $family]
+        );
+    }
+
+    /**
+     * Batch-fetches everything the book-/chapter-overview pages need to
+     * compute a HistoricalAlignmentScoreService score per verse, in as few
+     * queries as possible: one for the pivot's own verse list (authoritative
+     * for SV1657 -- avoids relying on Hebrew/Greek-derived verse counts,
+     * which can disagree with SV1657 due to versification differences), one
+     * for every word across the four translations in scope, one for every
+     * link touching those words. The per-verse score computation itself
+     * then happens in PHP over already-in-memory data -- no N+1 queries per
+     * verse, which matters for a book like Psalms (~2500 verses).
+     *
+     * @return array{
+     *   pairs: list<array{0:string,1:string}>,
+     *   backbone_code: string,
+     *   verse_list: list<array{chapter: int, verse: int}>,
+     *   words_by_verse: array<string, array<string, list<array>>>,
+     *   links_by_verse: array<string, list<array>>,
+     * }
+     */
+    public function fetchHistoricalAlignmentScopeData(int $bookId, ?int $chapter = null, string $topology = 'star'): array
+    {
+        $topologyInfo = $this->resolveAlignmentTopology($topology);
+        $backboneCode = $topologyInfo['backbone_code'];
+        $backboneId = (int) $this->connection->fetchOne(
+            'SELECT id FROM translations WHERE code = :code',
+            ['code' => $backboneCode]
+        );
+
+        $verseListParams = ['pivotId' => $backboneId, 'bookId' => $bookId];
+        $verseListSql = 'SELECT chapter, verse FROM translation_verses WHERE translation_id = :pivotId AND book_id = :bookId';
+        if ($chapter !== null) {
+            $verseListSql .= ' AND chapter = :chapter';
+            $verseListParams['chapter'] = $chapter;
+        }
+        $verseListSql .= ' ORDER BY chapter, verse';
+        $verseList = $this->connection->fetchAllAssociative($verseListSql, $verseListParams);
+
+        $wordsParams = ['bookId' => $bookId];
+        $wordsSql = "SELECT tv.chapter, tv.verse, t.code, tw.id, tw.word_position, tw.word_text, tw.is_filler, tw.alignment_note
+                     FROM translation_words tw
+                     JOIN translation_verses tv ON tv.id = tw.verse_id
+                     JOIN translations t ON t.id = tv.translation_id
+                     WHERE tv.book_id = :bookId
+                       AND t.family = (SELECT family FROM translations WHERE is_alignment_pivot = TRUE LIMIT 1)";
+        if ($chapter !== null) {
+            $wordsSql .= ' AND tv.chapter = :chapter';
+            $wordsParams['chapter'] = $chapter;
+        }
+        $words = $this->connection->fetchAllAssociative($wordsSql, $wordsParams);
+
+        $wordsByVerse = [];
+        $verseKeyByWordId = [];
+        foreach ($words as $w) {
+            $key = $w['chapter'] . ':' . $w['verse'];
+            $wordsByVerse[$key][$w['code']][] = $w;
+            $verseKeyByWordId[(int) $w['id']] = $key;
+        }
+
+        $linksParams = ['bookId' => $bookId];
+        $linksSql = 'SELECT itl.word_a_id, itl.word_b_id, itl.method, itl.score
+                     FROM inter_translation_links itl
+                     JOIN translation_words twa ON twa.id = itl.word_a_id
+                     JOIN translation_verses tva ON tva.id = twa.verse_id
+                     WHERE tva.book_id = :bookId';
+        if ($chapter !== null) {
+            $linksSql .= ' AND tva.chapter = :chapter';
+            $linksParams['chapter'] = $chapter;
+        }
+        $links = $this->connection->fetchAllAssociative($linksSql, $linksParams);
+
+        $linksByVerse = [];
+        foreach ($links as $l) {
+            $key = $verseKeyByWordId[(int) $l['word_a_id']] ?? null;
+            if ($key !== null) {
+                $linksByVerse[$key][] = $l;
+            }
+        }
+
+        return [
+            'pairs' => $topologyInfo['pairs'],
+            'backbone_code' => $backboneCode,
+            'verse_list' => $verseList,
+            'words_by_verse' => $wordsByVerse,
+            'links_by_verse' => $linksByVerse,
+        ];
+    }
+
+    /**
+     * Clears alignment_note (particle_drop/prefix_drop) for one
+     * translation's words in the given scope, so a fresh recompute can
+     * re-derive it cleanly (particle_drop is pair-independent so always
+     * converges the same either way, but prefix_drop can vary per pair --
+     * see markAlignmentNote()'s $onlyIfUnset union semantics). Call once per
+     * distinct translation touched by the run (every id_a AND id_b across
+     * the pairs being processed -- see LinkTranslationsAutoCommand), before
+     * processing any pair: markAlignmentNote() only ever marks a pair's
+     * id_a side, and which translation that is depends on topology (star:
+     * always the pivot; chain: rotates through every translation), so a
+     * note set under one topology is never cleared by the other topology's
+     * run unless every translation actually involved gets cleared here.
+     */
+    public function clearAlignmentNotesForTranslation(int $translationId, ?string $book, ?int $chapter, ?int $verse): int
+    {
+        $sql = "UPDATE translation_words tw
+                SET alignment_note = NULL
+                FROM translation_verses tv, books b
+                WHERE tw.verse_id = tv.id AND tv.book_id = b.id
+                  AND tv.translation_id = :translationId
+                  AND tw.alignment_note IS NOT NULL";
+        $params = ['translationId' => $translationId];
+
+        if ($book !== null) {
+            $sql .= ' AND b.usfm_code = :usfm';
+            $params['usfm'] = $book;
+        }
+        if ($chapter !== null) {
+            $sql .= ' AND tv.chapter = :chapter';
+            $params['chapter'] = $chapter;
+        }
+        if ($verse !== null) {
+            $sql .= ' AND tv.verse = :verse';
+            $params['verse'] = $verse;
+        }
+
+        return (int) $this->connection->executeStatement($sql, $params);
+    }
+
+    /**
+     * Marks words with a systematic-exclusion reason (see migration
+     * Version20260904130000). With $onlyIfUnset, an existing note is never
+     * downgraded/overwritten -- used for prefix_drop, which can be flagged
+     * by one pair's alignment run and not another's, so a flag from any
+     * pair should stick for the whole recompute.
+     */
+    public function markAlignmentNote(array $wordIds, string $note, bool $onlyIfUnset = false): void
+    {
+        if (!$wordIds) {
+            return;
+        }
+        $sql = 'UPDATE translation_words SET alignment_note = :note WHERE id IN (:ids)';
+        if ($onlyIfUnset) {
+            $sql .= ' AND alignment_note IS NULL';
+        }
+        $this->connection->executeStatement(
+            $sql,
+            ['note' => $note, 'ids' => $wordIds],
+            ['ids' => ArrayParameterType::INTEGER]
+        );
+    }
+
+    /**
+     * Resolves a display/scoring topology to concrete facts the review UI
+     * and HistoricalAlignmentScoreService need: which translation-code
+     * pairs were (or should be) aligned, which code anchors row position
+     * (HistoricalAlignmentRowBuilder's backbone), and the left-to-right
+     * column display order. Star and chain can coexist in the DB at once
+     * (is_alignment_pivot and alignment_sequence are independent columns);
+     * this is what picks between them for a given request.
+     *
+     * @return array{pairs: list<array{0:string,1:string}>, backbone_code: string, ordered_codes: list<string>}
+     */
+    public function resolveAlignmentTopology(string $topology): array
+    {
+        if ($topology === 'chain') {
+            $chainPairs = $this->fetchChainAlignmentPairs();
+            $family = $chainPairs[0]['family'] ?? 'SV';
+            $orderedCodes = $this->fetchChainSequenceCodes($family);
+
+            return [
+                'pairs' => array_map(static fn($p) => [$p['code_a'], $p['code_b']], $chainPairs),
+                'backbone_code' => $orderedCodes[0] ?? '',
+                'ordered_codes' => $orderedCodes,
+            ];
+        }
+
+        $starPairs = $this->fetchHistoricalAlignmentPairs();
+        $backboneCode = $starPairs[0]['code_a'] ?? '';
+        $displayOrder = ['SV1657' => 0, 'SVGBS' => 1, 'SV' => 2, 'HSV' => 3];
+        $orderedCodes = array_merge([$backboneCode], array_column($starPairs, 'code_b'));
+        usort($orderedCodes, static fn($a, $b) => ($displayOrder[$a] ?? 99) <=> ($displayOrder[$b] ?? 99));
+
+        return [
+            'pairs' => array_map(static fn($p) => [$p['code_a'], $p['code_b']], $starPairs),
+            'backbone_code' => $backboneCode,
+            'ordered_codes' => $orderedCodes,
+        ];
+    }
+
+    /**
+     * All data the historical-alignment review page needs for one verse:
+     * the family's translations (ordered per $topology), their words
+     * (including alignment_note), every inter_translation_links row
+     * touching any of those words, any Strong's numbers linked to those
+     * words via word_links, and the topology facts needed to score and lay
+     * out the page (see resolveAlignmentTopology()).
+     *
+     * @return array{translations: list<array>, words: array<string, list<array>>, links: list<array>, strongs: array<int, list<string>>, pairs: list<array{0:string,1:string}>, backbone_code: string}
+     */
+    public function fetchHistoricalAlignmentVerseData(int $bookId, int $chapter, int $verse, string $topology = 'star'): array
+    {
+        $topologyInfo = $this->resolveAlignmentTopology($topology);
+
+        $allTranslations = $this->connection->fetchAllAssociative(
+            "SELECT id, code, name, COALESCE(abbreviation, code) AS abbreviation, is_alignment_pivot, source_lang_authority
+             FROM translations
+             WHERE family = (SELECT family FROM translations WHERE is_alignment_pivot = TRUE LIMIT 1)"
+        );
+        $byCode = [];
+        foreach ($allTranslations as $t) {
+            $byCode[$t['code']] = $t;
+        }
+        $translations = array_values(array_filter(
+            array_map(static fn($code) => $byCode[$code] ?? null, $topologyInfo['ordered_codes']),
+        ));
+
+        $wordsByCode = [];
+        foreach ($translations as $t) {
+            $wordsByCode[$t['code']] = $this->connection->fetchAllAssociative(
+                "SELECT tw.id, tw.word_position, tw.word_text, tw.is_filler, tw.alignment_note
+                 FROM translation_words tw
+                 JOIN translation_verses tv ON tv.id = tw.verse_id
+                 WHERE tv.translation_id = :tid AND tv.book_id = :bid AND tv.chapter = :ch AND tv.verse = :vs
+                 ORDER BY tw.word_position",
+                ['tid' => $t['id'], 'bid' => $bookId, 'ch' => $chapter, 'vs' => $verse]
+            );
+        }
+
+        $allIds = [];
+        foreach ($wordsByCode as $words) {
+            foreach ($words as $w) {
+                $allIds[] = (int) $w['id'];
+            }
+        }
+
+        $links = [];
+        if ($allIds) {
+            $links = $this->connection->fetchAllAssociative(
+                "SELECT id, word_a_id, word_b_id, method, score, confidence, updated_at
+                 FROM inter_translation_links
+                 WHERE word_a_id IN (:ids) OR word_b_id IN (:ids)",
+                ['ids' => $allIds],
+                ['ids' => ArrayParameterType::INTEGER]
+            );
+        }
+
+        // Strong's numbers, keyed by translation_word_id -- checked across
+        // ALL four editions' words, not just the source_lang_authority one
+        // (SV/Jongbloed): word_links is where this normally lives, but the
+        // review screen shouldn't assume which edition happens to carry it.
+        // A list per word since a compound Hebrew/Greek match can link more
+        // than one source word to the same translation word.
+        $strongsByWordId = [];
+        if ($allIds) {
+            $strongsRows = $this->connection->fetchAllAssociative(
+                "SELECT wl.translation_word_id, COALESCE(hw.strongs, gw.strongs) AS strongs
+                 FROM word_links wl
+                 LEFT JOIN hebrew_words hw ON hw.id = wl.hebrew_word_id
+                 LEFT JOIN greek_words gw ON gw.id = wl.greek_word_id
+                 WHERE wl.translation_word_id IN (:ids)",
+                ['ids' => $allIds],
+                ['ids' => ArrayParameterType::INTEGER]
+            );
+            foreach ($strongsRows as $r) {
+                if ($r['strongs'] !== null) {
+                    $strongsByWordId[(int) $r['translation_word_id']][] = $r['strongs'];
+                }
+            }
+        }
+
+        return [
+            'translations' => $translations,
+            'words' => $wordsByCode,
+            'links' => $links,
+            'strongs' => $strongsByWordId,
+            'pairs' => $topologyInfo['pairs'],
+            'backbone_code' => $topologyInfo['backbone_code'],
+        ];
+    }
+
+    /**
+     * Guards manual link/unlink API calls: both words must belong to the
+     * same verse (book/chapter/verse) and to translations within the
+     * alignment-pivot family, so a request can't forge a link between
+     * unrelated words.
+     */
+    public function wordsShareVerseInAlignmentFamily(int $wordAId, int $wordBId): bool
+    {
+        return (bool) $this->connection->fetchOne(
+            "SELECT 1
+             FROM translation_words wa
+             JOIN translation_words wb ON true
+             JOIN translation_verses tva ON tva.id = wa.verse_id
+             JOIN translation_verses tvb ON tvb.id = wb.verse_id
+             JOIN translations ta ON ta.id = tva.translation_id
+             JOIN translations tb ON tb.id = tvb.translation_id
+             WHERE wa.id = :a AND wb.id = :b
+               AND ta.family = tb.family
+               AND ta.family = (SELECT family FROM translations WHERE is_alignment_pivot = TRUE LIMIT 1)
+               AND tva.book_id = tvb.book_id AND tva.chapter = tvb.chapter AND tva.verse = tvb.verse
+             LIMIT 1",
+            ['a' => $wordAId, 'b' => $wordBId]
+        );
+    }
+
+    /**
+     * "Goedkeuren" (plan sectie 6): promotes every link touching any of
+     * these word IDs to `manual`, score 1.0 -- including links that were
+     * already manual, which get their updated_at/updated_by refreshed as a
+     * re-confirmation, per plan sectie 4/6.
+     */
+    public function approveVerseLinks(array $wordIds, int $userId): int
+    {
+        if (!$wordIds) {
+            return 0;
+        }
+
+        return (int) $this->connection->executeStatement(
+            "UPDATE inter_translation_links
+             SET method = 'manual',
+                 score = 1.0,
+                 confidence = NULL,
+                 updated_at = NOW(),
+                 updated_by = :userId,
+                 created_by_user_id = COALESCE(created_by_user_id, :userId)
+             WHERE word_a_id IN (:ids) OR word_b_id IN (:ids)",
+            ['ids' => $wordIds, 'userId' => $userId],
+            ['ids' => ArrayParameterType::INTEGER]
+        );
+    }
+
+    /**
+     * Existing manual links within a word-ID scope, as raw (word_a_id,
+     * word_b_id) pairs. Used to seed forced anchors for
+     * HistoricalAlignmentService::alignPair() -- manual links are always
+     * respected and never overwritten by the auto-linker.
+     */
+    public function fetchManualLinkPairs(array $idsA, array $idsB): array
+    {
+        if (!$idsA || !$idsB) {
+            return [];
+        }
+
+        return $this->connection->fetchAllAssociative(
+            "SELECT word_a_id, word_b_id FROM inter_translation_links
+             WHERE method = 'manual'
+               AND ((word_a_id IN (:listA) AND word_b_id IN (:listB))
+                 OR (word_a_id IN (:listB) AND word_b_id IN (:listA)))",
+            ['listA' => $idsA, 'listB' => $idsB],
+            ['listA' => ArrayParameterType::INTEGER, 'listB' => ArrayParameterType::INTEGER]
         );
     }
 
@@ -1296,19 +1738,30 @@ class LinkingRepository
 
     /**
      * Save an inter-translation link (word_a_id < word_b_id enforced).
+     * `updated_at`/`updated_by` are stamped on every write, including when
+     * re-confirming a link that already existed (see plan sectie 4/6).
      */
-    public function saveInterTranslationLink(int $wordAId, int $wordBId, string $method = 'manual', ?int $confidence = null, ?int $createdByUserId = null): void
-    {
+    public function saveInterTranslationLink(
+        int $wordAId,
+        int $wordBId,
+        string $method = 'manual',
+        ?int $confidence = null,
+        ?int $createdByUserId = null,
+        ?float $score = null,
+    ): void {
         [$a, $b] = $wordAId < $wordBId ? [$wordAId, $wordBId] : [$wordBId, $wordAId];
 
         $this->connection->executeStatement(
-            "INSERT INTO inter_translation_links (word_a_id, word_b_id, method, confidence, created_by_user_id)
-             VALUES (:a, :b, :method, :confidence, :userId)
+            "INSERT INTO inter_translation_links (word_a_id, word_b_id, method, confidence, score, created_by_user_id, updated_at, updated_by)
+             VALUES (:a, :b, :method, :confidence, :score, :userId, NOW(), :userId)
              ON CONFLICT (word_a_id, word_b_id) DO UPDATE
                 SET method = EXCLUDED.method,
                     confidence = CASE WHEN EXCLUDED.confidence IS NULL THEN NULL ELSE EXCLUDED.confidence END,
-                    created_by_user_id = COALESCE(inter_translation_links.created_by_user_id, EXCLUDED.created_by_user_id)",
-            ['a' => $a, 'b' => $b, 'method' => $method, 'confidence' => $confidence, 'userId' => $createdByUserId]
+                    score = EXCLUDED.score,
+                    created_by_user_id = COALESCE(inter_translation_links.created_by_user_id, EXCLUDED.created_by_user_id),
+                    updated_at = NOW(),
+                    updated_by = EXCLUDED.updated_by",
+            ['a' => $a, 'b' => $b, 'method' => $method, 'confidence' => $confidence, 'score' => $score, 'userId' => $createdByUserId]
         );
     }
 

@@ -111,12 +111,14 @@ class BibleVerseEmbedRenderer implements BlogEmbedRendererInterface
             }
         }
 
-        // SV is the authority translation: word_links are entered against it directly, and
-        // every other translation's links are propagated from SV via inter_translation_links
-        // (see PassageRepository::fetchPropagatedLinksForVerseBatch, same as BibleController::verse()).
-        $svTranslation = $this->translationRepository->findByCode('SV');
+        // The source-lang authority translation (currently SV/Jongbloed): word_links
+        // are entered against it directly, and every other translation's links are
+        // propagated from it via inter_translation_links (see
+        // PassageRepository::fetchPropagatedLinksForVerseBatch, same as BibleController::verse()).
+        $authorityCode = $this->translationRepository->findSourceLangAuthorityCode();
+        $svTranslation = $authorityCode ? $this->translationRepository->findByCode($authorityCode) : null;
         if (!$svTranslation) {
-            return $this->renderError('Vertaling "SV" niet gevonden.');
+            return $this->renderError('Geen bronvertaling (source_lang_authority) geconfigureerd.');
         }
 
         // Translations to actually query per verse: the ones being displayed,
@@ -163,15 +165,15 @@ class BibleVerseEmbedRenderer implements BlogEmbedRendererInterface
                 }
                 $dutchVersesByCode[$t->getCode()] = $passage['dutch_verse'] ?? [];
 
-                // This translation's own per-word links: direct word_links (SV
-                // only) or, for every other translation, links propagated from
-                // SV via inter_translation_links.
+                // This translation's own per-word links: direct word_links (the
+                // authority only) or, for every other translation, links propagated
+                // from the authority via inter_translation_links.
                 $tLinksById = [];
                 foreach ($passage['source_words'] ?? [] as $w) {
                     $tLinksById[$w['id']] = $w['dutch_links'] ?? [];
                 }
                 $propagated = [];
-                if ($t->getCode() !== 'SV') {
+                if ($t->getCode() !== $authorityCode) {
                     $batch = $this->passageRepository->fetchPropagatedLinksForVerseBatch(
                         $book->getId(), $curChapter, $curVerse, $testament,
                         $svTranslation->getId(), [$t->getId()],

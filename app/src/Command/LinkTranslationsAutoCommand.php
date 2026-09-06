@@ -4,6 +4,7 @@ namespace App\Command;
 
 use App\Repository\LinkingRepository;
 use App\Repository\TranslationRepository;
+use App\Service\Alignment\HistoricalAlignmentService;
 use Doctrine\DBAL\Connection;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -19,9 +20,10 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 class LinkTranslationsAutoCommand extends Command
 {
     public function __construct(
-        private readonly Connection             $connection,
-        private readonly LinkingRepository     $linkingRepo,
-        private readonly TranslationRepository $translationRepo,
+        private readonly Connection                    $connection,
+        private readonly LinkingRepository              $linkingRepo,
+        private readonly TranslationRepository          $translationRepo,
+        private readonly HistoricalAlignmentService      $historicalAlignmentService,
     ) {
         parent::__construct();
     }
@@ -30,22 +32,51 @@ class LinkTranslationsAutoCommand extends Command
     {
         $this
             ->addOption('dry-run', null, InputOption::VALUE_NONE,  'Do not write to DB')
-            ->addOption('reset',   null, InputOption::VALUE_NONE,  'Delete existing auto-links before re-running')
+            ->addOption('reset',   null, InputOption::VALUE_NONE,  'Delete existing auto-links before re-running (pairwise engine only -- the historical engine always does this, since manual links are passed through as protected anchors instead of being skipped over)')
             ->addOption('family',  null, InputOption::VALUE_OPTIONAL, 'Only process this family (e.g. SV)', null)
-            ->addOption('book',    null, InputOption::VALUE_OPTIONAL, 'Only process this book USFM code', null);
+            ->addOption('book',    null, InputOption::VALUE_OPTIONAL, 'Only process this book USFM code', null)
+            ->addOption('chapter', null, InputOption::VALUE_OPTIONAL, 'Only process this chapter, e.g. GEN.1', null)
+            ->addOption('verse',   null, InputOption::VALUE_OPTIONAL, 'Only process this verse, e.g. GEN.1.1', null)
+            ->addOption('engine',  null, InputOption::VALUE_OPTIONAL, 'Which pipeline to run: "pairwise" (default, legacy source-pivot/sequence/positional passes) or "historical" (HistoricalAlignmentService)', 'pairwise')
+            ->addOption('topology', null, InputOption::VALUE_OPTIONAL, 'Historical engine only: "star" (default, everything pivots through the is_alignment_pivot translation) or "chain" (adjacent editions linked directly to each other by alignment_sequence, e.g. SV1657<->SV<->SVGBS<->HSV)', 'star');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $io     = new SymfonyStyle($input, $output);
-        $dryRun = (bool) $input->getOption('dry-run');
-        $reset  = (bool) $input->getOption('reset');
-        $family = $input->getOption('family');
-        $book   = $input->getOption('book');
+        $io       = new SymfonyStyle($input, $output);
+        $dryRun   = (bool) $input->getOption('dry-run');
+        $reset    = (bool) $input->getOption('reset');
+        $family   = $input->getOption('family');
+        $engine   = $input->getOption('engine');
+        $topology = $input->getOption('topology');
 
-        $io->title('Auto-link translation pairs');
+        if (!in_array($engine, ['pairwise', 'historical'], true)) {
+            $io->error("Ongeldige --engine waarde '{$engine}'. Gebruik 'pairwise' of 'historical'.");
+            return Command::FAILURE;
+        }
+        if (!in_array($topology, ['star', 'chain'], true)) {
+            $io->error("Ongeldige --topology waarde '{$topology}'. Gebruik 'star' of 'chain'.");
+            return Command::FAILURE;
+        }
 
-        $pairs = $this->linkingRepo->fetchTranslationPairs();
+        [$book, $chapter, $verse, $scopeError] = $this->resolveScope(
+            $input->getOption('book'),
+            $input->getOption('chapter'),
+            $input->getOption('verse'),
+        );
+        if ($scopeError !== null) {
+            $io->error($scopeError);
+            return Command::FAILURE;
+        }
+
+        $io->title($engine === 'historical' ? "Auto-link historical alignment ({$topology} topology)" : 'Auto-link translation pairs');
+
+        $pairs = match (true) {
+            $engine === 'historical' && $topology === 'chain' => $this->linkingRepo->fetchChainAlignmentPairs(),
+            $engine === 'historical' => $this->linkingRepo->fetchHistoricalAlignmentPairs(),
+            default => $this->linkingRepo->fetchTranslationPairs(),
+        };
+
         if ($family) {
             $pairs = array_filter($pairs, fn($p) => $p['family'] === $family);
         }
@@ -55,26 +86,120 @@ class LinkTranslationsAutoCommand extends Command
             return Command::SUCCESS;
         }
 
+        // Start each full historical recompute from a clean alignment_note
+        // slate so particle_drop/prefix_drop flags don't go stale across
+        // runs (see LinkingRepository::clearAlignmentNotesForTranslation()).
+        // markAlignmentNote() only ever marks the CURRENT pair's id_a side
+        // (see processHistoricalPair()), but which translation that is
+        // depends on topology: star always has id_a = the pivot, chain
+        // rotates id_a through every translation in the chain. A note set
+        // by one topology's run is therefore never on id_a for the OTHER
+        // topology's pairs, so clearing must cover every translation that
+        // appears as id_a OR id_b across the pairs actually being
+        // processed now -- clearing only id_a left the non-pivot side's
+        // notes permanently stale whenever star and chain topology were
+        // ever both run against the same verse.
+        if ($engine === 'historical' && !$dryRun) {
+            $clearedIds = [];
+            foreach ($pairs as $pair) {
+                foreach ([(int) $pair['id_a'], (int) $pair['id_b']] as $id) {
+                    if (!isset($clearedIds[$id])) {
+                        $this->linkingRepo->clearAlignmentNotesForTranslation($id, $book, $chapter, $verse);
+                        $clearedIds[$id] = true;
+                    }
+                }
+            }
+        }
+
         foreach ($pairs as $pair) {
             $io->section(sprintf('%s ↔ %s (family: %s)', $pair['code_a'], $pair['code_b'], $pair['family']));
 
-            $this->processPair(
-                $io, $dryRun, $reset,
-                (int) $pair['id_a'], $pair['code_a'],
-                (int) $pair['id_b'], $pair['code_b'],
-                $book,
-            );
+            if ($engine === 'historical') {
+                $this->processHistoricalPair(
+                    $io, $dryRun,
+                    (int) $pair['id_a'], (int) $pair['id_b'],
+                    $book, $chapter, $verse,
+                );
+            } else {
+                $this->processPair(
+                    $io, $dryRun, $reset,
+                    (int) $pair['id_a'], $pair['code_a'],
+                    (int) $pair['id_b'], $pair['code_b'],
+                    $book, $chapter, $verse,
+                );
+            }
         }
 
         $io->success('Done.');
         return Command::SUCCESS;
     }
 
+    /**
+     * Parses --book/--chapter/--verse into a single (book, chapter, verse)
+     * scope. At most one of the three may be given (--chapter and --verse
+     * already imply the book).
+     *
+     * @return array{0: ?string, 1: ?int, 2: ?int, 3: ?string} [book, chapter, verse, error]
+     */
+    private function resolveScope(?string $book, ?string $chapterOpt, ?string $verseOpt): array
+    {
+        $given = array_filter(['book' => $book, 'chapter' => $chapterOpt, 'verse' => $verseOpt], fn($v) => $v !== null);
+        if (count($given) > 1) {
+            return [null, null, null, 'Gebruik slechts één van --book, --chapter of --verse.'];
+        }
+
+        if ($verseOpt !== null) {
+            $parts = explode('.', $verseOpt);
+            if (count($parts) !== 3 || $parts[0] === '' || !ctype_digit($parts[1]) || !ctype_digit($parts[2])) {
+                return [null, null, null, "Ongeldig --verse formaat '{$verseOpt}', verwacht bijv. GEN.1.1"];
+            }
+            return [strtoupper($parts[0]), (int) $parts[1], (int) $parts[2], null];
+        }
+
+        if ($chapterOpt !== null) {
+            $parts = explode('.', $chapterOpt);
+            if (count($parts) !== 2 || $parts[0] === '' || !ctype_digit($parts[1])) {
+                return [null, null, null, "Ongeldig --chapter formaat '{$chapterOpt}', verwacht bijv. GEN.1"];
+            }
+            return [strtoupper($parts[0]), (int) $parts[1], null, null];
+        }
+
+        if ($book !== null) {
+            return [strtoupper($book), null, null, null];
+        }
+
+        return [null, null, null, null];
+    }
+
+    /**
+     * Builds the optional book/chapter/verse WHERE-fragment shared by both
+     * engines' verse queries. Assumes the book table is aliased `b` and the
+     * "A-side" verse table `tv_a`.
+     */
+    private function scopeWhereSql(?string $book, ?int $chapter, ?int $verse, array &$params): string
+    {
+        $sql = '';
+        if ($book !== null) {
+            $sql .= ' AND b.usfm_code = :usfm';
+            $params['usfm'] = $book;
+        }
+        if ($chapter !== null) {
+            $sql .= ' AND tv_a.chapter = :chapter';
+            $params['chapter'] = $chapter;
+        }
+        if ($verse !== null) {
+            $sql .= ' AND tv_a.verse = :verse';
+            $params['verse'] = $verse;
+        }
+
+        return $sql;
+    }
+
     private function processPair(
         SymfonyStyle $io, bool $dryRun, bool $reset,
         int $idA, string $codeA,
         int $idB, string $codeB,
-        ?string $bookFilter
+        ?string $bookFilter, ?int $chapterFilter, ?int $verseFilter,
     ): void {
         // Fetch all verses present in both translations
         $versesSql = "
@@ -90,11 +215,7 @@ class LinkTranslationsAutoCommand extends Command
             WHERE tv_a.translation_id = :id_a
         ";
         $params = ['id_a' => $idA, 'id_b' => $idB];
-
-        if ($bookFilter) {
-            $versesSql .= " AND b.usfm_code = :usfm";
-            $params['usfm'] = strtoupper($bookFilter);
-        }
+        $versesSql .= $this->scopeWhereSql($bookFilter, $chapterFilter, $verseFilter, $params);
         $versesSql .= " ORDER BY tv_a.book_id, tv_a.chapter, tv_a.verse";
 
         // Count first for a meaningful progress bar (cheap COUNT query)
@@ -318,5 +439,156 @@ class LinkTranslationsAutoCommand extends Command
                  OR (word_a_id IN ({$listB}) AND word_b_id IN ({$listA})))
              LIMIT 1"
         );
+    }
+
+    // ── Historical-alignment engine (HistoricalAlignmentService, is_alignment_pivot) ──
+
+    /**
+     * Unlike processPair(), this always resets non-manual links and always
+     * recomputes -- there is no "skip verse if it has manual links" branch,
+     * because manual links are passed into HistoricalAlignmentService as
+     * protected forced anchors instead: the rest of the pipeline aligns
+     * around them, exactly as it already does around its own algorithmic
+     * anchors. --reset is accepted but irrelevant here.
+     */
+    private function processHistoricalPair(
+        SymfonyStyle $io, bool $dryRun,
+        int $idA, int $idB,
+        ?string $bookFilter, ?int $chapterFilter, ?int $verseFilter,
+    ): void {
+        $versesSql = "
+            SELECT tv_a.id AS verse_id_a, tv_b.id AS verse_id_b,
+                   tv_a.book_id, tv_a.chapter, tv_a.verse, b.usfm_code
+            FROM translation_verses tv_a
+            JOIN translation_verses tv_b
+                ON tv_b.translation_id = :id_b
+               AND tv_b.book_id  = tv_a.book_id
+               AND tv_b.chapter  = tv_a.chapter
+               AND tv_b.verse    = tv_a.verse
+            JOIN books b ON b.id = tv_a.book_id
+            WHERE tv_a.translation_id = :id_a
+        ";
+        $params = ['id_a' => $idA, 'id_b' => $idB];
+        $versesSql .= $this->scopeWhereSql($bookFilter, $chapterFilter, $verseFilter, $params);
+        $versesSql .= " ORDER BY tv_a.book_id, tv_a.chapter, tv_a.verse";
+
+        $countSql = "SELECT COUNT(*) FROM ({$versesSql}) t";
+        $total    = (int) $this->connection->fetchOne($countSql, $params);
+        $verses   = $this->connection->iterateAssociative($versesSql, $params);
+
+        $io->progressStart($total);
+        $linked = 0;
+
+        foreach ($verses as $v) {
+            $verseIdA = (int) $v['verse_id_a'];
+            $verseIdB = (int) $v['verse_id_b'];
+
+            $wordsA = $this->connection->fetchAllAssociative(
+                "SELECT id, word_position, word_text FROM translation_words WHERE verse_id = :vid ORDER BY word_position",
+                ['vid' => $verseIdA]
+            );
+            $wordsB = $this->connection->fetchAllAssociative(
+                "SELECT id, word_position, word_text FROM translation_words WHERE verse_id = :vid ORDER BY word_position",
+                ['vid' => $verseIdB]
+            );
+
+            if (empty($wordsA) || empty($wordsB)) {
+                $io->progressAdvance();
+                continue;
+            }
+
+            $idsA = array_column($wordsA, 'id');
+            $idsB = array_column($wordsB, 'id');
+
+            // Bestaande manual-links worden ALTIJD gerespecteerd: als vaste
+            // ankers meegegeven, nooit verwijderd of overschreven.
+            $forcedAnchors = $this->resolveForcedAnchors($wordsA, $wordsB, $idsA, $idsB);
+
+            if (!$dryRun) {
+                $this->linkingRepo->resetVerseAutoLinks($idsA, $idsB);
+            }
+
+            $srcRaw = array_column($wordsA, 'word_text');
+            $tgtRaw = array_column($wordsB, 'word_text');
+            $result = $this->historicalAlignmentService->alignPair($srcRaw, $tgtRaw, $forcedAnchors);
+
+            $verseLinked = 0;
+            foreach ($result->links as $link) {
+                // 'manual' links already exist in the DB and were fed in as
+                // forced anchors -- never re-write them here.
+                if ($link->kind === 'manual' || !$link->tgt) {
+                    continue;
+                }
+                foreach ($link->tgt as $tgtPos) {
+                    if (!$dryRun) {
+                        $this->linkingRepo->saveInterTranslationLink(
+                            (int) $wordsA[$link->src]['id'],
+                            (int) $wordsB[$tgtPos]['id'],
+                            $link->kind,
+                            null,
+                            null,
+                            $link->score,
+                        );
+                    }
+                    $verseLinked++;
+                }
+            }
+            $linked += $verseLinked;
+
+            if (!$dryRun) {
+                // particle_drop is pair-independent (purely a function of the
+                // the pivot's own text) so it's always safe to (re-)assert. prefix_drop
+                // can vary per pair -- only ever set it, never overwrite an
+                // existing note, so a flag from any of the 3 pairs sticks.
+                $particleWordIds = array_map(fn($i) => (int) $wordsA[$i]['id'], $result->particles);
+                $prefixWordIds = array_map(fn($i) => (int) $wordsA[$i]['id'], $result->droppedPrefixes);
+                $this->linkingRepo->markAlignmentNote($particleWordIds, 'particle_drop');
+                $this->linkingRepo->markAlignmentNote($prefixWordIds, 'prefix_drop', onlyIfUnset: true);
+            }
+
+            unset($wordsA, $wordsB, $idsA, $idsB, $forcedAnchors, $result, $srcRaw, $tgtRaw);
+            $io->progressAdvance();
+        }
+
+        $io->progressFinish();
+        $io->text(sprintf('  Linked %d word pairs%s', $linked, $dryRun ? ' (dry run)' : ''));
+    }
+
+    /**
+     * Maps existing manual links for this verse pair to [srcPos, tgtPos]
+     * position pairs relative to $wordsA/$wordsB's order, for
+     * HistoricalAlignmentService::alignPair()'s $forcedAnchors argument.
+     * (word_a_id, word_b_id) in inter_translation_links is ordered by ID,
+     * not by "which side is the pivot", so either id could belong to
+     * either side -- resolved here via the id -> position maps.
+     */
+    private function resolveForcedAnchors(array $wordsA, array $wordsB, array $idsA, array $idsB): array
+    {
+        $manualRows = $this->linkingRepo->fetchManualLinkPairs($idsA, $idsB);
+        if (!$manualRows) {
+            return [];
+        }
+
+        $posA = [];
+        foreach ($wordsA as $idx => $w) {
+            $posA[(int) $w['id']] = $idx;
+        }
+        $posB = [];
+        foreach ($wordsB as $idx => $w) {
+            $posB[(int) $w['id']] = $idx;
+        }
+
+        $forced = [];
+        foreach ($manualRows as $row) {
+            $x = (int) $row['word_a_id'];
+            $y = (int) $row['word_b_id'];
+            if (isset($posA[$x], $posB[$y])) {
+                $forced[] = [$posA[$x], $posB[$y]];
+            } elseif (isset($posA[$y], $posB[$x])) {
+                $forced[] = [$posA[$y], $posB[$x]];
+            }
+        }
+
+        return $forced;
     }
 }
