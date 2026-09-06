@@ -77,13 +77,14 @@ PushSubscription
     UNIQUE (user_id, endpoint)
 
 NewsDigest
-├── id            int, PK
-├── title         string(255)
-├── body          text
-├── url           string(255), nullable    — relatief same-origin pad, gevalideerd bij ontvangst — zie §5.2
-├── sentAt        datetime_immutable
-├── successCount  int
-└── failureCount  int
+├── id             int, PK
+├── idempotencyKey string(32), unique       — client-key of server-fallback (UTC-datum) — zie §5.2
+├── title          string(255)
+├── body           text
+├── url            string(255), nullable    — relatief same-origin pad, gevalideerd bij ontvangst — zie §5.2
+├── sentAt         datetime_immutable
+├── successCount   int
+└── failureCount   int
 ```
 
 Eén gebruiker kan meerdere `PushSubscription`s hebben (meerdere apparaten/
@@ -140,20 +141,66 @@ Nieuwe env-vars, zelfde patroon als `GOOGLE_ANALYTICS_ID`/`ANTHROPIC_API_KEY`
 (zie [`docs/deployment.md`](deployment.md)):
 
 - root `.env.local`: `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `NEWS_DIGEST_WEBHOOK_TOKEN`
-  (`openssl rand -hex 32`)
+  (`openssl rand -hex 32`), `NEWS_DIGEST_PUSH_ENABLED` (default `true` — zie
+  §3.1 hieronder)
 - `docker-compose.yml`, `app`-service `environment:`-blok:
   ```yaml
   VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
   VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
   NEWS_DIGEST_WEBHOOK_TOKEN: ${NEWS_DIGEST_WEBHOOK_TOKEN:-}
+  NEWS_DIGEST_PUSH_ENABLED: ${NEWS_DIGEST_PUSH_ENABLED:-true}
   ```
 - `app/.env` (defaults) + `config/services.yaml` parameters die naar
   `%env(VAPID_PUBLIC_KEY)%` etc. verwijzen, zodat services en Twig
   (`vapid_public_key` global) ze kunnen gebruiken.
 
-Voeg de drie secrets ook toe aan de checklist in `docs/deployment.md` §4/§7.1
-en aan de GitHub Actions secrets-tabel (§ "Secrets toevoegen"), als die
-uiteindelijk via CI wordt aangemaakt/geroteerd.
+Voeg de vier secrets/vlaggen ook toe aan de checklist in `docs/deployment.md`
+§4/§7.1 en aan de GitHub Actions secrets-tabel (§ "Secrets toevoegen"), als
+die uiteindelijk via CI wordt aangemaakt/geroteerd.
+
+### 3.1 Kill switch (los van tokenrotatie)
+
+`NEWS_DIGEST_PUSH_ENABLED` wordt als eerste gecontroleerd in
+`NewsDigestWebhookController` (zie §5.2) — op `false` antwoordt het endpoint
+direct `503`, zonder het token te controleren of iets te verwerken. Om
+verzending te pauzeren (bv. bij een vermoede tokenlek, of om welke reden dan
+ook) volstaat dus:
+
+```bash
+# .env.local: NEWS_DIGEST_PUSH_ENABLED=false
+docker compose up -d   # herstart, geen rebuild/redeploy nodig
+```
+
+Dat is aanzienlijk sneller dan een volledige tokenrotatie + CI/CD-redeploy,
+en kan dus ook als eerste, voorlopige maatregel dienen terwijl het token
+alsnog geroteerd wordt.
+
+### 3.2 Impact van sleutelrotatie
+
+Het roteren van `VAPID_PRIVATE_KEY`/`VAPID_PUBLIC_KEY` (bv. na een vermoede
+lek) maakt **in één keer alle bestaande browserabonnementen ongeldig**: elk
+abonnement is bij het aanmaken cryptografisch gekoppeld aan de toen geldende
+publieke sleutel, en de pushdienst (FCM/Autopush/Apple) wijst elke verzending
+met de nieuwe sleutel af (`401`/`403`) totdat de browser opnieuw abonneert
+met de nieuwe sleutel. Dit wordt op twee plekken opgevangen, zodat het geen
+stille storing wordt:
+
+- **Server:** `SendNewsDigestPushHandler` (§5.2) behandelt `401`/`403` van de
+  pushdienst hetzelfde als `404`/`410` — de `PushSubscription`-rij wordt
+  verwijderd. Een verlopen/ongeldige rij blijft dus nooit onnodig staan,
+  ongeacht de oorzaak.
+- **Client:** `push_subscribe_controller.js` (§6.2) vergelijkt bij elk bezoek
+  van `/account/meldingen` de `applicationServerKey` waarmee de browser
+  ooit heeft geabonneerd tegen de huidige, door de server aangeleverde
+  `vapid_public_key`. Bij een mismatch (na rotatie) wordt lokaal
+  `unsubscribe()` aangeroepen en de toggle teruggezet naar "uit", met een
+  duidelijke melding dat opnieuw inschakelen nodig is — in plaats van dat de
+  gebruiker denkt geabonneerd te zijn terwijl meldingen allang niet meer
+  aankomen.
+
+Neem de rotatiestap zelf (wanneer, door wie, met welk effect) op in de
+secret-rotatiechecklist van `docs/deployment.md`, zoals daar nu al voor
+`APP_SECRET` gebeurt.
 
 ---
 
@@ -223,12 +270,53 @@ correct afhandelen in plaats van op een DB-exceptie te vertrouwen.)
 
 | Route | Methode | Doel |
 |-------|---------|------|
-| `/api/nieuwsoverzicht/push` | POST | Body: `{title, body, url?}`. Header `Authorization: Bearer <NEWS_DIGEST_WEBHOOK_TOKEN>`, vergeleken met `hash_equals()` (timing-safe). Bij mismatch: `403` zonder verdere verwerking. |
+| `/api/nieuwsoverzicht/push` | POST | Body: `{title, body, url?, idempotency_key?}`. Header `Authorization: Bearer <NEWS_DIGEST_WEBHOOK_TOKEN>`, vergeleken met `hash_equals()` (timing-safe). |
 
-**`url`-validatie (verplicht, geen losse vervolgstap):** vóórdat de
-`NewsDigest`-rij wordt opgeslagen of er iets gedispatcht wordt, wordt `url`
-gecontroleerd op een relatief, same-origin pad. Alles anders wordt verworpen
-met `422`, niet stilzwijgend genegeerd of ongevalideerd doorgezet:
+Verwerkingsvolgorde in de controller — elke stap kan het verzoek beëindigen
+vóórdat de volgende (duurdere) stap wordt uitgevoerd:
+
+1. **Kill switch** (§3.1): `NEWS_DIGEST_PUSH_ENABLED=false` → `503`, niets
+   anders wordt gecontroleerd of gelogd.
+2. **Token** (`hash_equals`) → mismatch: `403`.
+3. **Rate limit** → over de limiet: `429`.
+4. **Idempotentie** (zie hieronder) → bekende sleutel: `200` met het eerder
+   opgeslagen resultaat, geen nieuwe verzending.
+5. **`url`-validatie** → ongeldig: `422`.
+6. Geldig: `NewsDigest`-rij opslaan, `SendNewsDigestPush` dispatchen → `202`.
+
+**Rate limiting (verplicht, geen losse vervolgstap):** dit endpoint heeft één
+legitieme aanroeper (de scheduled task) die hooguit een paar keer per dag
+zou moeten posten. `symfony/rate-limiter` (al een dependency, nu gebruikt
+voor `login_throttling`) krijgt een tweede policy, globaal gesleuteld (niet
+per IP — de scheduled task draait in de cloud met wisselend IP-adres):
+
+```yaml
+# config/packages/rate_limiter.yaml
+framework:
+    rate_limiter:
+        news_digest_push:
+            policy: fixed_window
+            limit: 10
+            interval: '1 hour'
+```
+
+Dit begrenst zowel misbruik van een gelekt token als een verkeerd
+geconfigureerde scheduled task die per ongeluk in een lus komt te draaien.
+
+**Idempotentie (verplicht, geen losse vervolgstap):** de aanroeper mag een
+`idempotency_key` meesturen; ontbreekt die, dan valt de server terug op de
+huidige UTC-datum (`Y-m-d`) — passend bij een taak die hooguit eens per dag
+loopt, zonder dat de aanroeper iets hoeft aan te passen. `NewsDigest` krijgt
+een unieke kolom `idempotencyKey`. Bestaat er al een rij met die sleutel, dan
+wordt er niets opnieuw verstuurd; de controller antwoordt `200` met de
+destijds opgeslagen `successCount`/`failureCount`. Zo is een netwerkretry
+vanuit de scheduled task altijd veilig, en kan dezelfde dag nooit twee keer
+dezelfde melding pushen.
+
+**`url`-validatie:** vóórdat de `NewsDigest`-rij wordt opgeslagen of er iets
+gedispatcht wordt, wordt `url` gecontroleerd op een relatief, same-origin
+pad. Alles anders wordt verworpen met `422`, niet stilzwijgend genegeerd of
+ongevalideerd doorgezet:
 
 ```php
 private function isValidRelativePath(?string $url): bool
@@ -242,21 +330,19 @@ private function isValidRelativePath(?string $url): bool
 }
 ```
 
-Bij een ongeldige `url` faalt het hele verzoek (`422`) — er wordt geen
-`NewsDigest` met een afgekeurde of leeggemaakte `url` opgeslagen, zodat de
-scheduled task de fout direct terugziet in plaats van dat de melding stilzwijgend
-zonder klikbare link verstuurd wordt.
-
-Bij een geldig verzoek: slaat een `NewsDigest`-rij op, dispatcht daarna een
-Messenger-bericht `SendNewsDigestPush` (huidige `sync://`-transport is
-voldoende bij een handvol abonnees per dag; als het aantal groeit is dit later
-zonder controller-wijziging naar `async` te verplaatsen — alleen
+Bij een geldig verzoek: slaat een `NewsDigest`-rij op (incl.
+`idempotencyKey`), dispatcht daarna een Messenger-bericht
+`SendNewsDigestPush` (huidige `sync://`-transport is voldoende bij een
+handvol abonnees per dag; als het aantal groeit is dit later zonder
+controller-wijziging naar `async` te verplaatsen — alleen
 `messenger.yaml`-routing verandert dan).
 
 `SendNewsDigestPushHandler` haalt alle `PushSubscription`s op van gebruikers
 met `ROLE_NEWS_SUBSCRIBER`, stuurt de melding via `minishlink/web-push`, en
-verwerkt per subscription het rapport: `410 Gone`/`404 Not Found` → subscription
-verwijderen; overig succes/falen → tellers op de `NewsDigest`-rij bijwerken.
+verwerkt per subscription het rapport: `410 Gone`/`404 Not Found` **en**
+`401 Unauthorized`/`403 Forbidden` (VAPID-sleutel niet meer geldig, zie §3.2)
+→ subscription verwijderen; overig succes/falen → tellers op de
+`NewsDigest`-rij bijwerken.
 
 ---
 
@@ -294,13 +380,22 @@ overige controllers in `assets/controllers.json`. Op de
    anders een nette "niet ondersteund door je browser"-melding (met name
    relevant voor oudere iOS-versies of privé-browsen).
 2. Registreert `/sw.js` (`navigator.serviceWorker.register('/sw.js')`).
-3. Vraagt toestemming (`Notification.requestPermission()`) — alleen op
+3. **Sleutelrotatie-detectie (verplicht, geen losse vervolgstap — zie §3.2):**
+   bij elke page-load, vóórdat de aan/uit-status bepaald wordt, haalt de
+   controller de bestaande subscription op
+   (`registration.pushManager.getSubscription()`) en vergelijkt
+   `subscription.options.applicationServerKey` byte-voor-byte met de huidige
+   `vapid_public_key` uit de pagina. Bij een mismatch: lokaal
+   `subscription.unsubscribe()` aanroepen, status tonen als "uit", met een
+   melding dat meldingen opnieuw ingeschakeld moeten worden (de oude
+   subscription kan met de nieuwe sleutel nooit meer slagen — zie §3.2).
+4. Vraagt toestemming (`Notification.requestPermission()`) — alleen op
    expliciete klik van de gebruiker (browsers blokkeren dit bij
    page-load-aanvragen).
-4. Abonneert: `registration.pushManager.subscribe({ userVisibleOnly: true,
+5. Abonneert: `registration.pushManager.subscribe({ userVisibleOnly: true,
    applicationServerKey: <VAPID public key, base64 → Uint8Array> })`.
-5. Post het resultaat naar `/account/meldingen/abonneren`.
-6. Bij uitzetten: `subscription.unsubscribe()` in de browser + POST naar
+6. Post het resultaat naar `/account/meldingen/abonneren`.
+7. Bij uitzetten: `subscription.unsubscribe()` in de browser + POST naar
    `/account/meldingen/opzeggen`.
 
 De VAPID-publieke sleutel komt als Twig-global (`vapid_public_key`) op de
@@ -332,8 +427,8 @@ Eén link "Meldingen" toevoegen aan de bestaande navigatie
 
 | Ernst  | Aantal |
 |--------|--------|
-| Hoog   | 2 (✅ beide verwerkt in het plan) |
-| Medium | 3      |
+| Hoog   | 2 (✅ alle verwerkt in het plan) |
+| Medium | 3 (✅ alle verwerkt in het plan) |
 | Laag   | 2      |
 | Info   | 3      |
 
@@ -366,39 +461,46 @@ iemand anders hoorde). Dit vereiste ook een aanpassing van de unique-
 constraint op `PushSubscription` (§1): niet los op `endpoint`, maar
 samengesteld op `(user, endpoint)`.
 
-### MEDIUM — Geen rate limiting of kill switch op de webhook, los van het token
+### ✅ VERWERKT — MEDIUM — Geen rate limiting of kill switch op de webhook, los van het token
 
 **Locatie:** §5.2
+**Fix opgenomen in:** §3.1 (kill switch), §5.2 (rate limiter policy + verwerkingsvolgorde)
 
-Als `NEWS_DIGEST_WEBHOOK_TOKEN` ooit lekt, is de enige stop een handmatige
-rotatie + herdeploy. `symfony/rate-limiter` staat al in `composer.json` (nu
-gebruikt voor `login_throttling`) — hergebruik dat voor deze route. Overweeg
-daarnaast een losse, snel om te zetten instelling (env-var of DB-vlag) die
-verzending direct pauzeert zonder dat het token hoeft te roteren.
+Als `NEWS_DIGEST_WEBHOOK_TOKEN` ooit lekt, was de enige stop een handmatige
+rotatie + herdeploy. §5.2 voegt een `symfony/rate-limiter`-policy toe
+(`news_digest_push`, 10/uur, globaal gesleuteld) als stap 3 in de
+verwerkingsvolgorde. §3.1 voegt daarnaast `NEWS_DIGEST_PUSH_ENABLED` toe: een
+kill switch die verzending direct pauzeert met alleen een `docker compose up
+-d` (geen tokenrotatie of herdeploy nodig) — bruikbaar als eerste maatregel
+terwijl het token alsnog geroteerd wordt.
 
-### MEDIUM — Geen replay-/idempotentiebescherming op de webhook
+### ✅ VERWERKT — MEDIUM — Geen replay-/idempotentiebescherming op de webhook
 
 **Locatie:** §5.2
+**Fix opgenomen in:** §5.2 (idempotentie-stap), §1 (`NewsDigest.idempotencyKey`)
 
 Een netwerkretry vanuit de scheduled task (of een afgevangen en herhaald
-verzoek binnen de levensduur van het token) stuurt dezelfde melding nogmaals
-naar alle abonnees. **Fix:** laat de aanroeper een idempotentiesleutel
-meesturen (bv. hash van titel+datum) en negeer een tweede verzoek met dezelfde
-sleutel binnen een tijdvenster, vóór het dispatchen van
-`SendNewsDigestPush`.
+verzoek binnen de levensduur van het token) stuurde de melding nogmaals naar
+alle abonnees. §5.2 introduceert een optionele `idempotency_key` in de
+request-body, met een server-side fallback op de huidige UTC-datum
+(`Y-m-d`) als die ontbreekt — passend bij een taak die hooguit eens per dag
+draait. Een tweede verzoek met dezelfde sleutel dispatcht niets opnieuw en
+krijgt gewoon het eerder opgeslagen resultaat terug (`200`).
 
-### MEDIUM — Impact van VAPID-sleutelrotatie niet uitgewerkt
+### ✅ VERWERKT — MEDIUM — Impact van VAPID-sleutelrotatie niet uitgewerkt
 
 **Locatie:** §3
+**Fix opgenomen in:** §3.2 (rotatie-impact), §5.2 (verbrede cleanup op `401`/`403`), §6.2 (client-side rotatiedetectie)
 
-Bij een vermoede lek van `VAPID_PRIVATE_KEY` is roteren de enige optie, maar
-dat maakt **alle** bestaande browserabonnementen in één keer ongeldig zonder
-zichtbare foutmelding voor de gebruiker (de browser blijft "geabonneerd"
-denken; verzending faalt stil). Neem dit expliciet op in de
-secret-rotatiechecklist van `docs/deployment.md` (zoals nu al voor
-`APP_SECRET`), inclusief hoe gebruikers merken dat ze opnieuw moeten
-abonneren (bv. periodieke check op `/account/meldingen` die een
-verlopen/ongeldige subscription detecteert en de toggle terugzet naar "uit").
+Bij een vermoede lek van `VAPID_PRIVATE_KEY` is roteren nog steeds de enige
+optie, en dat maakt nog steeds **alle** bestaande browserabonnementen in één
+keer ongeldig — maar dit gebeurt niet langer stil. §3.2 legt de twee kanten
+vast: server-side worden `401`/`403`-reacties van de pushdienst voortaan net
+als `404`/`410` behandeld (subscription wordt opgeruimd), en client-side
+vergelijkt de Stimulus-controller (§6.2, stap 3) bij elke page-load de
+sleutel waarmee ooit geabonneerd is met de huidige — bij een mismatch wordt
+de gebruiker expliciet gevraagd opnieuw in te schakelen, in plaats van in de
+veronderstelling te blijven dat meldingen nog aankomen.
 
 ### LAAG — Geen cap of formaatvalidatie op nieuwe `PushSubscription`-rijen
 
@@ -448,24 +550,30 @@ dit kanaal ooit verbreedt naar gevoeligere inhoud.
 
 ## 9. Bouwvolgorde
 
-1. Migratie + entities `PushSubscription`, `NewsDigest`.
+1. Migratie + entities `PushSubscription`, `NewsDigest` (incl. de
+   samengestelde unique-constraint en `idempotencyKey` uit §1).
 2. Rol `ROLE_NEWS_SUBSCRIBER` in `security.yaml` + `AdminUserController`.
 3. `composer require minishlink/web-push`, VAPID-sleutels genereren, env-vars
-   wiren (root `.env.local`, `docker-compose.yml`, `config/services.yaml`).
-4. `NewsDigestWebhookController` + `SendNewsDigestPushHandler` (Messenger),
-   inclusief de `url`-validatie uit §5.2 (al onderdeel van het endpoint-
-   ontwerp, geen losse vervolgstap) — vul hierbij nog de openstaande
-   MEDIUM-bevindingen uit §8 aan: rate limiting via `symfony/rate-limiter`
-   en de idempotentiesleutel-check.
+   wiren (root `.env.local`, `docker-compose.yml`, `config/services.yaml`) —
+   inclusief `NEWS_DIGEST_PUSH_ENABLED` (§3.1) en de
+   `news_digest_push`-rate-limiter-policy (§5.2).
+4. `NewsDigestWebhookController` + `SendNewsDigestPushHandler` (Messenger)
+   volgens de volledige verwerkingsvolgorde uit §5.2 (kill switch → token →
+   rate limit → idempotentie → `url`-validatie → dispatch), en de verbrede
+   `401`/`403`-cleanup uit §3.2.
 5. `PushSubscriptionController` + `/account/meldingen`-pagina, inclusief de
-   eigenaarscontrole uit §5.1 (al onderdeel van het endpoint-ontwerp) — vul
-   hierbij de LAAG-bevinding uit §8 aan: cap + formaatvalidatie op nieuwe
-   subscriptions.
-6. `public/sw.js` + `push_subscribe_controller.js` + navigatielink.
+   eigenaarscontrole uit §5.1 — vul hierbij de LAAG-bevinding uit §8 aan:
+   cap + formaatvalidatie op nieuwe subscriptions (nog niet in het
+   basisontwerp opgenomen, zie §8).
+6. `public/sw.js` + `push_subscribe_controller.js` (incl. de
+   sleutelrotatie-detectie uit §6.2, stap 3) + navigatielink.
 7. Handmatig testen: eigen account de rol geven, abonneren in de browser,
    `curl` naar `/api/nieuwsoverzicht/push` met testtoken, melding checken;
-   expliciet ook testen dat een tweede identiek verzoek niet dubbel verstuurt
-   en dat opzeggen met andermans endpoint niets doet.
+   expliciet ook testen dat een tweede identiek verzoek niet dubbel verstuurt,
+   dat opzeggen met andermans endpoint niets doet, en dat een VAPID-rotatie
+   de toggle op `/account/meldingen` terugzet naar "uit".
 8. Scheduled-task-config (buiten deze repo) uitbreiden met de HTTP-POST-actie.
-9. VAPID- en webhook-token-rotatie toevoegen aan de secret-checklist in
-   `docs/deployment.md` (§8, MEDIUM-bevinding).
+9. De rotatieprocedure uit §3.2 (VAPID) en het bestaande `APP_SECRET`-patroon
+   toevoegen aan de secret-checklist in `docs/deployment.md` — het ontwerp
+   staat al in dit plan, dit is alleen nog het overnemen ervan in dat
+   losstaande document.
