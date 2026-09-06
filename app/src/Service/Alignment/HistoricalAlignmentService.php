@@ -671,79 +671,89 @@ class HistoricalAlignmentService
             $n = count($srcPhrase);
             $m = count($tgtPhrase);
 
-            $srcPos = null;
-            for ($k = 0; $k <= count($unmatchedSrc) - $n; $k++) {
-                $match = true;
-                for ($o = 0; $o < $n; $o++) {
-                    if ($src[$unmatchedSrc[$k + $o]] !== $srcPhrase[$o]) {
-                        $match = false;
-                        break;
-                    }
-                }
-                if ($match) {
-                    for ($o = 0; $o < $n - 1; $o++) {
-                        $curIdx = $unmatchedSrc[$k + $o];
-                        $nextIdx = $unmatchedSrc[$k + $o + 1];
-                        if ($nextIdx === $curIdx + 1) {
-                            continue;
+            // Keep finding occurrences of this phrase pair until none are
+            // left -- a phrase like "hetgeen" (2 source words -> 1 target
+            // word) can genuinely occur more than once in the same verse,
+            // and only ever linking the first occurrence silently drops the
+            // rest.
+            while (true) {
+                $srcPos = null;
+                for ($k = 0; $k <= count($unmatchedSrc) - $n; $k++) {
+                    $match = true;
+                    for ($o = 0; $o < $n; $o++) {
+                        if ($src[$unmatchedSrc[$k + $o]] !== $srcPhrase[$o]) {
+                            $match = false;
+                            break;
                         }
-                        $allEmpty = true;
-                        for ($x = $curIdx + 1; $x < $nextIdx; $x++) {
-                            if ($src[$x] !== '') {
-                                $allEmpty = false;
+                    }
+                    if ($match) {
+                        for ($o = 0; $o < $n - 1; $o++) {
+                            $curIdx = $unmatchedSrc[$k + $o];
+                            $nextIdx = $unmatchedSrc[$k + $o + 1];
+                            if ($nextIdx === $curIdx + 1) {
+                                continue;
+                            }
+                            $allEmpty = true;
+                            for ($x = $curIdx + 1; $x < $nextIdx; $x++) {
+                                if ($src[$x] !== '') {
+                                    $allEmpty = false;
+                                    break;
+                                }
+                            }
+                            if (!$allEmpty) {
+                                $match = false;
                                 break;
                             }
                         }
-                        if (!$allEmpty) {
-                            $match = false;
-                            break;
-                        }
                     }
-                }
-                if ($match) {
-                    $srcPos = $k;
-                    break;
-                }
-            }
-
-            $tgtPos = null;
-            for ($k = 0; $k <= count($unmatchedTgt) - $m; $k++) {
-                $match = true;
-                for ($o = 0; $o < $m; $o++) {
-                    if ($tgt[$unmatchedTgt[$k + $o]] !== $tgtPhrase[$o]) {
-                        $match = false;
+                    if ($match) {
+                        $srcPos = $k;
                         break;
                     }
                 }
-                if ($match) {
-                    for ($o = 0; $o < $m - 1; $o++) {
-                        if ($unmatchedTgt[$k + $o + 1] !== $unmatchedTgt[$k + $o] + 1) {
+
+                $tgtPos = null;
+                for ($k = 0; $k <= count($unmatchedTgt) - $m; $k++) {
+                    $match = true;
+                    for ($o = 0; $o < $m; $o++) {
+                        if ($tgt[$unmatchedTgt[$k + $o]] !== $tgtPhrase[$o]) {
                             $match = false;
                             break;
                         }
                     }
+                    if ($match) {
+                        for ($o = 0; $o < $m - 1; $o++) {
+                            if ($unmatchedTgt[$k + $o + 1] !== $unmatchedTgt[$k + $o] + 1) {
+                                $match = false;
+                                break;
+                            }
+                        }
+                    }
+                    if ($match) {
+                        $tgtPos = $k;
+                        break;
+                    }
                 }
-                if ($match) {
-                    $tgtPos = $k;
+
+                if ($srcPos === null || $tgtPos === null) {
                     break;
                 }
-            }
 
-            if ($srcPos === null || $tgtPos === null) {
-                continue;
-            }
+                $srcIdx = [];
+                for ($o = 0; $o < $n; $o++) {
+                    $srcIdx[] = $unmatchedSrc[$srcPos + $o];
+                }
+                $tgtIdx = [];
+                for ($o = 0; $o < $m; $o++) {
+                    $tgtIdx[] = $unmatchedTgt[$tgtPos + $o];
+                }
 
-            $srcIdx = [];
-            for ($o = 0; $o < $n; $o++) {
-                $srcIdx[] = $unmatchedSrc[$srcPos + $o];
-            }
-            $tgtIdx = [];
-            for ($o = 0; $o < $m; $o++) {
-                $tgtIdx[] = $unmatchedTgt[$tgtPos + $o];
-            }
+                foreach ($srcIdx as $i) {
+                    $links[] = new AlignmentLink($i, $tgtIdx, 0.95, 'phrase');
+                }
 
-            foreach ($srcIdx as $i) {
-                $links[] = new AlignmentLink($i, $tgtIdx, 0.95, 'phrase');
+                $unmatchedSrc = array_values(array_diff($unmatchedSrc, $srcIdx));
+                $unmatchedTgt = array_values(array_diff($unmatchedTgt, $tgtIdx));
             }
         }
     }
@@ -796,11 +806,21 @@ class HistoricalAlignmentService
             $found = [];
             $claimed = $usedTgt;
             foreach ($this->multiSynonymBridge[$sw] as $needed) {
+                // Closest unclaimed occurrence to $i, not the first one in
+                // the sentence -- a common word like "de" easily occurs
+                // several times, and picking an arbitrary far-away one
+                // (rather than the one actually next to this source word)
+                // produces a wrong pairing even though the target *word* is
+                // technically correct.
                 $j = null;
+                $bestDist = null;
                 foreach ($tgt as $jj => $tw) {
                     if ($tw === $needed && !isset($claimed[$jj])) {
-                        $j = $jj;
-                        break;
+                        $dist = abs($jj - $i);
+                        if ($bestDist === null || $dist < $bestDist) {
+                            $bestDist = $dist;
+                            $j = $jj;
+                        }
                     }
                 }
                 if ($j === null) {

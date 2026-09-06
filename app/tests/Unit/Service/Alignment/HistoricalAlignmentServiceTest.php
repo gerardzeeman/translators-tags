@@ -223,6 +223,58 @@ class HistoricalAlignmentServiceTest extends TestCase
         $this->assertSame([0, 1], $synonymLinks[0]->tgt);
     }
 
+    /**
+     * Regression: bridgePhrases() only ever linked the FIRST occurrence of a
+     * phrase pattern in the verse, silently leaving later occurrences of the
+     * exact same phrase unlinked (found via a real case: "het gene" ->
+     * "hetgeen" appears 3 times in 1 John 1:1, and only the first was ever
+     * matched). It now keeps finding occurrences until none are left.
+     */
+    public function testBridgePhrasesLinksEveryOccurrenceNotJustTheFirst(): void
+    {
+        // DEFAULT_PHRASE_BRIDGE already has ['de','beginne'] -> ['het','begin'];
+        // repeat it twice in the same sentence, separated by an anchor word.
+        $result = $this->service->alignPair(
+            ['de', 'beginne', 'xx1', 'de', 'beginne'],
+            ['het', 'begin', 'xx1', 'het', 'begin'],
+        );
+
+        $phraseLinks = array_values(array_filter($result->links, fn($l) => $l->kind === 'phrase'));
+        $bySrc = [];
+        foreach ($phraseLinks as $l) {
+            $bySrc[$l->src] = $l->tgt;
+        }
+        $this->assertSame([0, 1], $bySrc[0] ?? null, 'first occurrence: "de" links to the first "het"+"begin"');
+        $this->assertSame([0, 1], $bySrc[1] ?? null, 'first occurrence: "beginne" links to the first "het"+"begin"');
+        $this->assertSame([3, 4], $bySrc[3] ?? null, 'second occurrence must also be linked, not silently dropped');
+        $this->assertSame([3, 4], $bySrc[4] ?? null, 'second occurrence must also be linked, not silently dropped');
+    }
+
+    /**
+     * Regression: bridgeMultiSynonyms() picked the FIRST unclaimed
+     * occurrence of a needed target word anywhere in the sentence, not the
+     * one actually next to the source word -- found via a real case where
+     * "der" (needing "van"+"de") grabbed a "de" many words away instead of
+     * the one sitting right next to its correct partner, because a
+     * different, closer "de" happened to come first in the array.
+     */
+    public function testBridgeMultiSynonymsPicksClosestOccurrenceNotFirst(): void
+    {
+        // 'openbaar' -> ['te', 'herkennen'] (DEFAULT_MULTI_SYNONYM_BRIDGE).
+        // A "te" far from 'openbaar' comes first in the array; the "te"
+        // right next to "herkennen" (its real partner) comes later but is
+        // the one that must be picked.
+        $src = ['xx', 'xx', 'xx', 'openbaar'];
+        $tgt = ['te', 'xx', 'xx', 'xx', 'te', 'herkennen'];
+        $links = [];
+
+        $this->service->bridgeMultiSynonyms($links, $src, $tgt);
+
+        $this->assertCount(1, $links);
+        $this->assertSame(3, $links[0]->src);
+        $this->assertSame([4, 5], $links[0]->tgt);
+    }
+
     public function testDropKnownPrefixDropsOpWhenFollowingWordAlreadyMatched(): void
     {
         // 'op' + 'dat' -> HSV sometimes drops 'op' in isolation once 'dat'
