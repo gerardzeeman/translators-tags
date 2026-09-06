@@ -271,15 +271,141 @@ Eén link "Meldingen" toevoegen aan de bestaande navigatie
 
 ---
 
-## 8. Bouwvolgorde
+## 8. Beveiligingsaudit (plan-niveau, vóór implementatie)
+
+> Auditor: Claude Sonnet 5 · Scope: dit document, geen code (nog niet gebouwd)
+
+| Ernst  | Aantal |
+|--------|--------|
+| Hoog   | 2      |
+| Medium | 3      |
+| Laag   | 2      |
+| Info   | 3      |
+
+### HOOG — Ongevalideerde `url` opent willekeurige bestemming bij klik op de melding
+
+**Locatie:** §5.2 (webhook-body `{title, body, url?}`), §6.1 (`sw.js`
+`notificationclick` → `clients.openWindow(event.notification.data.url)`)
+
+Er is geen validatie op `url` voorzien. Als het webhook-token ooit lekt (zie
+Info-bevinding hieronder) kan een aanvaller een melding pushen die er voor elke
+abonnee uitziet als een vertrouwde melding van Alef-Omega, maar bij een klik
+een externe phishingpagina opent. **Fix:** valideer server-side dat `url`
+een relatief, same-origin pad is (bv. regex `^/(?!/)`) en verwerp absolute
+URL's (`http:`, `https:`, `javascript:`, `data:`) vóórdat de `NewsDigest`-rij
+wordt opgeslagen.
+
+### HOOG — Ontbrekende eigenaarscontrole op `/account/meldingen/opzeggen`
+
+**Locatie:** §5.1
+
+Een gebruiker met `ROLE_NEWS_SUBSCRIBER` kan een willekeurige `endpoint`-string
+meesturen; zonder expliciete check verwijdert dit elke `PushSubscription`-rij
+met die endpoint, ongeacht van wie. Dat is een IDOR: elke abonnee kan zo het
+abonnement van een andere abonnee opzeggen. **Fix:** de query moet altijd
+scopen op `WHERE endpoint = :endpoint AND user = :current_user` (en dus niets
+doen — geen foutmelding die verklapt of de endpoint bij iemand anders hoorde —
+als er geen match is).
+
+### MEDIUM — Geen rate limiting of kill switch op de webhook, los van het token
+
+**Locatie:** §5.2
+
+Als `NEWS_DIGEST_WEBHOOK_TOKEN` ooit lekt, is de enige stop een handmatige
+rotatie + herdeploy. `symfony/rate-limiter` staat al in `composer.json` (nu
+gebruikt voor `login_throttling`) — hergebruik dat voor deze route. Overweeg
+daarnaast een losse, snel om te zetten instelling (env-var of DB-vlag) die
+verzending direct pauzeert zonder dat het token hoeft te roteren.
+
+### MEDIUM — Geen replay-/idempotentiebescherming op de webhook
+
+**Locatie:** §5.2
+
+Een netwerkretry vanuit de scheduled task (of een afgevangen en herhaald
+verzoek binnen de levensduur van het token) stuurt dezelfde melding nogmaals
+naar alle abonnees. **Fix:** laat de aanroeper een idempotentiesleutel
+meesturen (bv. hash van titel+datum) en negeer een tweede verzoek met dezelfde
+sleutel binnen een tijdvenster, vóór het dispatchen van
+`SendNewsDigestPush`.
+
+### MEDIUM — Impact van VAPID-sleutelrotatie niet uitgewerkt
+
+**Locatie:** §3
+
+Bij een vermoede lek van `VAPID_PRIVATE_KEY` is roteren de enige optie, maar
+dat maakt **alle** bestaande browserabonnementen in één keer ongeldig zonder
+zichtbare foutmelding voor de gebruiker (de browser blijft "geabonneerd"
+denken; verzending faalt stil). Neem dit expliciet op in de
+secret-rotatiechecklist van `docs/deployment.md` (zoals nu al voor
+`APP_SECRET`), inclusief hoe gebruikers merken dat ze opnieuw moeten
+abonneren (bv. periodieke check op `/account/meldingen` die een
+verlopen/ongeldige subscription detecteert en de toggle terugzet naar "uit").
+
+### LAAG — Geen cap of formaatvalidatie op nieuwe `PushSubscription`-rijen
+
+**Locatie:** §5.1
+
+Beperkt risico omdat de route al `ROLE_NEWS_SUBSCRIBER` vereist, maar niets
+weerhoudt zo'n account ervan herhaaldelijk te posten met verzonnen
+`endpoint`/`p256dh`/`auth`-waarden. Voeg een basisvalidatie toe (verwachte
+lengte/base64url-vorm) en een redelijk maximum aantal actieve subscriptions
+per gebruiker (bv. 5, voor meerdere apparaten).
+
+### LAAG — `NewsDigest.title`/`body` zijn extern aangeleverde, ongefilterde tekst
+
+**Locatie:** §1, §5.2
+
+Bij het bouwen van een `/admin`-historieoverzicht: vertrouw op Twig's
+standaard auto-escaping en gebruik nooit `|raw` op deze velden — de inhoud
+komt van een systeem buiten deze applicatie en moet als niet-vertrouwd worden
+behandeld, ook al is XSS via de OS-notificatie zelf niet mogelijk (die toont
+altijd platte tekst).
+
+### INFO — Het webhook-token leeft ook buiten deze repository
+
+Wie het `NEWS_DIGEST_WEBHOOK_TOKEN` in de configuratie van de Claude
+Code-scheduled-task kan inzien of bewerken, heeft dezelfde macht als iemand
+die het token direct heeft. Dat valt buiten deze codebase, maar hoort bij het
+dreigingsmodel van deze feature — betrek dit bij de beslissing wie toegang
+heeft tot die scheduled-task-configuratie.
+
+### INFO — Bestaande CSP-header ontbreekt in `app/Caddyfile`, ondanks dat `docs/security.md`/`SECURITY-AUDIT-LOGIN.md` hem als opgelost registreren
+
+Losstaand van dit plan gevonden tijdens de audit: het huidige
+`header { ... }`-blok in `app/Caddyfile` bevat geen
+`Content-Security-Policy`-regel, terwijl eerdere audit-documenten vermelden
+dat die is toegevoegd. Niet iets om nu op te lossen, maar relevant zodra dat
+alsnog gebeurt: een CSP moet `worker-src 'self'` (of een `script-src 'self'`
+die als fallback dient) bevatten, anders registreert `public/sw.js` niet meer
+en breekt deze hele feature stilzwijgend.
+
+### INFO — Meldingsinhoud is zichtbaar op het vergrendelscherm
+
+Pushmeldingen verschijnen standaard ook op een vergrendeld toestel. Prima voor
+een publiek kerknieuwsoverzicht, maar hou hier rekening mee als het bereik van
+dit kanaal ooit verbreedt naar gevoeligere inhoud.
+
+---
+
+## 9. Bouwvolgorde
 
 1. Migratie + entities `PushSubscription`, `NewsDigest`.
 2. Rol `ROLE_NEWS_SUBSCRIBER` in `security.yaml` + `AdminUserController`.
 3. `composer require minishlink/web-push`, VAPID-sleutels genereren, env-vars
    wiren (root `.env.local`, `docker-compose.yml`, `config/services.yaml`).
-4. `NewsDigestWebhookController` + `SendNewsDigestPushHandler` (Messenger).
-5. `PushSubscriptionController` + `/account/meldingen`-pagina.
+4. `NewsDigestWebhookController` + `SendNewsDigestPushHandler` (Messenger) —
+   inclusief vanaf het begin: `url`-validatie (relatief, same-origin), rate
+   limiting via `symfony/rate-limiter`, en de idempotentiesleutel-check (zie
+   §8, HOOG/MEDIUM-bevindingen — dit zijn geen losse vervolgstappen, maar
+   onderdeel van deze stap).
+5. `PushSubscriptionController` + `/account/meldingen`-pagina — inclusief
+   eigenaarscontrole op opzeggen en een cap op subscriptions per gebruiker
+   (§8, HOOG/LAAG-bevindingen).
 6. `public/sw.js` + `push_subscribe_controller.js` + navigatielink.
 7. Handmatig testen: eigen account de rol geven, abonneren in de browser,
-   `curl` naar `/api/nieuwsoverzicht/push` met testtoken, melding checken.
+   `curl` naar `/api/nieuwsoverzicht/push` met testtoken, melding checken;
+   expliciet ook testen dat een tweede identiek verzoek niet dubbel verstuurt
+   en dat opzeggen met andermans endpoint niets doet.
 8. Scheduled-task-config (buiten deze repo) uitbreiden met de HTTP-POST-actie.
+9. VAPID- en webhook-token-rotatie toevoegen aan de secret-checklist in
+   `docs/deployment.md` (§8, MEDIUM-bevinding).
