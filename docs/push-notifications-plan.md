@@ -619,12 +619,9 @@ dit kanaal ooit verbreedt naar gevoeligere inhoud.
    sleutelrotatie-detectie uit §6.2, stap 3) + navigatielink.
 7. `AdminNewsDigestController` + historie-template (§5.3), met Twig's
    default auto-escaping op `title`/`body`/`url` — geen `|raw`.
-8. Handmatig testen: eigen account de rol geven, abonneren in de browser,
-   `curl` naar `/api/nieuwsoverzicht/push` met testtoken, melding checken;
-   expliciet ook testen dat een tweede identiek verzoek niet dubbel verstuurt,
-   dat opzeggen met andermans endpoint niets doet, dat een zesde abonnement
-   per gebruiker geweigerd wordt, en dat een VAPID-rotatie de toggle op
-   `/account/meldingen` terugzet naar "uit".
+8. Handmatig testen — zie [`push-notifications-test-plan.md`](push-notifications-test-plan.md)
+   voor de volledige checklist (webhook-gedrag, abonneren/opzeggen,
+   rolgating, sleutelrotatie, admin-historie, cross-browser).
 9. Scheduled-task-config (buiten deze repo) uitbreiden met de HTTP-POST-actie.
 10. De rotatieprocedure uit §3.2 (VAPID) en het bestaande `APP_SECRET`-patroon
     toevoegen aan de secret-checklist in `docs/deployment.md` — het ontwerp
