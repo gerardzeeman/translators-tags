@@ -50,9 +50,9 @@ niet aan deze applicatie — buiten scope van dit plan.
    soorten meldingen) of specifiek voor dit CGK/Rijnsburg-overzicht?
 2. **Wie mag de rol toekennen**: alleen `ROLE_ADMIN` via `/admin/users` (zoals
    alle andere rollen), aannemen dat dat volstaat.
-3. **Bewaren van verstuurde overzichten**: MVP hieronder logt elke push (titel,
-   tekst, tijdstip, aantal geslaagd/mislukt) in een simpele `NewsDigest`-tabel,
-   zodat er een `/admin`-overzicht van de historie is. Nodig, of overbodig?
+3. **Bewaren van verstuurde overzichten**: MVP logt elke push (titel, tekst,
+   tijdstip, aantal geslaagd/mislukt) in een `NewsDigest`-tabel, met een
+   alleen-lezen `/admin`-overzicht (uitgewerkt in §5.3). Nodig, of overbodig?
 4. **Icoon/branding van de melding**: gebruikt voorlopig `favicon.png` als
    notificatie-icoon; geen apart ontwerp nodig tenzij gewenst.
 
@@ -264,6 +264,30 @@ browser/device na een eerdere `unsubscribe()` meestal een nieuwe endpoint bij
 een volgende `subscribe()`, maar de constraint moet dit randgeval hoe dan ook
 correct afhandelen in plaats van op een DB-exceptie te vertrouwen.)
 
+**Formaatvalidatie & cap per gebruiker (verplicht, geen losse vervolgstap):**
+`/account/meldingen/abonneren` valideert de drie velden vóór het opslaan, en
+weigert een nieuw abonnement als de gebruiker al vijf actieve heeft:
+
+```php
+private function isValidSubscriptionPayload(string $endpoint, string $p256dh, string $auth): bool
+{
+    return str_starts_with($endpoint, 'https://')
+        && strlen($endpoint) <= 512
+        && (bool) preg_match('#^[A-Za-z0-9_-]{60,}$#', $p256dh)  // base64url, ~65 bytes rauw
+        && (bool) preg_match('#^[A-Za-z0-9_-]{16,}$#', $auth);   // base64url, ~16 bytes rauw
+}
+
+// vóór persist():
+if ($subscription === null && $repository->count(['user' => $this->getUser()]) >= 5) {
+    return $this->json(['error' => 'Maximaal 5 apparaten per account.'], 429);
+}
+```
+
+Bij een ongeldige payload of een overschreden limiet: `422` respectievelijk
+`429`, niets opgeslagen. Dit begrenst zowel per-ongeluk als moedwillig misbruik
+van de route door een account dat de rol al heeft — de route blijft verder
+onbereikbaar voor iedereen zonder `ROLE_NEWS_SUBSCRIBER` (§2).
+
 ### 5.2 Binnenkomend webhook (machine-naar-machine, geen sessie)
 
 `src/Controller/NewsDigestWebhookController.php`:
@@ -343,6 +367,30 @@ verwerkt per subscription het rapport: `410 Gone`/`404 Not Found` **en**
 `401 Unauthorized`/`403 Forbidden` (VAPID-sleutel niet meer geldig, zie §3.2)
 → subscription verwijderen; overig succes/falen → tellers op de
 `NewsDigest`-rij bijwerken.
+
+### 5.3 Admin-historie
+
+Beantwoordt openstaande beslissing 3 (§ "Openstaande beslissingen"): een
+alleen-lezen overzicht van verstuurde overzichten.
+
+`src/Controller/AdminNewsDigestController.php`, `#[Route('/admin/nieuwsoverzicht')]`
+`#[IsGranted('ROLE_ADMIN')]` — zelfde beveiligingspatroon als
+`AdminUserController`. Toont `NewsDigest::findBy([], ['sentAt' => 'DESC'])`
+in een tabel (`sentAt`, `title`, `url`, `successCount`/`failureCount`).
+
+`title`/`body`/`url` zijn afkomstig van een systeem buiten deze applicatie
+(de scheduled task) en worden dus als niet-vertrouwde tekst behandeld, niet
+anders dan gebruikersinvoer elders in de app:
+
+```twig
+{# templates/admin/news_digest/index.html.twig #}
+<td>{{ digest.title }}</td>   {# Twig's standaard auto-escaping — nooit |raw op deze velden #}
+```
+
+Geen extra sanitisatie nodig zolang Twig's default `autoescape` (al actief in
+`config/packages/twig.yaml`, ongewijzigd) van toepassing blijft — XSS via de
+OS-notificatie zelf is sowieso niet mogelijk (die toont altijd platte tekst,
+zie §6.1), dit gaat puur over deze ene toekomstige HTML-weergave.
 
 ---
 
@@ -429,7 +477,7 @@ Eén link "Meldingen" toevoegen aan de bestaande navigatie
 |--------|--------|
 | Hoog   | 2 (✅ alle verwerkt in het plan) |
 | Medium | 3 (✅ alle verwerkt in het plan) |
-| Laag   | 2      |
+| Laag   | 2 (✅ alle verwerkt in het plan) |
 | Info   | 3      |
 
 ### ✅ VERWERKT — HOOG — Ongevalideerde `url` opent willekeurige bestemming bij klik op de melding
@@ -502,25 +550,28 @@ sleutel waarmee ooit geabonneerd is met de huidige — bij een mismatch wordt
 de gebruiker expliciet gevraagd opnieuw in te schakelen, in plaats van in de
 veronderstelling te blijven dat meldingen nog aankomen.
 
-### LAAG — Geen cap of formaatvalidatie op nieuwe `PushSubscription`-rijen
+### ✅ VERWERKT — LAAG — Geen cap of formaatvalidatie op nieuwe `PushSubscription`-rijen
 
 **Locatie:** §5.1
+**Fix opgenomen in:** §5.1 (`isValidSubscriptionPayload()`, max. 5 subscriptions/gebruiker)
 
 Beperkt risico omdat de route al `ROLE_NEWS_SUBSCRIBER` vereist, maar niets
-weerhoudt zo'n account ervan herhaaldelijk te posten met verzonnen
-`endpoint`/`p256dh`/`auth`-waarden. Voeg een basisvalidatie toe (verwachte
-lengte/base64url-vorm) en een redelijk maximum aantal actieve subscriptions
-per gebruiker (bv. 5, voor meerdere apparaten).
+weerhield zo'n account ervan herhaaldelijk te posten met verzonnen
+`endpoint`/`p256dh`/`auth`-waarden. §5.1 valideert nu lengte/formaat van alle
+drie de velden en weigert (`429`) een nieuw abonnement zodra een gebruiker
+al vijf actieve heeft.
 
-### LAAG — `NewsDigest.title`/`body` zijn extern aangeleverde, ongefilterde tekst
+### ✅ VERWERKT — LAAG — `NewsDigest.title`/`body` zijn extern aangeleverde, ongefilterde tekst
 
 **Locatie:** §1, §5.2
+**Fix opgenomen in:** §5.3 (admin-historieweergave, expliciete escaping-eis)
 
-Bij het bouwen van een `/admin`-historieoverzicht: vertrouw op Twig's
-standaard auto-escaping en gebruik nooit `|raw` op deze velden — de inhoud
-komt van een systeem buiten deze applicatie en moet als niet-vertrouwd worden
-behandeld, ook al is XSS via de OS-notificatie zelf niet mogelijk (die toont
-altijd platte tekst).
+Het `/admin`-historieoverzicht uit beslissing 3 was nog niet uitgewerkt; nu
+het dat is (§5.3), staat er expliciet bij dat `title`/`body`/`url` als
+niet-vertrouwde tekst behandeld worden en dat de Twig-template nooit `|raw`
+op deze velden mag gebruiken — de inhoud komt van een systeem buiten deze
+applicatie. (XSS via de OS-notificatie zelf was sowieso al niet mogelijk, die
+toont altijd platte tekst; dit ging puur over de toekomstige HTML-weergave.)
 
 ### INFO — Het webhook-token leeft ook buiten deze repository
 
@@ -562,18 +613,20 @@ dit kanaal ooit verbreedt naar gevoeligere inhoud.
    rate limit → idempotentie → `url`-validatie → dispatch), en de verbrede
    `401`/`403`-cleanup uit §3.2.
 5. `PushSubscriptionController` + `/account/meldingen`-pagina, inclusief de
-   eigenaarscontrole uit §5.1 — vul hierbij de LAAG-bevinding uit §8 aan:
-   cap + formaatvalidatie op nieuwe subscriptions (nog niet in het
-   basisontwerp opgenomen, zie §8).
+   eigenaarscontrole (§5.1) én de formaatvalidatie/cap van 5 subscriptions
+   per gebruiker (§5.1) — beide al onderdeel van het endpoint-ontwerp.
 6. `public/sw.js` + `push_subscribe_controller.js` (incl. de
    sleutelrotatie-detectie uit §6.2, stap 3) + navigatielink.
-7. Handmatig testen: eigen account de rol geven, abonneren in de browser,
+7. `AdminNewsDigestController` + historie-template (§5.3), met Twig's
+   default auto-escaping op `title`/`body`/`url` — geen `|raw`.
+8. Handmatig testen: eigen account de rol geven, abonneren in de browser,
    `curl` naar `/api/nieuwsoverzicht/push` met testtoken, melding checken;
    expliciet ook testen dat een tweede identiek verzoek niet dubbel verstuurt,
-   dat opzeggen met andermans endpoint niets doet, en dat een VAPID-rotatie
-   de toggle op `/account/meldingen` terugzet naar "uit".
-8. Scheduled-task-config (buiten deze repo) uitbreiden met de HTTP-POST-actie.
-9. De rotatieprocedure uit §3.2 (VAPID) en het bestaande `APP_SECRET`-patroon
-   toevoegen aan de secret-checklist in `docs/deployment.md` — het ontwerp
-   staat al in dit plan, dit is alleen nog het overnemen ervan in dat
-   losstaande document.
+   dat opzeggen met andermans endpoint niets doet, dat een zesde abonnement
+   per gebruiker geweigerd wordt, en dat een VAPID-rotatie de toggle op
+   `/account/meldingen` terugzet naar "uit".
+9. Scheduled-task-config (buiten deze repo) uitbreiden met de HTTP-POST-actie.
+10. De rotatieprocedure uit §3.2 (VAPID) en het bestaande `APP_SECRET`-patroon
+    toevoegen aan de secret-checklist in `docs/deployment.md` — het ontwerp
+    staat al in dit plan, dit is alleen nog het overnemen ervan in dat
+    losstaande document.
