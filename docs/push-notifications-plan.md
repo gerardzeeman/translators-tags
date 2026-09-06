@@ -26,7 +26,7 @@ HTTP POST /api/nieuwsoverzicht/push   (Bearer-token, geen sessie)
         │
         ▼
 Alef-Omega backend
-        │  zoekt alle PushSubscription's van gebruikers met ROLE_NEWS_SUBSCRIBER
+        │  zoekt alle PushSubscription's van gebruikers met ROLE_CGK_RIJNSBURG_NIEUWS
         ▼
 Web Push (VAPID, minishlink/web-push)
         │
@@ -43,18 +43,18 @@ niet aan deze applicatie — buiten scope van dit plan.
 
 ---
 
-## Openstaande beslissingen (graag bevestigen)
+## Beslissingen (bevestigd door gebruiker)
 
-1. **Rolnaam**: hieronder gebruikt als `ROLE_NEWS_SUBSCRIBER` ("Nieuwsmeldingen
-   ontvangen"). Verdient dat een generieke naam (herbruikbaar voor toekomstige
-   soorten meldingen) of specifiek voor dit CGK/Rijnsburg-overzicht?
-2. **Wie mag de rol toekennen**: alleen `ROLE_ADMIN` via `/admin/users` (zoals
-   alle andere rollen), aannemen dat dat volstaat.
-3. **Bewaren van verstuurde overzichten**: MVP logt elke push (titel, tekst,
-   tijdstip, aantal geslaagd/mislukt) in een `NewsDigest`-tabel, met een
-   alleen-lezen `/admin`-overzicht (uitgewerkt in §5.3). Nodig, of overbodig?
-4. **Icoon/branding van de melding**: gebruikt voorlopig `favicon.png` als
-   notificatie-icoon; geen apart ontwerp nodig tenzij gewenst.
+1. **Rolnaam**: `ROLE_CGK_RIJNSBURG_NIEUWS` — specifiek voor dit overzicht,
+   niet generiek. Komt er later een tweede soort pushmelding bij, dan hoort
+   daar een eigen rol (en eventueel een eigen `type`-onderscheid op
+   `NewsDigest`, zie §7) bij, niet hergebruik van deze rol.
+2. **Roltoekenning**: alleen `ROLE_ADMIN` via `/admin/users`, zoals alle
+   andere rollen — geen self-service opt-in.
+3. **Verzendhistorie**: de `NewsDigest`-tabel met alleen-lezen
+   `/admin`-overzicht (§5.3) blijft in het plan.
+4. **Icoon/branding**: `favicon.png` als notificatie-icoon, geen apart
+   ontwerptraject.
 
 ---
 
@@ -104,18 +104,18 @@ Migratie volgt het bestaande patroon in `app/migrations/VersionYYYYMMDDHHMMSS.ph
 
 ```yaml
 role_hierarchy:
-    ROLE_NEWS_SUBSCRIBER:       [ROLE_VIEWER]
-    ROLE_ADMIN:                 [..., ROLE_NEWS_SUBSCRIBER]   # bestaande lijst + deze
+    ROLE_CGK_RIJNSBURG_NIEUWS:       [ROLE_VIEWER]
+    ROLE_ADMIN:                 [..., ROLE_CGK_RIJNSBURG_NIEUWS]   # bestaande lijst + deze
 
 access_control:
-    - { path: ^/account/meldingen,          roles: ROLE_NEWS_SUBSCRIBER }
+    - { path: ^/account/meldingen,          roles: ROLE_CGK_RIJNSBURG_NIEUWS }
     - { path: ^/api/nieuwsoverzicht/push,   roles: PUBLIC_ACCESS }   # bewust: auth via Bearer-token in de controller, niet via de sessie-firewall (aanroeper is de scheduled task, geen ingelogde browser)
 ```
 
 `AdminUserController::ASSIGNABLE_ROLES` krijgt er één regel bij:
 
 ```php
-'ROLE_NEWS_SUBSCRIBER' => 'Nieuwsmeldingen (push)',
+'ROLE_CGK_RIJNSBURG_NIEUWS' => 'Nieuwsmeldingen (push)',
 ```
 
 Daarmee kan een admin de rol per gebruiker aan-/uitzetten op de bestaande
@@ -219,7 +219,7 @@ subscriptions te kunnen opruimen.
 
 ## 5. Endpoints
 
-### 5.1 Zelf-abonneren (ingelogde gebruiker, `ROLE_NEWS_SUBSCRIBER`)
+### 5.1 Zelf-abonneren (ingelogde gebruiker, `ROLE_CGK_RIJNSBURG_NIEUWS`)
 
 `src/Controller/PushSubscriptionController.php`, route-prefix `/account/meldingen`:
 
@@ -286,7 +286,7 @@ if ($subscription === null && $repository->count(['user' => $this->getUser()]) >
 Bij een ongeldige payload of een overschreden limiet: `422` respectievelijk
 `429`, niets opgeslagen. Dit begrenst zowel per-ongeluk als moedwillig misbruik
 van de route door een account dat de rol al heeft — de route blijft verder
-onbereikbaar voor iedereen zonder `ROLE_NEWS_SUBSCRIBER` (§2).
+onbereikbaar voor iedereen zonder `ROLE_CGK_RIJNSBURG_NIEUWS` (§2).
 
 ### 5.2 Binnenkomend webhook (machine-naar-machine, geen sessie)
 
@@ -362,7 +362,7 @@ controller-wijziging naar `async` te verplaatsen — alleen
 `messenger.yaml`-routing verandert dan).
 
 `SendNewsDigestPushHandler` haalt alle `PushSubscription`s op van gebruikers
-met `ROLE_NEWS_SUBSCRIBER`, stuurt de melding via `minishlink/web-push`, en
+met `ROLE_CGK_RIJNSBURG_NIEUWS`, stuurt de melding via `minishlink/web-push`, en
 verwerkt per subscription het rapport: `410 Gone`/`404 Not Found` **en**
 `401 Unauthorized`/`403 Forbidden` (VAPID-sleutel niet meer geldig, zie §3.2)
 → subscription verwijderen; overig succes/falen → tellers op de
@@ -370,8 +370,8 @@ verwerkt per subscription het rapport: `410 Gone`/`404 Not Found` **en**
 
 ### 5.3 Admin-historie
 
-Beantwoordt openstaande beslissing 3 (§ "Openstaande beslissingen"): een
-alleen-lezen overzicht van verstuurde overzichten.
+Volgt uit beslissing 3 (§ "Beslissingen"): een alleen-lezen overzicht van
+verstuurde overzichten.
 
 `src/Controller/AdminNewsDigestController.php`, `#[Route('/admin/nieuwsoverzicht')]`
 `#[IsGranted('ROLE_ADMIN')]` — zelfde beveiligingspatroon als
@@ -455,7 +455,7 @@ Stimulus-value-conventie als de bestaande controllers (bv.
 
 Eén link "Meldingen" toevoegen aan de bestaande navigatie
 (`templates/base.html.twig` / `nav_panel_controller.js`), zichtbaar zodra
-`is_granted('ROLE_NEWS_SUBSCRIBER')`.
+`is_granted('ROLE_CGK_RIJNSBURG_NIEUWS')`.
 
 ---
 
@@ -499,7 +499,7 @@ vóórdat de `NewsDigest`-rij wordt opgeslagen.
 **Locatie:** §5.1
 **Fix opgenomen in:** §5.1 (query gescopet op `user = :current_user`), §1 (samengestelde unique-constraint)
 
-Een gebruiker met `ROLE_NEWS_SUBSCRIBER` kon een willekeurige `endpoint`-string
+Een gebruiker met `ROLE_CGK_RIJNSBURG_NIEUWS` kon een willekeurige `endpoint`-string
 meesturen; zonder expliciete check verwijderde dit elke `PushSubscription`-rij
 met die endpoint, ongeacht van wie — een IDOR waarmee elke abonnee het
 abonnement van een andere abonnee kon opzeggen. §5.1 scopet abonneren én
@@ -555,7 +555,7 @@ veronderstelling te blijven dat meldingen nog aankomen.
 **Locatie:** §5.1
 **Fix opgenomen in:** §5.1 (`isValidSubscriptionPayload()`, max. 5 subscriptions/gebruiker)
 
-Beperkt risico omdat de route al `ROLE_NEWS_SUBSCRIBER` vereist, maar niets
+Beperkt risico omdat de route al `ROLE_CGK_RIJNSBURG_NIEUWS` vereist, maar niets
 weerhield zo'n account ervan herhaaldelijk te posten met verzonnen
 `endpoint`/`p256dh`/`auth`-waarden. §5.1 valideert nu lengte/formaat van alle
 drie de velden en weigert (`429`) een nieuw abonnement zodra een gebruiker
@@ -603,7 +603,7 @@ dit kanaal ooit verbreedt naar gevoeligere inhoud.
 
 1. Migratie + entities `PushSubscription`, `NewsDigest` (incl. de
    samengestelde unique-constraint en `idempotencyKey` uit §1).
-2. Rol `ROLE_NEWS_SUBSCRIBER` in `security.yaml` + `AdminUserController`.
+2. Rol `ROLE_CGK_RIJNSBURG_NIEUWS` in `security.yaml` + `AdminUserController`.
 3. `composer require minishlink/web-push`, VAPID-sleutels genereren, env-vars
    wiren (root `.env.local`, `docker-compose.yml`, `config/services.yaml`) —
    inclusief `NEWS_DIGEST_PUSH_ENABLED` (§3.1) en de
