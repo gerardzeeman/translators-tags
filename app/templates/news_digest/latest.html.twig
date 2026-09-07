@@ -10,7 +10,7 @@
         <header class="blog-post-header">
             <h1>{{ digest.title }}</h1>
             <div class="blog-post-meta">
-                <span>{{ digest.sentAt|date('d-m-Y H:i') }}</span>
+                <span>{{ digest.sentAt|date('d-m-Y H:i', 'Europe/Amsterdam') }}</span>
             </div>
         </header>
 
