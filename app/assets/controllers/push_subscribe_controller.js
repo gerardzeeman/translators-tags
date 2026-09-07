@@ -12,12 +12,12 @@ function urlBase64ToUint8Array(base64) {
     return Uint8Array.from([...raw].map(c => c.charCodeAt(0)))
 }
 
-function keysEqual(a, b) {
-    if (!a || !b || a.byteLength !== b.byteLength) return false
-    const viewA = new Uint8Array(a)
-    const viewB = new Uint8Array(b)
-    return viewA.every((byte, i) => byte === viewB[i])
-}
+// Onthoudt met welke VAPID-sleutel is geabonneerd. `PushSubscription.options.
+// applicationServerKey` (de spec-conforme manier om dit terug te lezen) blijkt
+// niet op elke browser betrouwbaar gevuld te worden -- op Android Chrome gaf
+// dat een fout-positieve "sleutel komt niet overeen" bij een heel normale
+// eerste keer abonneren. localStorage is simpeler en werkt overal hetzelfde.
+const VAPID_KEY_STORAGE = 'pushVapidKey'
 
 export default class extends Controller {
     static targets = ['toggle', 'status', 'unsupported']
@@ -71,9 +71,15 @@ export default class extends Controller {
         const subscription = await this.registration.pushManager.getSubscription()
 
         if (subscription) {
-            const currentKey = urlBase64ToUint8Array(this.vapidPublicKeyValue).buffer
-            if (!keysEqual(subscription.options?.applicationServerKey, currentKey)) {
+            // Alleen als we zelf een eerder gebruikte sleutel hebben
+            // vastgelegd én die afwijkt van de huidige, is dit een echte
+            // rotatie. Geen vastgelegde sleutel (bv. localStorage gewist)
+            // betekent "onbekend", niet "afwijkend" -- dan een geldig
+            // abonnement niet onterecht intrekken.
+            const knownKey = localStorage.getItem(VAPID_KEY_STORAGE)
+            if (knownKey && knownKey !== this.vapidPublicKeyValue) {
                 await subscription.unsubscribe()
+                localStorage.removeItem(VAPID_KEY_STORAGE)
                 this.#setState(false, 'Meldingen zijn opnieuw ingeschakeld nodig na een sleutelwissel.')
                 return
             }
@@ -112,6 +118,7 @@ export default class extends Controller {
             return
         }
 
+        localStorage.setItem(VAPID_KEY_STORAGE, this.vapidPublicKeyValue)
         this.#setState(true)
     }
 
@@ -125,6 +132,7 @@ export default class extends Controller {
             })
             await subscription.unsubscribe()
         }
+        localStorage.removeItem(VAPID_KEY_STORAGE)
         this.#setState(false)
     }
 
