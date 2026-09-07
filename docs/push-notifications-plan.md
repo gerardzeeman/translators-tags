@@ -1,6 +1,6 @@
 # Push-meldingen ("Nieuwsoverzicht") — implementatieplan
 
-Status: **plan, nog niet geïmplementeerd**
+Status: **geïmplementeerd en getest** — zie [`push-notifications-test-plan.md`](push-notifications-test-plan.md)
 Branch: `feat/push-notifications`
 
 ## Doel

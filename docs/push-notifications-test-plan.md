@@ -1,15 +1,17 @@
 # Push-meldingen — testplan
 
-Status: **klaar om uit te voeren**
+Status: **uitgevoerd — alle in-scope stappen geslaagd** (2026-09-07)
 Branch: `feat/push-notifications`
 Hoort bij: [`push-notifications-plan.md`](push-notifications-plan.md)
 
 Dit testplan verifieert de implementatie op `feat/push-notifications`. Deel 1
-is al door mij uitgevoerd (via `curl` en een gesandboxte testbrowser) en
-hoeft niet herhaald te worden. Deel 2 vereist een **echte browser met een
-secure context** (HTTPS, of een browser die `http://localhost` als
-zodanig erkent) — dat kon mijn testomgeving niet bieden, dus dit is voor
-jou om uit te voeren.
+is door mij uitgevoerd (via `curl` en een gesandboxte testbrowser). Deel 2
+is samen met de gebruiker doorlopen in een echte Firefox- en Chrome-sessie
+(de gesandboxte testbrowser kon geen secure context krijgen op
+`http://localhost`, zie onderaan). Resultaat: **A t/m G volledig geslaagd**;
+H gedeeltelijk (desktop Firefox/Chrome bevestigd, Android/iOS niet getest —
+zie die sectie). Tijdens dit testen zijn twee echte implementatiebugs aan
+het licht gekomen en gefixt (zie "Bekende bugs, al gefixt" in Deel 1).
 
 ---
 
@@ -70,6 +72,12 @@ image bouwt (`docker compose build app`) zit de fix er al in.
 
 ### A. Abonneren (happy path)
 
+> **✅ Bevestigd** — meerdere keren doorlopen (initieel, na opzeggen, na
+> VAPID-rotatie), zowel in Firefox als Chrome. `push_subscriptions` kreeg
+> telkens de verwachte rij; niet elke afzonderlijke devtools-subcheck
+> (service-workerstatus, exacte statustekst) is apart gerapporteerd, maar de
+> eindtoestand (succesvolle aflevering in B) bewijst dat de hele keten werkt.
+
 - [ ] Log in, ga naar `https://localhost/profile`.
 - [ ] Open de devtools-console: geen fouten bij het laden van de pagina.
 - [ ] Devtools → Application → Service Workers: `/sw.js` staat geregistreerd
@@ -84,6 +92,10 @@ image bouwt (`docker compose build app`) zit de fix er al in.
       ```
 
 ### B. Melding ontvangen
+
+> **✅ Bevestigd** — testmeldingen kwamen aan in zowel Firefox als Chrome
+> (`success_count` correct per keer). Het specifieke "klik op de melding
+> opent /blog"-detail is niet apart teruggekoppeld.
 
 - [ ] Verstuur een testoverzicht naar de webhook. In een Bash-terminal (WSL,
       Git Bash):
@@ -114,6 +126,9 @@ image bouwt (`docker compose build app`) zit de fix er al in.
 
 ### C. Opzeggen
 
+> **✅ Bevestigd** — rij verdween uit `push_subscriptions`; een daarna
+> verstuurd testoverzicht kreeg `success_count: 0, failure_count: 0`.
+
 - [ ] Zet de checkbox op `/profile` weer uit.
 - [ ] Controleer dat de rij uit `push_subscriptions` verdwenen is.
 - [ ] Verstuur nogmaals een testoverzicht (nieuwe `idempotency_key`) → geen
@@ -121,6 +136,12 @@ image bouwt (`docker compose build app`) zit de fix er al in.
       `0` als er verder niemand anders geabonneerd is).
 
 ### D. Rolgating (incl. rolhiërarchie)
+
+> **✅ Bevestigd** — gebruiker zonder rol zag geen Meldingen-sectie en kreeg
+> `403` op een directe POST. Rolhiërarchie-expansie was al bewezen doordat
+> het echte account (alleen `ROLE_ADMIN`, geen expliciete
+> `ROLE_CGK_RIJNSBURG_NIEUWS`) gedurende het hele testplan meldingen bleef
+> ontvangen.
 
 - [ ] Log in als gebruiker **zonder** de rol → `/profile` toont geen
       Meldingen-sectie.
@@ -136,6 +157,10 @@ image bouwt (`docker compose build app`) zit de fix er al in.
       alleen een letterlijke rol-match in de database).
 
 ### E. Robuustheid (nogmaals, nu vanuit de browser i.p.v. curl)
+
+> **✅ Bevestigd** — cross-user opzeggen gaf `200 {"status":"ok"}` maar liet
+> de rij van de ander ongemoeid (geen IDOR). Het 6e abonnement op één account
+> kreeg exact `429 "Maximaal 5 apparaten per account."`, de eerste 5 slaagden.
 
 - [ ] **Eigenaarscontrole:** noteer de `endpoint` van jouw abonnement, log in
       als een andere geabonneerde gebruiker, en probeer diens endpoint op te
@@ -154,6 +179,12 @@ image bouwt (`docker compose build app`) zit de fix er al in.
       `"Maximaal 5 apparaten per account."`.
 
 ### F. VAPID-sleutelrotatie
+
+> **✅ Bevestigd, beide kanten.** Client: na rotatie sprong de toggle vanzelf
+> naar "uit" met de rotatiemelding. Server: een verzendpoging naar de
+> verouderde subscription gaf `failure_count: 1`, waarna die rij meteen
+> automatisch verwijderd werd (`401`/`403`-afhandeling). Opnieuw abonneren
+> met de nieuwe sleutel werkte daarna gewoon (herhaling van B).
 
 - [ ] Genereer een nieuw sleutelpaar:
       ```bash
@@ -179,6 +210,11 @@ image bouwt (`docker compose build app`) zit de fix er al in.
 
 ### G. Admin-historie
 
+> **✅ Bevestigd** — historiepagina toonde kloppende rijen/tellers. Een
+> titel met `<script>alert(1)</script>` verscheen geëscaped
+> (`&lt;script&gt;...`) in de HTML, geen alert, geen ongeautoriseerd script
+> in de DOM.
+
 - [ ] `/admin/nieuwsoverzicht` (als `ROLE_ADMIN`) toont alle verstuurde
       overzichten met kloppende `success_count`/`failure_count`.
 - [ ] Verstuur een testoverzicht met een titel die HTML bevat, bv.
@@ -189,23 +225,34 @@ image bouwt (`docker compose build app`) zit de fix er al in.
 
 ### H. Cross-browser (voor zover relevant/beschikbaar)
 
-- [ ] Chrome/Edge desktop — volledige ondersteuning verwacht.
-- [ ] Firefox desktop — volledige ondersteuning verwacht.
-- [ ] Android Chrome — volledige ondersteuning verwacht.
-- [ ] iOS Safari 16.4+ — vereist eerst "Zet op beginscherm"; pas daarna is
-      Web Push beschikbaar. Zonder dat: de "niet ondersteund"-melding hoort
-      te verschijnen, geen kapotte toggle.
-- [ ] Een browser zonder Push-ondersteuning (of privé-venster met beperkte
-      API's) → de "Pushmeldingen worden niet ondersteund door deze
-      browser"-melding verschijnt, de checkbox is uitgeschakeld, geen
-      onbehandelde JS-fout in de console.
+- [x] Chrome desktop — bevestigd (abonneren, aflevering: `success_count: 2`
+      samen met Firefox in dezelfde test).
+- [x] Firefox desktop — bevestigd (het hele testplan A–G is hiermee
+      doorlopen).
+- [ ] Android Chrome — **niet getest**, geen apparaat beschikbaar tijdens
+      deze sessie.
+- [ ] iOS Safari 16.4+ — **niet getest**, geen apparaat beschikbaar tijdens
+      deze sessie.
+- [x] Een browser zonder secure context/Push-ondersteuning → bevestigd in de
+      gesandboxte testbrowser: de "niet ondersteund"-melding verscheen, de
+      checkbox werd uitgeschakeld, geen onbehandelde JS-fout in de console
+      (zie ook de `try`/`catch` rond `serviceWorker.register()` in
+      `push_subscribe_controller.js`, toegevoegd naar aanleiding hiervan).
+
+**Openstaand voor later:** Android Chrome en iOS Safari zijn niet getest.
+Beide gebruiken hetzelfde standaard Web Push-mechanisme als Chrome/Firefox
+desktop, dus een probleem is niet waarschijnlijk — maar iOS vereist specifiek
+"Zet op beginscherm" vóórdat Web Push beschikbaar is, en dat pad is nog nooit
+uitgeprobeerd.
 
 ---
 
-## Bekende beperking van mijn eigen verificatie
+## Beperking van de gesandboxte testbrowser (achterhaald)
 
 Mijn gesandboxte testbrowser kon `navigator.serviceWorker.register()` niet
 succesvol uitvoeren op `http://localhost` (geen erkende secure context) en
 kon de zelfondertekende certificaatwaarschuwing op `https://localhost` niet
-wegklikken. Deel 2 hierboven is dus door niemand nog echt bevestigd — dat is
-precies waarom dit testplan er is.
+wegklikken — dat is waarom Deel 2 oorspronkelijk om handmatige uitvoering
+vroeg. Inmiddels is dat deel samen met de gebruiker in echte Firefox- en
+Chrome-sessies doorlopen (zie hierboven); deze beperking is dus niet meer
+van toepassing op de resultaten in dit document.
