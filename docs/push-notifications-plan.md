@@ -627,3 +627,39 @@ dit kanaal ooit verbreedt naar gevoeligere inhoud.
     toevoegen aan de secret-checklist in `docs/deployment.md` — het ontwerp
     staat al in dit plan, dit is alleen nog het overnemen ervan in dat
     losstaande document.
+
+---
+
+## 10. Uitbreiding: publieke overzichtspagina (`/cgk-rijnsburg-nieuwsoverzicht`)
+
+Toegevoegd na productietests: de pushmelding-link wees aanvankelijk naar
+`/blog/`, maar er was geen pagina die de **volledige tekst** van het laatst
+verstuurde overzicht toont (met werkende links) — alleen de korte
+notificatietekst zelf.
+
+- **Route:** `GET /cgk-rijnsburg-nieuwsoverzicht`, `ROLE_CGK_RIJNSBURG_NIEUWS`
+  (bevestigd door gebruiker, niet `PUBLIC_ACCESS` zoals aanvankelijk
+  gebouwd) — dezelfde rol als de pushmelding zelf, dus alleen abonnees zien
+  de pagina; wie op de melding klikt is per definitie al ingelogd met die
+  rol. Zowel via `access_control` als `#[IsGranted]` op de controller
+  (zelfde dubbele patroon als `AdminNewsDigestController`).
+- **Toont:** alleen het laatst verstuurde `NewsDigest`
+  (`findOneBy([], ['sentAt' => 'DESC'])`) — expliciet niet de volledige
+  historie (dat blijft `/admin/nieuwsoverzicht`, alleen voor admins).
+- **`body` wordt nu als Markdown gerenderd** (`NewsDigestMarkdownRenderer`,
+  Twig-filter `news_digest_markdown`), zodat de scheduled task links en
+  opmaak kan meesturen — dit is een bewuste wijziging ten opzichte van het
+  oorspronkelijke ontwerp (§8, laag-bevinding), waar `title`/`body` nergens
+  als HTML werden geïnterpreteerd. Zelfde beveiligingsposture als
+  `BlogMarkdownRenderer`: `html_input: 'strip'` + `allow_unsafe_links: false`
+  — ruwe HTML in de bron wordt volledig verwijderd, niet geëscaped-en-getoond
+  (getest: een `<script>`-poging in een testbericht verdween spoorloos, geen
+  DOM-injectie). Nodig omdat deze content van een systeem buiten de
+  applicatie komt, net als bij blogs die publiek zichtbaar kunnen zijn.
+- **`public/sw.js`**: de standaard-klikbestemming (als de webhook geen `url`
+  meestuurt) is veranderd van `/` naar deze pagina — op dit moment de enige
+  soort pushmelding die de app verstuurt (§7).
+- **Aanbeveling voor de scheduled-task-instructies (stap 9 hierboven):** stuur
+  `url: "/cgk-rijnsburg-nieuwsoverzicht"` mee (of laat het veld weg en leun op
+  de nieuwe standaardwaarde in `sw.js`), en gebruik Markdown-links in `body`
+  voor "lees meer"-verwijzingen i.p.v. losse `url`-velden.

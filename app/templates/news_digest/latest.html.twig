@@ -1,0 +1,26 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}{{ digest ? digest.title : 'Nieuwsoverzicht' }} – Alef-Omega{% endblock %}
+
+{% block body %}
+<div class="container container--narrow blog-post-container">
+
+    {% if digest %}
+    <article class="blog-post">
+        <header class="blog-post-header">
+            <h1>{{ digest.title }}</h1>
+            <div class="blog-post-meta">
+                <span>{{ digest.sentAt|date('d-m-Y H:i') }}</span>
+            </div>
+        </header>
+
+        <div class="blog-content">
+            {{ digest.body|news_digest_markdown|raw }}
+        </div>
+    </article>
+    {% else %}
+    <p>Er is nog geen nieuwsoverzicht beschikbaar.</p>
+    {% endif %}
+
+</div>
+{% endblock %}
