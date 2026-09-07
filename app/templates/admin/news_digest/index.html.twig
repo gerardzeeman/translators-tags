@@ -29,7 +29,7 @@
         <tbody>
         {% for digest in digests %}
             <tr>
-                <td>{{ digest.sentAt|date('d-m-Y H:i') }}</td>
+                <td>{{ digest.sentAt|date('d-m-Y H:i', 'Europe/Amsterdam') }}</td>
                 {# title/body/url komen van een systeem buiten deze applicatie
                    (de scheduled task) en worden dus als niet-vertrouwde tekst
                    behandeld -- Twig's standaard auto-escaping, nooit |raw
