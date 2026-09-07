@@ -27,6 +27,7 @@
     <section class="profile-card">
         <h2>Accountgegevens</h2>
         <p class="profile-field"><strong>E-mail:</strong> {{ user.email }}</p>
+        {% if is_granted('ROLE_ADMIN') %}
         {% set role_labels = {
             'ROLE_ADMIN':  'Beheerder',
             'ROLE_LINKER': 'Koppelaar (SV)',
@@ -38,8 +39,9 @@
         <p class="profile-field"><strong>Rollen:</strong>
             {{ named_roles|length > 0 ? named_roles|join(', ') : '–' }}
         </p>
+        {% endif %}
         <p class="profile-field"><strong>Lid sinds:</strong> {{ user.createdAt|date('d-m-Y') }}</p>
-        {% if user.lastLoginAt %}
+        {% if is_granted('ROLE_ADMIN') and user.lastLoginAt %}
         <p><strong>Laatste login:</strong> {{ user.lastLoginAt|date('d-m-Y H:i') }}</p>
         {% endif %}
     </section>
