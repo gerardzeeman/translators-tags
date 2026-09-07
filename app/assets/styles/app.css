@@ -2987,6 +2987,7 @@ a:hover { text-decoration: underline; }
     margin: .1rem;
 }
 .btn-danger-inline { background: none; border: none; color: var(--color-error, #922); cursor: pointer; padding: 0; margin-left: .75rem; }
+.btn-inline { background: none; border: none; color: var(--color-accent-2); cursor: pointer; padding: 0; margin-left: .75rem; text-decoration: underline; }
 .form-inline { display: inline; }
 
 /* ── Institutio: hoofdpagina (inhoudsopgave) ────────────────────────────────── */

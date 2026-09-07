@@ -663,3 +663,19 @@ notificatietekst zelf.
   `url: "/cgk-rijnsburg-nieuwsoverzicht"` mee (of laat het veld weg en leun op
   de nieuwe standaardwaarde in `sw.js`), en gebruik Markdown-links in `body`
   voor "lees meer"-verwijzingen i.p.v. losse `url`-velden.
+
+---
+
+## 11. Uitbreiding: opnieuw versturen vanaf de admin-historie
+
+`/admin/nieuwsoverzicht` (§5.3) heeft nu per rij een knop "Opnieuw versturen"
+(`POST /admin/nieuwsoverzicht/{id}/opnieuw-versturen`, `ROLE_ADMIN`,
+CSRF-beschermd, met een JS-`confirm()` omdat dit een echte pushmelding naar
+alle huidige abonnees stuurt). Dispatcht rechtstreeks
+`SendNewsDigestPush($digest->getId())` — niet via de webhook, dus de
+idempotentie-/rate-limit-bescherming van §5.2 is hier bewust niet van
+toepassing (dit is een geauthenticeerde admin-actie, geen binnenkomend
+verzoek van de scheduled task). `successCount`/`failureCount` op die rij
+worden cumulatief opgehoogd bij elke herverzending, niet gereset — de teller
+weerspiegelt dus het totaal aantal geslaagde/mislukte pogingen over alle
+verzendingen van dat overzicht heen.
