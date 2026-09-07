@@ -1,6 +1,12 @@
 {% extends 'base.html.twig' %}
 {% block title %}Mijn profiel – Bijbel Vergelijking{% endblock %}
 
+{% block head %}
+{% if is_granted('ROLE_CGK_RIJNSBURG_NIEUWS') %}
+<meta name="csrf-token" content="{{ csrf_token('push_notifications') }}">
+{% endif %}
+{% endblock %}
+
 {% block body %}
 <div class="profile-page">
     <h1>Mijn profiel</h1>
@@ -86,5 +92,26 @@
             </button>
         </form>
     </section>
+
+    {# Push-meldingen (docs/push-notifications-plan.md) #}
+    {% if is_granted('ROLE_CGK_RIJNSBURG_NIEUWS') %}
+    <section class="profile-card"
+             data-controller="push-subscribe"
+             data-push-subscribe-vapid-public-key-value="{{ vapid_public_key }}"
+             data-push-subscribe-subscribe-url-value="{{ path('app_push_subscribe') }}"
+             data-push-subscribe-unsubscribe-url-value="{{ path('app_push_unsubscribe') }}">
+        <h2>Meldingen</h2>
+        <p class="profile-field">
+            <label>
+                <input type="checkbox" data-push-subscribe-target="toggle" data-action="change->push-subscribe#toggle">
+                Dagelijks CGK/Rijnsburg nieuwsoverzicht ontvangen als pushmelding
+            </label>
+        </p>
+        <p class="profile-field" data-push-subscribe-target="status"></p>
+        <p class="profile-field" data-push-subscribe-target="unsupported" hidden>
+            Pushmeldingen worden niet ondersteund door deze browser.
+        </p>
+    </section>
+    {% endif %}
 </div>
 {% endblock %}

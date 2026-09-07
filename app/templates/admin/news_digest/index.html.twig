@@ -1,0 +1,42 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Nieuwsoverzicht-historie – Bijbel Vergelijking{% endblock %}
+
+{% block body %}
+<div class="container container--wide">
+
+    <div class="admin-page-header">
+        <h1>Nieuwsoverzicht-historie</h1>
+    </div>
+
+    <table class="admin-table">
+        <thead>
+            <tr>
+                <th>Verstuurd</th>
+                <th>Titel</th>
+                <th>Link</th>
+                <th>Geslaagd</th>
+                <th>Mislukt</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for digest in digests %}
+            <tr>
+                <td>{{ digest.sentAt|date('d-m-Y H:i') }}</td>
+                {# title/body/url komen van een systeem buiten deze applicatie
+                   (de scheduled task) en worden dus als niet-vertrouwde tekst
+                   behandeld -- Twig's standaard auto-escaping, nooit |raw
+                   (plan §5.3). #}
+                <td>{{ digest.title }}</td>
+                <td>{{ digest.url ?: '–' }}</td>
+                <td>{{ digest.successCount }}</td>
+                <td>{{ digest.failureCount }}</td>
+            </tr>
+        {% else %}
+            <tr class="empty-row"><td colspan="5">Nog geen overzichten verstuurd.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+</div>
+{% endblock %}
