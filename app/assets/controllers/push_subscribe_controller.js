@@ -48,10 +48,18 @@ export default class extends Controller {
 
     // Aan-/uitzetten via de checkbox (data-action="change->push-subscribe#toggle")
     async toggle(event) {
-        if (event.target.checked) {
-            await this.#subscribe()
-        } else {
-            await this.#unsubscribe()
+        try {
+            if (event.target.checked) {
+                await this.#subscribe()
+            } else {
+                await this.#unsubscribe()
+            }
+        } catch (error) {
+            // Zonder deze catch verdwijnt een fout hier stil in de console --
+            // de checkbox blijft dan "aan" staan terwijl er niets gebeurd is,
+            // zonder dat de gebruiker enig signaal krijgt.
+            console.error('push-subscribe', error)
+            this.#setState(false, 'Inschrijven is niet gelukt door een onverwachte fout.')
         }
     }
 
