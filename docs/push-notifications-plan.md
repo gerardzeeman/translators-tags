@@ -637,9 +637,12 @@ Toegevoegd na productietests: de pushmelding-link wees aanvankelijk naar
 verstuurde overzicht toont (met werkende links) — alleen de korte
 notificatietekst zelf.
 
-- **Route:** `GET /cgk-rijnsburg-nieuwsoverzicht`, `PUBLIC_ACCESS` (zelfde
-  overweging als `/blog`: kerknieuws is publiek, en een klik vanuit een
-  pushmelding moet niet op een inlogmuur stuiten).
+- **Route:** `GET /cgk-rijnsburg-nieuwsoverzicht`, `ROLE_CGK_RIJNSBURG_NIEUWS`
+  (bevestigd door gebruiker, niet `PUBLIC_ACCESS` zoals aanvankelijk
+  gebouwd) — dezelfde rol als de pushmelding zelf, dus alleen abonnees zien
+  de pagina; wie op de melding klikt is per definitie al ingelogd met die
+  rol. Zowel via `access_control` als `#[IsGranted]` op de controller
+  (zelfde dubbele patroon als `AdminNewsDigestController`).
 - **Toont:** alleen het laatst verstuurde `NewsDigest`
   (`findOneBy([], ['sentAt' => 'DESC'])`) — expliciet niet de volledige
   historie (dat blijft `/admin/nieuwsoverzicht`, alleen voor admins).

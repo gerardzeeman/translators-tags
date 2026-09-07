@@ -6,13 +6,17 @@ use App\Repository\NewsDigestRepository;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 /**
- * Publieke pagina met het laatst verstuurde CGK/Rijnsburg-nieuwsoverzicht --
- * de bestemming van de pushmelding-link, zodat de volledige tekst en
- * eventuele links leesbaar/klikbaar zijn buiten de melding zelf (alleen het
- * laatste overzicht; de volledige historie staat op /admin/nieuwsoverzicht).
+ * Pagina met het laatst verstuurde CGK/Rijnsburg-nieuwsoverzicht -- de
+ * bestemming van de pushmelding-link, zodat de volledige tekst en eventuele
+ * links leesbaar/klikbaar zijn buiten de melding zelf (alleen het laatste
+ * overzicht; de volledige historie staat op /admin/nieuwsoverzicht).
+ * Alleen zichtbaar voor abonnees van de rol (zelfde rol als de pushmelding
+ * zelf), niet publiek.
  */
+#[IsGranted('ROLE_CGK_RIJNSBURG_NIEUWS')]
 class NewsDigestPageController extends AbstractController
 {
     #[Route('/cgk-rijnsburg-nieuwsoverzicht', name: 'app_news_digest_latest')]

@@ -69,7 +69,7 @@ security:
         - { path: ^/blog/afbeeldingen,     roles: ROLE_BLOGGER }
         - { path: ^/account/meldingen,     roles: ROLE_CGK_RIJNSBURG_NIEUWS }
         - { path: ^/api/nieuwsoverzicht/push, roles: PUBLIC_ACCESS }
-        - { path: ^/cgk-rijnsburg-nieuwsoverzicht, roles: PUBLIC_ACCESS }
+        - { path: ^/cgk-rijnsburg-nieuwsoverzicht, roles: ROLE_CGK_RIJNSBURG_NIEUWS }
         - { path: ^/blog,                  roles: PUBLIC_ACCESS }
         - { path: ^/book,                  roles: ROLE_VIEWER }
         - { path: ^/institutie,            roles: ROLE_VIEWER }
