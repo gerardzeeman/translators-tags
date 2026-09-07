@@ -30,7 +30,12 @@ export default class extends Controller {
         }
 
         try {
-            this.registration = await navigator.serviceWorker.register('/sw.js')
+            // updateViaCache: 'none' voorkomt dat de browser een door de
+            // HTTP-cache bewaarde kopie van sw.js gebruikt bij het periodiek
+            // checken op updates -- zonder dit kan een nieuwe versie van dit
+            // bestand nog langer onopgemerkt blijven dan sowieso al het
+            // geval is (zie install/activate in sw.js zelf).
+            this.registration = await navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' })
         } catch {
             // bv. geen secure context, browserbeleid, of schijfquotum -- zelfde
             // eindtoestand als "niet ondersteund": geen bruikbare toggle.
