@@ -43,6 +43,26 @@ jou om uit te voeren.
 | 6 | Webhook met absolute `url` (bv. `https://evil.example.com`) | `422`, niets opgeslagen |
 | 7 | `/profile` toont de Meldingen-sectie alleen met de rol | bevestigd |
 | 8 | Twig-lint, YAML-lint, migratie tegen echte Postgres-schema | allemaal groen |
+| 9 | Daadwerkelijke aflevering (`SendNewsDigestPushHandler`) tegen een bestaand abonnement | `success_count: 1`, geen exception — zie "Bekende bugs, al gefixt" hieronder |
+
+### Bekende bugs, al gefixt (tijdens dit testen zelf ontdekt)
+
+Test 9 hierboven faalde aanvankelijk met een `500` op elke verzendpoging —
+niet gerelateerd aan het testplan zelf, maar twee echte gaten in de
+implementatie die pas zichtbaar werden zodra er een echt abonnement bestond
+om naartoe te versturen:
+
+1. **Ontbrekende `bcmath`-PHP-extensie** — de VAPID-JWT-signing
+   (`web-token/jwt-library`) gaf zonder `bcmath`/`gmp` een notice die
+   Symfony's foutafhandeling fataal maakte. Opgelost: `bcmath` toegevoegd
+   aan `app/Dockerfile`.
+2. **Ontbrekende PSR-17-implementatie** — `minishlink/web-push` kan zonder
+   een geïnstalleerd pakket als `nyholm/psr7` geen HTTP-requests bouwen.
+   Opgelost: `composer require nyholm/psr7`; `SendNewsDigestPushHandler`
+   gebruikt weer gewoon `WebPush`'s standaard auto-discovery.
+
+Beide zijn gecommit vóór dit testplan werd bijgewerkt — als je een fris
+image bouwt (`docker compose build app`) zit de fix er al in.
 
 ---
 
@@ -65,12 +85,23 @@ jou om uit te voeren.
 
 ### B. Melding ontvangen
 
-- [ ] Verstuur een testoverzicht naar de webhook:
+- [ ] Verstuur een testoverzicht naar de webhook. In een Bash-terminal (WSL,
+      Git Bash):
       ```bash
       curl -sk -X POST https://localhost/api/nieuwsoverzicht/push \
         -H "Content-Type: application/json" \
         -H "Authorization: Bearer <NEWS_DIGEST_WEBHOOK_TOKEN uit .env.local>" \
         -d '{"title":"Testoverzicht","body":"Handmatige testmelding.","url":"/blog","idempotency_key":"handtest-1"}'
+      ```
+      In PowerShell: gebruik `curl.exe` (niet de `curl`-alias van
+      `Invoke-WebRequest`) én schrijf de JSON-body eerst naar een tijdelijk
+      bestand — inline `-d '{"..."}'` wordt door PowerShell's eigen
+      argument-quoting voor native executables stilzwijgend afgebroken:
+      ```powershell
+      $json = '{"title":"Testoverzicht","body":"Handmatige testmelding.","url":"/blog","idempotency_key":"handtest-1"}'
+      $tmp = "$env:TEMP\push-test-body.json"
+      [System.IO.File]::WriteAllText($tmp, $json, [System.Text.UTF8Encoding]::new($false))
+      curl.exe -sk -X POST https://localhost/api/nieuwsoverzicht/push -H "Content-Type: application/json" -H "Authorization: Bearer <NEWS_DIGEST_WEBHOOK_TOKEN uit .env.local>" --data-binary "@$tmp"
       ```
 - [ ] Binnen enkele seconden verschijnt een OS-melding (Chrome moet draaien,
       hoeft niet op de voorgrond).
