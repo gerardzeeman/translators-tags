@@ -9,6 +9,12 @@
         <h1>Nieuwsoverzicht-historie</h1>
     </div>
 
+    {% for label, messages in app.flashes %}
+        {% for message in messages %}
+        <div class="alert alert-{{ label }}">{{ message }}</div>
+        {% endfor %}
+    {% endfor %}
+
     <table class="admin-table">
         <thead>
             <tr>
@@ -17,6 +23,7 @@
                 <th>Link</th>
                 <th>Geslaagd</th>
                 <th>Mislukt</th>
+                <th></th>
             </tr>
         </thead>
         <tbody>
@@ -31,9 +38,15 @@
                 <td>{{ digest.url ?: '–' }}</td>
                 <td>{{ digest.successCount }}</td>
                 <td>{{ digest.failureCount }}</td>
+                <td>
+                    <form method="post" action="{{ path('admin_news_digest_resend', {id: digest.id}) }}" class="form-inline" onsubmit="return confirm('&quot;{{ digest.title|e('js') }}&quot; opnieuw versturen naar alle abonnees?')">
+                        <input type="hidden" name="_csrf_token" value="{{ csrf_token('news_digest_resend_' ~ digest.id) }}">
+                        <button type="submit" class="btn-inline">Opnieuw versturen</button>
+                    </form>
+                </td>
             </tr>
         {% else %}
-            <tr class="empty-row"><td colspan="5">Nog geen overzichten verstuurd.</td></tr>
+            <tr class="empty-row"><td colspan="6">Nog geen overzichten verstuurd.</td></tr>
         {% endfor %}
         </tbody>
     </table>
