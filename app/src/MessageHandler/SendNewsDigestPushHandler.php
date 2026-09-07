@@ -9,7 +9,6 @@ use App\Repository\PushSubscriptionRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Minishlink\WebPush\Subscription;
 use Minishlink\WebPush\WebPush;
-use Symfony\Component\HttpClient\Psr18Client;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 
 /**
@@ -43,6 +42,8 @@ final class SendNewsDigestPushHandler
             return;
         }
 
+        // WebPush auto-discovers its PSR-18 client and PSR-17 factories
+        // (php-http/discovery, resolved to nyholm/psr7 -- see composer.json).
         $webPush = new WebPush(
             auth: [
                 'VAPID' => [
@@ -51,7 +52,6 @@ final class SendNewsDigestPushHandler
                     'privateKey' => $this->vapidPrivateKey,
                 ],
             ],
-            client: new Psr18Client(),
         );
 
         $payload = json_encode([

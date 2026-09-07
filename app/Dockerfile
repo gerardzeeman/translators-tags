@@ -4,6 +4,10 @@ FROM dunglas/frankenphp:1-php8.3-bookworm AS base
 WORKDIR /app
 
 # Install PHP extensions required by Symfony + Doctrine + PostgreSQL
+# bcmath: used by minishlink/web-push's VAPID JWT signing (web-token/jwt-library)
+# for its big-integer math -- without it, that library falls back to a pure-PHP
+# calculator and emits a notice that Symfony's error handler turns into a fatal
+# error (docs/push-notifications-plan.md).
 RUN install-php-extensions \
     pdo_pgsql \
     pgsql \
@@ -11,7 +15,8 @@ RUN install-php-extensions \
     opcache \
     zip \
     apcu \
-    mbstring
+    mbstring \
+    bcmath
 
 # Suppress PHP version header
 RUN echo "expose_php = Off" > /usr/local/etc/php/conf.d/security.ini
