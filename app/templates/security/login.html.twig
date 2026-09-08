@@ -7,26 +7,29 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
     <title>Inloggen – alefomega.nl</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Baskervville:ital@0;1&family=Public+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
     <style>
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
         :root {
-            --color-parchment: #f5f0e8;
-            --color-ink:       #1a1208;
-            --color-ink-light: #4a3f2a;
-            --color-ink-muted: #8a7a60;
-            --color-border:    #d4c9b0;
+            --color-parchment: #f6efe1;
+            --color-card:      #fffdf8;
+            --color-ink:       #241b0f;
+            --color-ink-light: #55492f;
+            --color-ink-muted: #8c7c5e;
+            --color-border:    #ddd0ae;
             --color-accent:    #7a3b1e;
             --color-accent-2:  #1e4d7a;
             --color-error-bg:  #fdf0ee;
             --color-error:     #922;
-            --font-serif:      'EB Garamond', Georgia, serif;
+            --font-serif:      'Baskervville', Georgia, 'Times New Roman', serif;
+            --font-sans:       'Public Sans', -apple-system, 'Segoe UI', Arial, sans-serif;
         }
 
         body {
             background: var(--color-parchment);
-            font-family: var(--font-serif);
+            font-family: var(--font-sans);
             min-height: 100vh;
             display: flex;
             flex-direction: column;
@@ -36,13 +39,13 @@
         }
 
         .auth-card {
-            background: #fff;
+            background: var(--color-card);
             border: 1px solid var(--color-border);
-            border-radius: 6px;
+            border-radius: 10px;
             padding: 2.5rem 3rem;
             width: 100%;
             max-width: 420px;
-            box-shadow: 0 2px 8px rgba(0,0,0,.08), 0 8px 32px rgba(0,0,0,.04);
+            box-shadow: 0 2px 8px rgba(36,27,15,.06), 0 8px 32px rgba(36,27,15,.05);
         }
 
         .auth-logo {
@@ -60,8 +63,9 @@
         }
 
         h1 {
-            font-size: 1.5rem;
-            font-weight: 500;
+            font-family: var(--font-serif);
+            font-size: 1.6rem;
+            font-weight: 400;
             color: var(--color-ink);
             margin-bottom: 1.5rem;
             text-align: center;
@@ -92,10 +96,10 @@
             padding: .6rem .85rem;
             border: 1px solid var(--color-border);
             border-radius: 4px;
-            font-family: var(--font-serif);
+            font-family: var(--font-sans);
             font-size: 1rem;
             color: var(--color-ink);
-            background: #fdfaf5;
+            background: #fdfbf5;
             transition: border-color .15s;
             outline: none;
         }
@@ -121,13 +125,14 @@
             color: #fff;
             border: none;
             border-radius: 4px;
-            font-family: var(--font-serif);
+            font-family: var(--font-sans);
+            font-weight: 600;
             font-size: 1rem;
             cursor: pointer;
             transition: background .15s;
             letter-spacing: .02em;
         }
-        .btn-primary:hover { background: #8a4522; }
+        .btn-primary:hover { background: #8f4a26; }
 
         .auth-footer {
             text-align: center;
