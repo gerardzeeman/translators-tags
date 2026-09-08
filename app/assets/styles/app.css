@@ -4135,6 +4135,15 @@ a:hover { text-decoration: underline; }
 .blog-content th, .blog-content td { padding: .5rem .75rem; border: 1px solid var(--color-border); text-align: left; }
 .blog-content th { background: var(--hover-warm); font-weight: 600; }
 
+/* ── Nieuwsoverzicht (/cgk-rijnsburg-nieuwsoverzicht): iets kleinere, vette
+   titel en compactere tekst dan een gewoon blogartikel ─────────────────── */
+.page-news-digest .blog-post-header h1 { font-size: 1.6rem; font-weight: 700; }
+.page-news-digest .blog-content { line-height: 1.5; }
+.page-news-digest .blog-content p { margin: 0 0 .75rem; }
+.page-news-digest .blog-content ul,
+.page-news-digest .blog-content ol { margin: 0 0 .75rem 1.5rem; }
+.page-news-digest .blog-content li { margin-bottom: .15rem; }
+
 /* ── Blog: embedmodules (bijbelvers/institutie) ─────────────────────────── */
 .blog-embed { margin: 1.75rem 0; }
 .embed-error {
