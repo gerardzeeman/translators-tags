@@ -3,6 +3,7 @@
 namespace App\Controller;
 
 use App\Entity\User;
+use App\Repository\PushSubscriptionRepository;
 use App\Repository\UserRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -31,10 +32,11 @@ class AdminUserController extends AbstractController
     ];
 
     #[Route('', name: 'admin_users_index')]
-    public function index(UserRepository $userRepository): Response
+    public function index(UserRepository $userRepository, PushSubscriptionRepository $pushSubscriptionRepository): Response
     {
         return $this->render('admin/users/index.html.twig', [
-            'users' => $userRepository->findBy([], ['createdAt' => 'DESC']),
+            'users'                => $userRepository->findBy([], ['createdAt' => 'DESC']),
+            'push_device_counts'   => $pushSubscriptionRepository->countsByUser(),
         ]);
     }
 
