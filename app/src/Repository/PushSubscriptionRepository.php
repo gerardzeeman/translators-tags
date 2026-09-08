@@ -28,6 +28,27 @@ class PushSubscriptionRepository extends ServiceEntityRepository
     }
 
     /**
+     * Aantal abonnementen per user_id, voor alle gebruikers in één query
+     * (voorkomt een N+1 count-query per rij op de admin-gebruikerspagina).
+     *
+     * @return array<int, int> user_id => aantal
+     */
+    public function countsByUser(): array
+    {
+        $rows = $this->createQueryBuilder('s')
+            ->select('IDENTITY(s.user) AS userId, COUNT(s.id) AS cnt')
+            ->groupBy('s.user')
+            ->getQuery()
+            ->getArrayResult();
+
+        $counts = [];
+        foreach ($rows as $row) {
+            $counts[(int) $row['userId']] = (int) $row['cnt'];
+        }
+        return $counts;
+    }
+
+    /**
      * All subscriptions belonging to a user who is (directly or via
      * role_hierarchy, e.g. ROLE_ADMIN) entitled to $role.
      *

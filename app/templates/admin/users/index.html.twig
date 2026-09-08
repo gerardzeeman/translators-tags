@@ -24,6 +24,7 @@
                 <th>Rollen</th>
                 <th>Aangemaakt</th>
                 <th>Laatste login</th>
+                <th>Apparaten (meldingen)</th>
                 <th></th>
             </tr>
         </thead>
@@ -41,6 +42,7 @@
                 </td>
                 <td>{{ user.createdAt|date('d-m-Y') }}</td>
                 <td>{{ user.lastLoginAt ? user.lastLoginAt|date('d-m-Y H:i') : '–' }}</td>
+                <td>{{ push_device_counts[user.id] ?? 0 }}</td>
                 <td>
                     <a href="{{ path('admin_users_edit', {id: user.id}) }}">Bewerken</a>
                     {% if user != app.user %}
@@ -52,7 +54,7 @@
                 </td>
             </tr>
         {% else %}
-            <tr class="empty-row"><td colspan="6">Geen gebruikers gevonden.</td></tr>
+            <tr class="empty-row"><td colspan="7">Geen gebruikers gevonden.</td></tr>
         {% endfor %}
         </tbody>
     </table>
