@@ -650,6 +650,11 @@ a:hover { text-decoration: underline; }
 
 /* Vertaling-switcher */
 .translation-switcher { display: flex; gap: .4rem; flex-wrap: wrap; }
+/* Mobiele variant: dropdown i.p.v. een knoppenrij die op smalle schermen
+   wrapt. Beide varianten staan in de DOM; welke zichtbaar is wisselt via de
+   mobiele media query hieronder — zelfde dual-render-patroon als
+   .mobile-trans-pill / .translation-indicator-toggle op de leespagina's. */
+.translation-switcher-mobile { display: none; }
 .trans-btn {
     display: inline-flex;
     align-items: center;
@@ -1753,20 +1758,34 @@ a:hover { text-decoration: underline; }
 
     .source-word { padding: .2rem 2px; }
 
-    /* .7rem/8px i.p.v. de eerdere .15rem/2px: deze regel (twee klassen,
-       hogere specificiteit) overschreef anders stilzwijgend de grotere
-       tikzone die hieronder in de bredere breakpoint is gezet. */
-    .source-words-grid .src-word { padding: .7rem 8px; }
+    /* Twee klassen (i.p.v. kaal .src-word) — hogere specificiteit, wint
+       betrouwbaar van de latere, onvoorwaardelijke basisregel verderop in dit
+       bestand. Waarde gelijk gehouden aan de overeenkomstige regel in de
+       bredere (900px) breakpoint hieronder. */
+    .source-words-grid .src-word { padding: .4rem 6px; }
 
     .linking-area .link-panel  { padding: .75rem 1rem; }
     .link-panel .panel-label   { margin-bottom: .5rem; padding-bottom: .35rem; }
     .link-panel .dutch-words-flow { font-size: 1rem; line-height: 2; margin-top: .4rem; }
 
     .linking-status-bar { flex-direction: column; align-items: stretch; gap: .5rem; }
-    .linking-status     { flex: none; }
+    /* Comprimeer de (vaak lange) instructie-/statuszin tot één regel i.p.v.
+       twee/drie — de aria-live-aankondiging blijft ongewijzigd volledig,
+       alleen de visuele ruimte die de tekst inneemt wordt kleiner. Een latere,
+       onvoorwaardelijke regel verderop zet nog altijd flex:1/align-items op
+       de rij; max-width:100% dwingt de breedtebeperking hier sowieso af,
+       ongeacht wie van de twee de flex-eigenschappen wint. */
+    .linking-status     {
+        max-width: 100%;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
     .btn-confirm-proposals { align-self: flex-start; }
-    .src-text            { font-size: 1rem; }
-    .source-words-grid.rtl .src-text { font-size: 1.25rem; }
+    /* .source-words-grid-voorvoegsel: zelfde reden als bij .src-word hierboven —
+       wint betrouwbaar van de latere, onvoorwaardelijke .src-text-regel. */
+    .source-words-grid .src-text     { font-size: .9rem; }
+    .source-words-grid.rtl .src-text { font-size: 1.1rem; }
     .src-translit   { font-size: .65rem; }
     .source-words-grid { gap: .2rem .1rem; }
 
@@ -1791,12 +1810,17 @@ a:hover { text-decoration: underline; }
         font-family: var(--font-ui);
     }
 
-    /* Action-bar: zwevend onderaan het scherm op mobiel */
-    .action-bar-inline {
-        position: fixed;
+    /* Action-bar: blijft onderaan het scherm zichtbaar op mobiel. Sticky i.p.v.
+       fixed — fixed glitcht op mobiele browsers zodra de adresbalk in-/uitschuift
+       tijdens scrollen (de balk verdwijnt dan tijdelijk of springt mee). Sticky
+       wordt, net als .site-header (position: sticky; top: 0), gewoon door de
+       normale document-flow/scroll gerekend en heeft dat probleem niet.
+       Voorvoegsel-klasse .page-linking: margin-top/border worden verderop ook
+       onvoorwaardelijk gezet — zonder de hogere specificiteit hier zou die
+       latere regel margin-top en de volle rand terugzetten. */
+    .page-linking .action-bar-inline {
+        position: sticky;
         bottom: 0;
-        left: 0;
-        right: 0;
         z-index: 400;
         margin-top: 0;
         border-radius: 0;
@@ -1807,6 +1831,22 @@ a:hover { text-decoration: underline; }
         padding: .75rem 1.5rem;
     }
     .action-bar-inline .action-label { color: var(--nav-text); }
+    .verse-ref { display: none; }
+
+    .translation-switcher { display: none; }
+    .translation-switcher-mobile {
+        display: block;
+        width: 100%;
+        padding: .4rem .65rem;
+        border: 1px solid var(--color-border);
+        border-radius: 4px;
+        font-size: .85rem;
+        font-family: var(--font-mono);
+        color: var(--color-ink-light);
+        background: var(--bg);
+        cursor: pointer;
+    }
+    .translation-switcher-mobile:focus { outline: none; border-color: var(--accent); }
     .action-bar-inline .btn-cancel   { color: var(--nav-text); border-color: rgba(255,255,255,.2); }
 
     /* Strong's: bottom sheet op mobiel */
@@ -1922,12 +1962,34 @@ a:hover { text-decoration: underline; }
     grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
     gap: 1.5rem;
 }
+/* Een grid-track heeft standaard min-width:auto, niet 0 — zonder deze regel
+   duwt een breed paneel (bv. het "Alle links"-overzicht bij een woord met
+   veel koppelgeschiedenis) de hele kolom, en dus de hele pagina, breder dan
+   het scherm, óók al heeft dat paneel zelf al een overflow-x:auto-wrapper
+   (.word-links-confidence-table-wrap) — die kan alleen daadwerkelijk krimpen
+   als de grid-item-ouder dat toestaat. Geldt op alle breedtes, niet alleen
+   mobiel: dezelfde bug kan ook bij twee panelen per rij optreden. */
+.linking-area .link-panel { min-width: 0; }
+
 @media (max-width: 900px) {
     .linking-area { grid-template-columns: 1fr; }
-    /* Grotere tikzone voor de kern-interactie op mobiel — de tekstgrootte
-       blijft gelijk, alleen de klikbare marge eromheen groeit. */
-    .src-word { padding: .7rem 8px; }
-    .nl-word  { padding: .3em .3em; }
+    /* Zonder deze regel probeert .link-panel-word-links verderop nog altijd
+       2 kolommen te claimen (grid-column: span 2) terwijl er nu maar 1
+       expliciete kolom is — CSS Grid maakt dan een impliciete 2e kolom aan
+       om die span te faciliteren, en plaatst de eerdere, niet-gepositioneerde
+       panelen (Bron, Vertaling) daardoor alsnog naast elkaar in die twee
+       kolommen i.p.v. gestapeld. Twee klassen i.p.v. kaal
+       .link-panel-word-links: wint betrouwbaar van de latere,
+       onvoorwaardelijke regel verderop in dit bestand. */
+    .linking-area .link-panel-word-links { grid-column: span 1; }
+    /* Compacte, maar nog steeds ruim tikbare bronwoord-blokken op mobiel.
+       Met voorvoegsel-klasse (i.p.v. kale .src-word/.nl-word) zodat dit
+       betrouwbaar wint van de latere, onvoorwaardelijke basisregels verderop
+       in dit bestand (.src-word/.nl-word padding) — anders wint bij gelijke
+       specificiteit de regel die later in het bestand staat, ongeacht of de
+       media query hier actief is. */
+    .source-words-grid .src-word { padding: .4rem 6px; }
+    .dutch-words-flow .nl-word   { padding: .3em .3em; }
 }
 
 /* Its confidence table (method/score/notes/date/who — "who" can be a full

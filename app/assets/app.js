@@ -24,6 +24,7 @@ import ChapterStripController        from './controllers/chapter_strip_controlle
 import TranslationSelectorController from './controllers/translation_selector_controller.js'
 import MobileNavController           from './controllers/mobile_nav_controller.js'
 import ConfirmSubmitController       from './controllers/confirm_submit_controller.js'
+import SelectNavigateController      from './controllers/select_navigate_controller.js'
 
 app.register('verse-compare',        VerseCompareController)
 app.register('source-word',          SourceWordController)
@@ -38,3 +39,4 @@ app.register('chapter-strip',        ChapterStripController)
 app.register('translation-selector', TranslationSelectorController)
 app.register('mobile-nav',           MobileNavController)
 app.register('confirm-submit',       ConfirmSubmitController)
+app.register('select-navigate',      SelectNavigateController)

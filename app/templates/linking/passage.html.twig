@@ -39,6 +39,21 @@
             {% endfor %}
         </div>
 
+        {# Mobiele variant van bovenstaande — dropdown i.p.v. een knoppenrij die op smalle schermen wrapt #}
+        <select class="translation-switcher-mobile"
+                aria-label="Vertaling"
+                data-controller="select-navigate"
+                data-action="change->select-navigate#navigate">
+            {% for t in translations %}
+            {% if translation_visible(t) %}
+            <option value="{{ path('app_linking_passage', {translation: t.code, usfm: book.usfmCode, chapter: chapter, verse: verse}) }}"
+                    {% if t.id == translation.id %}selected{% endif %}>
+                {{ t.name }}
+            </option>
+            {% endif %}
+            {% endfor %}
+        </select>
+
         <div class="linking-legend">
             <span><span class="dot method-manual"></span> Handmatig</span>
             <span><span class="dot method-manual-empty"></span> Handmatig leeg</span>
