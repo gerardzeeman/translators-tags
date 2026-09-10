@@ -2177,19 +2177,20 @@ a:hover { text-decoration: underline; }
 
 /* Op de koppelpagina (één actiebalk voor de hele pagina) plakt de balk aan
    de onderkant van het scherm, over de volle breedte — op alle formaten,
-   niet alleen mobiel. left:50%/margin-left:-50vw is de standaardtruc om
+   niet alleen mobiel. margin-left: calc(50% - 50vw) is de standaardtruc om
    buiten .page-linking/.site-main (gecentreerd, max-width) uit te breken
    tot volle viewportbreedte, zonder position:fixed nodig te hebben (sticky
-   blijft, anders dan fixed, gewoon meetellen in de documentflow). Bewust
-   scoped tot .page-linking: op de Strong's-pagina staat per vers een eigen
-   .action-bar-inline in de lijst — die moet inline blijven, niet vastplakken
-   aan het scherm. */
+   blijft, anders dan fixed, gewoon meetellen in de documentflow). Alleen
+   margin gebruiken (geen extra `left`) — die twee combineren schuift dubbel
+   op, met twee verschillende referentiebreedtes, en duwt de balk zichtbaar
+   naar links. Bewust scoped tot .page-linking: op de Strong's-pagina staat
+   per vers een eigen .action-bar-inline in de lijst — die moet inline
+   blijven, niet vastplakken aan het scherm. */
 .page-linking .action-bar-inline {
     position: sticky;
     bottom: 0;
-    left: 50%;
     width: 100vw;
-    margin-left: -50vw;
+    margin-left: calc(50% - 50vw);
     z-index: 400;
     margin-top: 0;
     border-radius: 0;
