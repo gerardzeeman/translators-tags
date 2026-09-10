@@ -4512,7 +4512,7 @@ a:hover { text-decoration: underline; }
 .hist-align-nav .nav-pos { font-family: var(--font-mono); font-size: .85rem; color: var(--color-ink-muted); }
 .hist-align-score { font-family: var(--font-mono); font-size: .85rem; }
 .hist-align-score-detail { color: var(--color-ink-muted); font-size: .8rem; }
-.hist-align-actions { display: flex; gap: .5rem; margin-left: auto; }
+.hist-align-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-left: auto; }
 
 .hist-align-lock-banner,
 .hist-align-gap-warning {

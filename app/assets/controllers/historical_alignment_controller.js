@@ -243,10 +243,22 @@ export default class extends Controller {
             const rectB = elB.getBoundingClientRect()
             const [left, right] = rectA.left <= rectB.left ? [rectA, rectB] : [rectB, rectA]
 
-            const x1 = left.right - containerRect.left
-            const y1 = left.top + left.height / 2 - containerRect.top
-            const x2 = right.left - containerRect.left
-            const y2 = right.top + right.height / 2 - containerRect.top
+            // getBoundingClientRect() is viewport-relative and shifts with the
+            // container's current scroll position, but the svg's own box is
+            // sized to scrollWidth/scrollHeight (the full, unscrolled content)
+            // and scrolls together with the table as a native child of
+            // .hist-align-columns -- so its path coordinates must be in that
+            // same content-relative space, not "wherever the viewport happens
+            // to show it right now". Adding scrollLeft/scrollTop back in keeps
+            // this correct even when #renderLines() re-runs (e.g. on resize,
+            // such as a mobile address bar hiding/showing while the table is
+            // scrolled horizontally) while the container isn't at (0, 0) --
+            // without it, lines get baked in offset by the scroll amount and
+            // visibly drift away from their words.
+            const x1 = left.right - containerRect.left + this.columnsTarget.scrollLeft
+            const y1 = left.top + left.height / 2 - containerRect.top + this.columnsTarget.scrollTop
+            const x2 = right.left - containerRect.left + this.columnsTarget.scrollLeft
+            const y2 = right.top + right.height / 2 - containerRect.top + this.columnsTarget.scrollTop
             const dx = Math.max((x2 - x1) * 0.4, 24)
             const d = `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`
 
