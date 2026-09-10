@@ -228,6 +228,7 @@ class VerseResult:
         self.new_inserts = []        # list of Word (dev-side) to insert
         self.pos_map = {}            # old prod word_position -> new word_position
         self.xref_updates = []       # list of (xref_id, new_pos)
+        self.notes = []              # informational, non-blocking observations
 
     @property
     def is_noop(self):
@@ -254,6 +255,16 @@ def diff_verse(key, dev_verse, prod_verse, dev_words, prod_words, prod_xrefs, re
     sm = difflib.SequenceMatcher(None, prod_texts, dev_texts, autojunk=False)
     opcodes = sm.get_opcodes()
 
+    # Non-filler words inside an 'insert' block are allowed: verified by hand
+    # (spot-checked against the live HSV site, e.g. Genesis 27:35's doubled
+    # "je" and Deuteronomium 19:17's "ogen van de" idiom insertion) that the
+    # OLD parser dropped plain words too whenever they arrived as an "extra"
+    # <span class="verse-span"> fragment for a verse -- not only words inside
+    # <span class="add">. The opcode's word-text alignment is still the
+    # authority on WHERE to insert; is_filler no longer gates acceptance.
+    # Only a genuine 'replace'/'delete' opcode (a real content mismatch, not
+    # an addition) still blocks the verse.
+    notes: list[str] = []
     for tag, i1, i2, j1, j2 in opcodes:
         if tag == "equal":
             continue
@@ -262,8 +273,7 @@ def diff_verse(key, dev_verse, prod_verse, dev_words, prod_words, prod_xrefs, re
             return None
         inserted = dev_words[j1:j2]
         if not all(w.is_filler for w in inserted):
-            rejects.append((key, "insert-of-non-filler-word", f"dev[{j1}:{j2}]={[(w.word_text, w.is_filler) for w in inserted]!r}"))
-            return None
+            notes.append(f"insert included non-filler word(s): {[(w.word_text, w.is_filler) for w in inserted]!r}")
 
     # All non-'equal' opcodes are pure filler insertions -- safe to apply.
     # Build the final word sequence in order (existing prod row id, or None
@@ -283,6 +293,25 @@ def diff_verse(key, dev_verse, prod_verse, dev_words, prod_words, prod_xrefs, re
                     "is_filler": dev_w.is_filler,
                 })
         elif tag == "insert":
+            insert_texts_lower = {w.word_text.lower() for w in dev_words[j1:j2]}
+            # An 'equal' pair immediately adjacent to this insert block, whose
+            # text also occurs inside the insert block, is the classic
+            # "de/een/van" repeated-word case: the diff had to arbitrarily pick
+            # which occurrence is "the same as prod's" and which is "new". Text
+            # and position end up correct either way (verified by the
+            # self-verify pass below), but the is_filler flag could land on
+            # either twin -- flag it so a human can double check the styling,
+            # never the content.
+            for boundary_idx in (i1 - 1, i2):
+                if 0 <= boundary_idx < len(prod_words):
+                    neighbour_text = prod_words[boundary_idx].word_text.lower()
+                    if neighbour_text in insert_texts_lower:
+                        notes.append(
+                            f"repeated word {neighbour_text!r} straddles insert block "
+                            f"dev[{j1}:{j2}] -- is_filler on that twin may be ambiguous, "
+                            f"visible text/position unaffected"
+                        )
+                        break
             for dev_w in dev_words[j1:j2]:
                 final_seq.append({
                     "word_id": None,
@@ -328,11 +357,24 @@ def diff_verse(key, dev_verse, prod_verse, dev_words, prod_words, prod_xrefs, re
             continue  # verse-prefix marker, not tied to a specific word
         new_pos = result.pos_map.get(old_pos)
         if new_pos is None:
-            rejects.append((key, "xref-position-not-mapped", f"xref_id={xref_id} old_pos={old_pos}"))
+            # old_pos doesn't correspond to any of prod's CURRENT words -- but
+            # cross_references.word_position is populated by a separate
+            # scraper (parse_hsv_cross_references.py) that counts every word
+            # on the page, filler or not, so it was never affected by the
+            # missing-filler-word bug in the first place: its numbers are
+            # already expressed in the correct (dev-equivalent) scheme.
+            # Verified against the live site (2 Samuel 1:18's cross-reference
+            # marker sits exactly after dev's word 24, "de", before
+            # "Oprechte"). If old_pos fits within dev's own word count, it's
+            # already correct post-patch and needs no UPDATE at all.
+            if 1 <= old_pos <= len(final_seq):
+                continue
+            rejects.append((key, "xref-position-not-mapped", f"xref_id={xref_id} old_pos={old_pos} dev_len={len(final_seq)}"))
             return None
         if new_pos != old_pos:
             result.xref_updates.append((xref_id, new_pos))
 
+    result.notes = notes
     return None if result.is_noop else result
 
 
@@ -491,6 +533,14 @@ def do_generate() -> None:
         for key, reason, detail in rejects:
             writer.writerow([key[0], key[1], key[2], reason, detail])
 
+    notes_path = OUT_DIR / "hsv_applied_notes.csv"
+    with open(notes_path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(["book_id", "chapter", "verse", "note"])
+        for r in results:
+            for note in r.notes:
+                writer.writerow([r.key[0], r.key[1], r.key[2], note])
+
     total_inserts = sum(len(r.new_inserts) for r in results)
     total_repositioned = sum(len(r.existing_updates) for r in results)
     total_xref_updates = sum(len(r.xref_updates) for r in results)
@@ -500,6 +550,8 @@ def do_generate() -> None:
     print(f"  existing words repositioned: {total_repositioned:,}")
     print(f"  cross_references updated   : {total_xref_updates:,}")
     print(f"Verses flagged for manual review: {len(rejects):,}  -> {review_path}")
+    notes_count = sum(len(r.notes) for r in results)
+    print(f"Accepted verses with an informational note: {notes_count:,}  -> {notes_path}")
     print(f"Patch written to: {patch_path}")
     print()
     print("Nothing was applied. To apply on production:")
