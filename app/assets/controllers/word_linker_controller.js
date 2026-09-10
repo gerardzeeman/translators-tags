@@ -14,6 +14,11 @@ export default class extends Controller {
     #selectedSourceLang = null
     #selectedTwIds      = new Set()
     #existingLinkIds    = new Map()
+    // Scrollpositie van vóór de selectie — vastgelegd in selectSource(), niet
+    // pas bij opslaan: zodra de Strong's/Alle-links-panelen en de actiebalk
+    // verschijnen/verdwijnen kan de pagina-inhoud nog verschuiven (en dus
+    // window.scrollY veranderen) vóórdat er daadwerkelijk wordt opgeslagen.
+    #preSelectionScrollY = 0
 
     // ── Source word selected ──────────────────────────────────────────────────
 
@@ -27,10 +32,20 @@ export default class extends Controller {
         // Clicking the same word again deselects
         if (this.#selectedSourceId === sourceId) {
             this.#reset()
+            this.#restoreSmoothScroll()
             return
         }
 
         this.#reset(false, false)
+        this.#preSelectionScrollY = window.scrollY
+        // De site-brede scroll-behavior:smooth (html-element) maakt van elke
+        // scrollpositie-aanpassing tijdens deze koppel-interactie — het
+        // verschijnen van de actiebalk, het laden van de Strong's/Alle-links-
+        // panelen — een trage, zichtbare animatie i.p.v. een onmerkbare
+        // sprong, tot een paar seconden merkbare "hobbel" toe. Tijdelijk uit,
+        // weer aan zodra deze interactie eindigt (annuleren, of ná de reload
+        // die op opslaan/verwijderen/bulk-bevestigen volgt).
+        this.#disableSmoothScroll()
 
         this.#selectedSourceId   = sourceId
         this.#selectedSourceLang = lang
@@ -93,6 +108,7 @@ export default class extends Controller {
         const chip   = event.currentTarget
         const linkId = chip.dataset.linkId
         if (!linkId) return
+        const scrollY = this.#preSelectionScrollY
 
         try {
             const resp = await fetch(this.#deleteUrl(linkId), {
@@ -108,7 +124,7 @@ export default class extends Controller {
                 await this.#refreshVerseBlock()
                 await this.#refreshProgressBar()
             } else {
-                setTimeout(() => this.#reloadCurrentView(), 400)
+                setTimeout(() => this.#reloadCurrentView(scrollY), 400)
             }
         } catch {
             this.#setStatus('Verwijderen van de koppeling is mislukt. Controleer je verbinding en probeer opnieuw.')
@@ -134,6 +150,7 @@ export default class extends Controller {
         const button = event.currentTarget
         button.disabled = true // voorkomt dubbele indiening bij dubbelklik / trage verbinding
 
+        const scrollY = this.#preSelectionScrollY
         const twIds = [...this.#selectedTwIds]
 
         try {
@@ -163,7 +180,7 @@ export default class extends Controller {
                     ? '✓ Opgeslagen: geen koppeling (handmatig leeg).'
                     : `✓ ${data.linked} koppeling(en) opgeslagen.`)
                 this.#reset()
-                setTimeout(() => this.#reloadCurrentView(), 600)
+                setTimeout(() => this.#reloadCurrentView(scrollY), 600)
             }
 
         } catch {
@@ -180,6 +197,7 @@ export default class extends Controller {
     async confirmAllProposals(event) {
         event?.stopPropagation()
         if (this.#confirmPending) return
+        const scrollY = window.scrollY
 
         const proposals = this.sourceWordTargets.filter(el =>
             el.classList.contains('src-word-propagated') &&
@@ -249,7 +267,7 @@ export default class extends Controller {
             this.#setStatus(`✓ ${saved} koppeling(en) bevestigd. Pagina wordt ververst…`)
         }
 
-        setTimeout(() => this.#reloadCurrentView(), 800)
+        setTimeout(() => this.#reloadCurrentView(scrollY), 800)
     }
 
     cancelConfirmAllProposals(event) {
@@ -271,18 +289,48 @@ export default class extends Controller {
     cancel(event) {
         event?.stopPropagation()
         this.#reset()
+        this.#restoreSmoothScroll()
         this.#setStatus('Koppeling geannuleerd.')
     }
 
     // Turbo-visit i.p.v. een harde reload — zelfde patroon als elders in de
     // app (zie historical_alignment_controller.js): geen volledige page-flash,
     // geen opnieuw laden van fonts/CSS, behoudt de Turbo-navigatiehistorie.
-    #reloadCurrentView() {
+    // Een Turbo-visit scrollt net als een gewone navigatie standaard terug
+    // naar boven — daarom krijgt deze methode de scrollpositie van vóór de
+    // actie aangereikt (op het moment van selecteren vastgelegd door de
+    // aanroeper, niet hier: de pagina kan intussen al verschoven zijn) en
+    // herstelt die na afloop (turbo:load). behavior:'instant' + het kort erna
+    // nogmaals toepassen zijn een extra vangnet; de eigenlijke fix tegen de
+    // zichtbare "hobbel" is dat scroll-behavior:smooth voor deze hele
+    // interactie al bij het selecteren is uitgezet (zie selectSource) en hier,
+    // aan het einde, weer wordt aangezet.
+    #reloadCurrentView(scrollY = window.scrollY) {
         if (window.Turbo) {
+            const applyScroll = () => window.scrollTo({ top: scrollY, behavior: 'instant' })
+            const restoreScroll = () => {
+                document.removeEventListener('turbo:load', restoreScroll)
+                applyScroll()
+                setTimeout(() => { applyScroll(); this.#restoreSmoothScroll() }, 800)
+            }
+            document.addEventListener('turbo:load', restoreScroll)
             window.Turbo.visit(window.location.href, { action: 'replace' })
         } else {
             window.location.reload()
         }
+    }
+
+    // ── Scroll-behavior:smooth tijdelijk uit tijdens een koppel-interactie ────
+    // (zie selectSource): voorkomt dat elke scrollpositie-aanpassing die het
+    // verschijnen/verdwijnen van panelen en de actiebalk veroorzaakt, wordt
+    // uitvergroot tot een trage, seconden durende scrollanimatie.
+
+    #disableSmoothScroll() {
+        document.documentElement.style.scrollBehavior = 'auto'
+    }
+
+    #restoreSmoothScroll() {
+        document.documentElement.style.removeProperty('scroll-behavior')
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────

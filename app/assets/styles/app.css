@@ -138,7 +138,20 @@
 }
 
 /* ─── Reset & basis ─────────────────────────────────────────────────────── */
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+*, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    /* Browser-scroll-anchoring uit: op deze pagina's verschijnen/verdwijnen
+       geregeld panelen (Strong's-detail, "Alle links", de actiebalk) boven of
+       binnen het zichtbare gebied. De browser probeert dat te compenseren met
+       een eigen, onzichtbare scrollcorrectie — maar omdat scroll-behavior
+       hierboven op smooth staat, wordt die correctie een trage, zichtbare
+       animatie i.p.v. een onmerkbare micro-aanpassing, en kan zelfs meerdere
+       seconden oscilleren voordat de pagina tot rust komt. Overal uitzetten
+       (niet alleen op html: overflow-anchor erft niet over) voorkomt dit. */
+    overflow-anchor: none;
+}
 
 html { font-size: 18px; scroll-behavior: smooth; }
 
@@ -1831,7 +1844,6 @@ a:hover { text-decoration: underline; }
         padding: .75rem 1.5rem;
     }
     .action-bar-inline .action-label { color: var(--nav-text); }
-    .verse-ref { display: none; }
 
     .translation-switcher { display: none; }
     .translation-switcher-mobile {
@@ -1904,7 +1916,7 @@ a:hover { text-decoration: underline; }
     gap: .75rem;
     margin-left: auto;
 }
-.verse-ref { font-weight: 500; font-size: 1.1rem; }
+.verse-ref { font-weight: 500; font-size: .85rem; }
 .linking-legend {
     display: flex;
     gap: 1rem;

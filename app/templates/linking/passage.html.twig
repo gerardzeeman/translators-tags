@@ -18,11 +18,11 @@
 
         <div class="linking-nav">
             {% if nav.prev %}
-            <a href="{{ path('app_linking_passage', nav.prev) }}" class="nav-btn nav-btn-text">‹ Vorig</a>
+            <a href="{{ path('app_linking_passage', nav.prev) }}" class="nav-btn" aria-label="Vorig vers" title="Vorig vers">‹</a>
             {% endif %}
             <span class="verse-ref">{{ book.nameNl }} {{ chapter }}:{{ verse }}</span>
             {% if nav.next %}
-            <a href="{{ path('app_linking_passage', nav.next) }}" class="nav-btn nav-btn-text">Volgend ›</a>
+            <a href="{{ path('app_linking_passage', nav.next) }}" class="nav-btn" aria-label="Volgend vers" title="Volgend vers">›</a>
             {% endif %}
 
         </div>
@@ -48,7 +48,7 @@
             {% if translation_visible(t) %}
             <option value="{{ path('app_linking_passage', {translation: t.code, usfm: book.usfmCode, chapter: chapter, verse: verse}) }}"
                     {% if t.id == translation.id %}selected{% endif %}>
-                {{ t.name }}
+                {{ t.abbreviation }}
             </option>
             {% endif %}
             {% endfor %}
