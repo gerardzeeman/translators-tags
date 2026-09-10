@@ -288,6 +288,7 @@ def diff_verse(key, dev_verse, prod_verse, dev_words, prod_words, prod_xrefs, re
                     "old_position": prod_w.word_position,
                     "old_char_start": prod_w.char_start,
                     "old_char_end": prod_w.char_end,
+                    "old_is_filler": prod_w.is_filler,
                     "word_text": dev_w.word_text,
                     "word_normalised": dev_w.word_normalised,
                     "is_filler": dev_w.is_filler,
@@ -297,19 +298,21 @@ def diff_verse(key, dev_verse, prod_verse, dev_words, prod_words, prod_xrefs, re
             # An 'equal' pair immediately adjacent to this insert block, whose
             # text also occurs inside the insert block, is the classic
             # "de/een/van" repeated-word case: the diff had to arbitrarily pick
-            # which occurrence is "the same as prod's" and which is "new". Text
-            # and position end up correct either way (verified by the
-            # self-verify pass below), but the is_filler flag could land on
-            # either twin -- flag it so a human can double check the styling,
-            # never the content.
+            # which occurrence is "the same as prod's" and which is "new".
+            # Text and position are unaffected either way (verified by the
+            # self-verify pass below); is_filler is separately reconciled
+            # below (every existing row's is_filler is overwritten to match
+            # dev's value at its final position, same as word_text already
+            # implicitly was), so this is purely an informational note now,
+            # not a residual risk -- kept for traceability of which verses
+            # hit the ambiguous case.
             for boundary_idx in (i1 - 1, i2):
                 if 0 <= boundary_idx < len(prod_words):
                     neighbour_text = prod_words[boundary_idx].word_text.lower()
                     if neighbour_text in insert_texts_lower:
                         notes.append(
-                            f"repeated word {neighbour_text!r} straddles insert block "
-                            f"dev[{j1}:{j2}] -- is_filler on that twin may be ambiguous, "
-                            f"visible text/position unaffected"
+                            f"repeated word {neighbour_text!r} straddled insert block "
+                            f"dev[{j1}:{j2}] -- is_filler reconciled to dev regardless"
                         )
                         break
             for dev_w in dev_words[j1:j2]:
@@ -318,6 +321,7 @@ def diff_verse(key, dev_verse, prod_verse, dev_words, prod_words, prod_xrefs, re
                     "old_position": None,
                     "old_char_start": None,
                     "old_char_end": None,
+                    "old_is_filler": None,
                     "word_text": dev_w.word_text,
                     "word_normalised": dev_w.word_normalised,
                     "is_filler": dev_w.is_filler,
@@ -343,9 +347,10 @@ def diff_verse(key, dev_verse, prod_verse, dev_words, prod_words, prod_xrefs, re
             result.pos_map[entry["old_position"]] = new_position
             if (entry["old_position"] != new_position
                     or entry["old_char_start"] != new_start
-                    or entry["old_char_end"] != new_end):
+                    or entry["old_char_end"] != new_end
+                    or entry["old_is_filler"] != entry["is_filler"]):
                 result.existing_updates.append(
-                    (entry["word_id"], new_position, new_start, new_end)
+                    (entry["word_id"], new_position, new_start, new_end, entry["is_filler"])
                 )
 
     if prod_text != dev_text:
@@ -398,10 +403,11 @@ def generate_patch_sql(results: list[VerseResult]) -> str:
                 f"UPDATE translation_words SET word_position = -word_position "
                 f"WHERE verse_id = {r.verse_id} AND id IN ({word_ids});"
             )
-            for word_id, new_pos, new_start, new_end in r.existing_updates:
+            for word_id, new_pos, new_start, new_end, is_filler in r.existing_updates:
                 lines.append(
                     f"UPDATE translation_words SET word_position = {new_pos}, "
-                    f"char_start = {new_start}, char_end = {new_end} WHERE id = {word_id};"
+                    f"char_start = {new_start}, char_end = {new_end}, "
+                    f"is_filler = {sql_bool(is_filler)} WHERE id = {word_id};"
                 )
 
         if r.new_inserts:
@@ -433,17 +439,17 @@ def verify_result(r: VerseResult, prod_words_this_verse: list[Word], dev_words_t
     issues = []
 
     prod_by_id = {w.word_id: w for w in prod_words_this_verse}
-    changed = {wid: (pos, cs, ce) for wid, pos, cs, ce in r.existing_updates}
+    changed = {wid: (pos, cs, ce, isf) for wid, pos, cs, ce, isf in r.existing_updates}
 
-    final_rows = []  # (position, char_start, char_end, word_text)
+    final_rows = []  # (position, char_start, char_end, word_text, is_filler)
     for wid, w in prod_by_id.items():
         if wid in changed:
-            pos, cs, ce = changed[wid]
+            pos, cs, ce, isf = changed[wid]
         else:
-            pos, cs, ce = w.word_position, w.char_start, w.char_end
-        final_rows.append((pos, cs, ce, w.word_text))
+            pos, cs, ce, isf = w.word_position, w.char_start, w.char_end, w.is_filler
+        final_rows.append((pos, cs, ce, w.word_text, isf))
     for ins in r.new_inserts:
-        final_rows.append((ins["word_position"], ins["char_start"], ins["char_end"], ins["word_text"]))
+        final_rows.append((ins["word_position"], ins["char_start"], ins["char_end"], ins["word_text"], ins["is_filler"]))
 
     final_rows.sort(key=lambda t: t[0])
 
@@ -456,8 +462,13 @@ def verify_result(r: VerseResult, prod_words_this_verse: list[Word], dev_words_t
     if got_texts != dev_texts:
         issues.append(f"final word sequence != dev sequence: {got_texts} vs {dev_texts}")
 
+    dev_fillers = [w.is_filler for w in dev_words_this_verse]
+    got_fillers = [row[4] for row in final_rows]
+    if got_fillers != dev_fillers:
+        issues.append(f"final is_filler sequence != dev sequence: {got_fillers} vs {dev_fillers}")
+
     prev_end = 0
-    for pos, cs, ce, text in final_rows:
+    for pos, cs, ce, text, _isf in final_rows:
         if cs < prev_end:
             issues.append(f"overlap at position {pos}: char_start {cs} < previous char_end {prev_end}")
         if ce - cs != len(text):
