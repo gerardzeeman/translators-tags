@@ -9,81 +9,12 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Baskervville:ital@0;1&family=Public+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+    {% include 'security/_auth_styles.html.twig' %}
     <style>
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-        :root {
-            --color-parchment: #f6efe1;
-            --color-card:      #fffdf8;
-            --color-ink:       #241b0f;
-            --color-ink-light: #55492f;
-            --color-ink-muted: #8c7c5e;
-            --color-border:    #ddd0ae;
-            --color-accent:    #7a3b1e;
-            --color-accent-2:  #1e4d7a;
-            --color-error-bg:  #fdf0ee;
-            --color-error:     #922;
-            --font-serif:      'Baskervville', Georgia, 'Times New Roman', serif;
-            --font-sans:       'Public Sans', -apple-system, 'Segoe UI', Arial, sans-serif;
-        }
-        body {
-            background: var(--color-parchment);
-            font-family: var(--font-sans);
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 2rem;
-        }
-        .auth-card {
-            background: var(--color-card);
-            border: 1px solid var(--color-border);
-            border-radius: 10px;
-            padding: 2.5rem 3rem;
-            width: 100%;
-            max-width: 440px;
-            box-shadow: 0 2px 8px rgba(36,27,15,.06), 0 8px 32px rgba(36,27,15,.05);
-        }
-        .auth-logo { text-align: center; margin-bottom: 2rem; display: flex; flex-direction: column; align-items: center; gap: .5rem; }
-        .auth-logo .logo-title { font-size: .95rem; color: var(--color-ink-muted); letter-spacing: .06em; }
-        h1 { font-family: var(--font-serif); font-weight: 400; font-size: 1.6rem; margin-bottom: 1.5rem; text-align: center; }
-        .alert { padding: .75rem 1rem; border-radius: 4px; margin-bottom: 1.25rem; font-size: .9rem; }
-        .alert-error { background: var(--color-error-bg); color: var(--color-error); border: 1px solid #f0b8b0; }
-        .form-group { margin-bottom: 1.25rem; }
-        label { display: block; font-size: .85rem; color: var(--color-ink-light); margin-bottom: .35rem; }
-        .field-hint { font-size: .75rem; color: var(--color-ink-muted); margin-top: .25rem; }
-        input[type="email"],
-        input[type="password"],
-        input[type="text"] {
-            width: 100%;
-            padding: .6rem .85rem;
-            border: 1px solid var(--color-border);
-            border-radius: 4px;
-            font-family: var(--font-sans);
-            font-size: 1rem;
-            color: var(--color-ink);
-            background: #fdfbf5;
-            transition: border-color .15s;
-            outline: none;
-        }
-        input:focus { border-color: var(--color-accent); box-shadow: 0 0 0 3px rgba(122,59,30,.12); }
-        .btn-primary {
-            width: 100%;
-            padding: .7rem;
-            background: var(--color-accent);
-            color: #fff;
-            border: none;
-            border-radius: 4px;
-            font-family: var(--font-sans);
-            font-weight: 600;
-            font-size: 1rem;
-            cursor: pointer;
-            transition: background .15s;
-        }
-        .btn-primary:hover { background: #8f4a26; }
-        .auth-footer { text-align: center; margin-top: 1.5rem; font-size: .85rem; color: var(--color-ink-muted); }
-        .auth-footer a { color: var(--color-accent-2); }
-        .divider { border: none; border-top: 1px solid var(--color-border); margin: 1.5rem 0; }
+        /* Klein, pagina-specifiek accent — geen reden om dit in de gedeelde
+           partial op te nemen, dat zou de login-pagina onnodig ook een
+           foutmelding-rand op elk veld geven. */
+        .field-error { color: var(--color-error); font-size: .75rem; margin-top: .25rem; }
     </style>
     {% if google_analytics_id %}
     <script async nonce="{{ csp_nonce() }}" src="https://www.googletagmanager.com/gtag/js?id={{ google_analytics_id }}"></script>
@@ -105,7 +36,7 @@
     <h1>Account aanmaken</h1>
 
     {% if error %}
-    <div class="alert alert-error">{{ error }}</div>
+    <div class="alert alert-error" role="alert">{{ error }}</div>
     {% endif %}
 
     <form method="post" action="{{ path('app_register') }}" data-turbo="false">
@@ -146,12 +77,29 @@
                    id="confirm_password"
                    name="confirm_password"
                    autocomplete="new-password"
+                   aria-describedby="confirm_password_error"
                    required>
+            <p id="confirm_password_error" class="field-error" hidden>De wachtwoorden komen niet overeen.</p>
         </div>
 
         <input type="hidden" name="_csrf_token" value="{{ csrf_token('register') }}">
         <button type="submit" class="btn-primary">Account aanmaken</button>
     </form>
+
+    <script nonce="{{ csp_nonce() }}">
+        (() => {
+            const password = document.getElementById('password')
+            const confirm  = document.getElementById('confirm_password')
+            const error    = document.getElementById('confirm_password_error')
+            const check    = () => {
+                const mismatch = confirm.value.length > 0 && confirm.value !== password.value
+                error.hidden = !mismatch
+                confirm.setAttribute('aria-invalid', mismatch ? 'true' : 'false')
+            }
+            confirm.addEventListener('blur', check)
+            confirm.addEventListener('input', () => { if (!error.hidden) check() })
+        })()
+    </script>
 
     <hr class="divider">
 

@@ -5,12 +5,14 @@ import { linkedIdsFromDataset } from '../translation_links.js'
 export default class extends Controller {
     connect() {
         this.element.addEventListener('click',      this.#onClick)
+        this.element.addEventListener('keydown',    this.#onKeyDown)
         this.element.addEventListener('mouseenter', this.#onMouseEnter)
         this.element.addEventListener('mouseleave', this.#onMouseLeave)
     }
 
     disconnect() {
         this.element.removeEventListener('click',      this.#onClick)
+        this.element.removeEventListener('keydown',    this.#onKeyDown)
         this.element.removeEventListener('mouseenter', this.#onMouseEnter)
         this.element.removeEventListener('mouseleave', this.#onMouseLeave)
     }
@@ -30,4 +32,14 @@ export default class extends Controller {
     #onClick      = () => this.#dispatch('source-word:activate')
     #onMouseEnter = () => this.#dispatch('source-word:hover')
     #onMouseLeave = () => this.#dispatch('source-word:unhover')
+
+    // Element is een <div role="button" tabindex="0">, geen native knop —
+    // Enter/Spatie moeten dus zelf naar dezelfde activatie doorgestuurd
+    // worden. preventDefault op Spatie voorkomt dat de pagina meescrollt.
+    #onKeyDown = (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            this.#onClick()
+        }
+    }
 }

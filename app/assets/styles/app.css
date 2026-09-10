@@ -18,7 +18,10 @@
     --color-parchment:   #fffdf8;
     --color-ink:         #241b0f;
     --color-ink-light:   #55492f;
-    --color-ink-muted:   #8c7c5e;
+    /* --color-ink-muted en --color-none zijn t.o.v. --bg verdonkerd tot ≥4,5:1
+       (WCAG AA) — de oorspronkelijke tinten (#8c7c5e / #c0b090) haalden slechts
+       ≈3,6:1 resp. ≈1,9:1 en waren te licht om betrouwbaar te lezen. */
+    --color-ink-muted:   #6b5c3f;
     --color-border:      rgba(107, 58, 20, 0.18);
     --color-border-light:#efe6d2;
     --color-accent:      #7a3b1e;
@@ -30,7 +33,7 @@
     --color-manual-hint: #2e7d6e;
     --color-proper-noun: #1e4d7a;
     --color-positional:  #8a5c1a;
-    --color-none:        #c0b090;
+    --color-none:        #8a7a5a;
     --color-auto-pivot:      #2e5c8a;
     --color-auto-sequence:   #5c7a2e;
     --color-auto-positional: #7a6b2e;
@@ -109,9 +112,29 @@
 [data-theme="dark"] .badge-positional   { background: rgba(217, 154, 74, .16); color: #e2ab6a; }
 
 /* ─── Thema-transitie ───────────────────────────────────────────────────── */
-*, *::before, *::after {
-    transition: background-color 0.35s ease, color 0.35s ease,
-                border-color 0.35s ease;
+@media (prefers-reduced-motion: no-preference) {
+    *, *::before, *::after {
+        transition: background-color 0.35s ease, color 0.35s ease,
+                    border-color 0.35s ease;
+    }
+}
+
+/* ─── Focus-zichtbaarheid — klikbare woorden ────────────────────────────────
+   .source-word/.dutch-word (leesweergave) en .src-word/.nl-word (koppelen)
+   zijn <div>/<span> met een klik-handler, geen native knoppen. Zonder deze
+   regel is er geen enkele zichtbare aanwijzing voor toetsenbordgebruikers dat
+   het element focus heeft — de belangrijkste interactie van de hele app was
+   daarmee onzichtbaar voor toetsenbordnavigatie. */
+.source-word:focus-visible,
+.src-word:focus-visible,
+.dutch-word:focus-visible,
+.nl-word:focus-visible,
+.book-link:focus-visible,
+.link-dot:focus-visible,
+.no-link-badge:focus-visible,
+.link-chip:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
 }
 
 /* ─── Reset & basis ─────────────────────────────────────────────────────── */
@@ -491,6 +514,18 @@ a:hover { text-decoration: underline; }
 .badge-proper-noun { background: #d0e4f4; color: #1e4d7a; }
 .badge-positional  { background: #fdf0d5; color: #8a5c1a; }
 
+.home-anon-cta {
+    text-align: center;
+    margin: 2.5rem auto 0;
+    max-width: 480px;
+    padding: 1.5rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    background: var(--card-warm);
+}
+.home-anon-cta p { margin-bottom: 1rem; color: var(--color-ink-light); }
+.home-anon-cta-actions { display: flex; gap: .75rem; justify-content: center; flex-wrap: wrap; }
+
 .testament-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 3rem; margin-top: 2rem; }
 @media (max-width: 900px) { .testament-grid { grid-template-columns: 1fr; } }
 .testament-col-apoc { grid-column: 1 / -1; }
@@ -641,6 +676,11 @@ a:hover { text-decoration: underline; }
     grid-template-columns: 1fr 1fr;
     gap: 1.5rem;
     align-items: start;
+    /* Een grid-track van 1fr heeft standaard min-width:auto, niet 0 — zonder
+       deze regel duwt de inhoud van .compare-col (brontekstwoorden die niet
+       verder willen krimpen) de kolom, en dus de hele pagina, breder dan het
+       scherm op mobiel, ook al valt de layout terug op 1 kolom. */
+    min-width: 0;
 }
 @media (max-width: 1000px) { .verse-compare-grid { grid-template-columns: 1fr; } }
 
@@ -648,6 +688,7 @@ a:hover { text-decoration: underline; }
     display: flex;
     flex-direction: column;
     gap: 1.5rem;
+    min-width: 0;
 }
 
 .panel {
@@ -707,6 +748,7 @@ a:hover { text-decoration: underline; }
     border-bottom: 1px solid var(--divider);
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
     gap: .5rem;
 }
 .lang-badge {
@@ -805,29 +847,56 @@ a:hover { text-decoration: underline; }
 }
 .link-indicators { display: flex; flex-wrap: wrap; gap: .1rem; justify-content: center; direction: ltr; }
 .link-dot {
+    position: relative;
     font-size: .65rem;
     padding: .02rem .08rem;
     border-radius: 2px;
     color: #4d7a63;
 }
-.no-link-badge { font-size: .65rem; color: #4d7a63; }
+.no-link-badge { position: relative; font-size: .65rem; color: #4d7a63; }
+
+/* Methode + score staan in het title-attribuut. Native title-tooltips
+   verschijnen alleen bij :hover — op een touchscreen (geen hover) en voor
+   toetsenbordgebruikers (title reageert niet op focus) was deze info dus
+   volledig onbereikbaar. Deze CSS-tooltip toont dezelfde tekst ook bij tik/
+   focus, zelfde visuele stijl als de bestaande .word-popup. */
+.link-dot:hover::after, .link-dot:focus::after,
+.no-link-badge:hover::after, .no-link-badge:focus::after,
+.link-chip:hover::after, .link-chip:focus::after {
+    content: attr(title);
+    position: absolute;
+    bottom: calc(100% + 5px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--nav);
+    color: #fff;
+    font-size: .65rem;
+    padding: 3px 7px;
+    border-radius: 4px;
+    white-space: nowrap;
+    z-index: 300;
+    pointer-events: none;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
 
 /* ─── Nederlandse vers ───────────────────────────────────────────────────── */
 .dutch-verse { font-family: var(--font-serif); font-size: 1.25rem; line-height: 2.2; }
 
 .dutch-word {
-    display: inline;
+    display: inline-block;
     border-radius: 2px;
     transition: background .15s;
     cursor: pointer;
-    padding: .05em .1em;
+    padding: .1em .15em;
 }
 .dutch-word:hover, .dutch-word.highlighted { background: #fef3cd; outline: 2px solid #f0c040; }
 
-/* Methodekleuring */
+/* Methodekleuring — kleur én lijnstijl samen dragen het onderscheid, zodat
+   kleurenblinde gebruikers (met name rood-groen) handmatig/hint/eigennaam niet
+   alleen op tint hoeven te onderscheiden. */
 .dutch-word[data-method="manual"]      { border-bottom: 2px solid var(--color-manual); }
-.dutch-word[data-method="manual_hint"] { border-bottom: 2px solid var(--color-manual-hint); }
-.dutch-word[data-method="proper_noun"] { border-bottom: 2px solid var(--color-proper-noun); }
+.dutch-word[data-method="manual_hint"] { border-bottom: 2px dotted var(--color-manual-hint); }
+.dutch-word[data-method="proper_noun"] { border-bottom: 3px double var(--color-proper-noun); }
 .dutch-word[data-method="positional"]  { border-bottom: 2px dashed var(--color-positional); }
 .dutch-word[data-method="none"]        { color: var(--color-ink-muted); }
 
@@ -1684,7 +1753,10 @@ a:hover { text-decoration: underline; }
 
     .source-word { padding: .2rem 2px; }
 
-    .source-words-grid .src-word { padding: .15rem 2px; }
+    /* .7rem/8px i.p.v. de eerdere .15rem/2px: deze regel (twee klassen,
+       hogere specificiteit) overschreef anders stilzwijgend de grotere
+       tikzone die hieronder in de bredere breakpoint is gezet. */
+    .source-words-grid .src-word { padding: .7rem 8px; }
 
     .linking-area .link-panel  { padding: .75rem 1rem; }
     .link-panel .panel-label   { margin-bottom: .5rem; padding-bottom: .35rem; }
@@ -1831,13 +1903,32 @@ a:hover { text-decoration: underline; }
     white-space: nowrap;
 }
 .btn-confirm-proposals:hover { filter: brightness(1.1); }
+.btn-cancel-proposals {
+    flex-shrink: 0;
+    padding: .3rem .85rem;
+    background: transparent;
+    color: var(--color-ink-light);
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    font-size: .85rem;
+    cursor: pointer;
+    font-style: normal;
+    white-space: nowrap;
+}
+.btn-cancel-proposals:hover { border-color: var(--accent); color: var(--accent); }
 
 .linking-area {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
     gap: 1.5rem;
 }
-@media (max-width: 900px) { .linking-area { grid-template-columns: 1fr; } }
+@media (max-width: 900px) {
+    .linking-area { grid-template-columns: 1fr; }
+    /* Grotere tikzone voor de kern-interactie op mobiel — de tekstgrootte
+       blijft gelijk, alleen de klikbare marge eromheen groeit. */
+    .src-word { padding: .7rem 8px; }
+    .nl-word  { padding: .3em .3em; }
+}
 
 /* Its confidence table (method/score/notes/date/who — "who" can be a full
    name + email) needs more room than a single equal-width grid track once
@@ -1901,8 +1992,8 @@ a:hover { text-decoration: underline; }
 
 .method-border-manual       { border-color: var(--color-manual); }
 .method-border-manual-empty { border-color: var(--color-manual); border-style: dashed; }
-.method-border-manual_hint  { border-color: var(--color-manual-hint); }
-.method-border-proper_noun  { border-color: var(--color-proper-noun); }
+.method-border-manual_hint  { border-color: var(--color-manual-hint); border-style: dotted; }
+.method-border-proper_noun  { border-color: var(--color-proper-noun); border-style: double; border-width: 3px; }
 .method-border-positional   { border-color: var(--color-positional); }
 .method-border-none         { border-color: var(--color-border); }
 .method-border-auto_source_pivot { border-color: var(--color-auto-pivot);     border-style: dashed; }
@@ -1931,6 +2022,7 @@ a:hover { text-decoration: underline; }
 
 .src-links { display: flex; flex-wrap: wrap; gap: .1rem; justify-content: center; margin-top: .1rem; }
 .link-chip {
+    position: relative;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -1944,9 +2036,9 @@ a:hover { text-decoration: underline; }
 
 .dutch-words-flow { font-family: var(--font-serif); font-size: 1.1rem; line-height: 2.4; margin-top: .75rem; }
 .nl-word {
-    display: inline;
+    display: inline-block;
     border-radius: 2px;
-    padding: .05em .1em;
+    padding: .1em .15em;
     cursor: pointer;
     transition: background .1s;
 }
@@ -1959,8 +2051,8 @@ a:hover { text-decoration: underline; }
 
 .method-underline-manual       { border-bottom: 2px solid var(--color-manual); }
 .method-underline-manual-empty { border-bottom: 2px dashed var(--color-manual); }
-.method-underline-manual_hint  { border-bottom: 2px solid var(--color-manual-hint); }
-.method-underline-proper_noun  { border-bottom: 2px solid var(--color-proper-noun); }
+.method-underline-manual_hint  { border-bottom: 2px dotted var(--color-manual-hint); }
+.method-underline-proper_noun  { border-bottom: 3px double var(--color-proper-noun); }
 .method-underline-positional   { border-bottom: 2px dashed var(--color-positional); }
 .method-underline-simalign     { border-bottom: 2px dashed var(--color-auto-pivot); }
 .method-underline-none         {}
@@ -2003,6 +2095,7 @@ a:hover { text-decoration: underline; }
     transition: background .12s;
 }
 .btn-save:hover { background: #156a30; }
+.btn-save:disabled { opacity: .5; cursor: not-allowed; }
 
 .btn-cancel {
     padding: .45rem 1rem;
@@ -2992,6 +3085,20 @@ a:hover { text-decoration: underline; }
 
 /* ── Admin: user edit page ─────────────────────────────────────────────────── */
 .container--narrow { max-width: 520px; margin: 2rem auto; padding: 0 1rem; }
+
+/* ── Strong's als losse pagina (buiten het turbo-frame, zie strongs_page.html.twig) ── */
+.strongs-standalone-back { margin-bottom: 1.25rem; }
+
+/* ── Foutpagina's (404 / 500) ─────────────────────────────────────────────── */
+.error-page { text-align: center; padding: 4rem 1rem; }
+.error-page-code {
+    font-family: var(--font-serif);
+    font-size: 4rem;
+    font-weight: 400;
+    color: var(--color-ink-muted);
+    margin-bottom: 1rem;
+}
+.error-page-message { font-size: 1.1rem; margin-bottom: 2rem; }
 .page-heading { font-size: 1.6rem; font-weight: 500; margin-bottom: 1.5rem; }
 .form-group--last { margin-bottom: 1.5rem; }
 .form-actions { display: flex; gap: 1rem; }
@@ -3016,6 +3123,11 @@ a:hover { text-decoration: underline; }
 
 /* ── Linking: legend word-filler ───────────────────────────────────────────── */
 .legend-item.word-filler { padding: .2rem .5rem; }
+
+/* Brede tabellen zonder wrapper duwen op mobiel de hele layout-viewport breder
+   dan het scherm — niet alleen de tabel, de héle pagina zoomt dan uit. Deze
+   wrapper begrenst de tabel tot een eigen horizontaal scrollbare strook. */
+.table-scroll { overflow-x: auto; }
 
 /* ── Admin: users table ────────────────────────────────────────────────────── */
 .container--wide { max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
@@ -4045,6 +4157,33 @@ a:hover { text-decoration: underline; }
     cursor: pointer;
 }
 .btn-danger:hover { filter: brightness(1.1); }
+
+/* ── Bevestigingsdialoog (vervangt window.confirm()) ─────────────────────── */
+.confirm-dialog {
+    /* De site-brede reset (`* { margin: 0 }`) wint van de UA-stylesheet se
+       margin:auto-centrering voor dialog:modal — dus zelf expliciet centreren. */
+    position: fixed;
+    inset: 0;
+    margin: auto;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    padding: 1.5rem;
+    max-width: 380px;
+    width: calc(100% - 2rem);
+    height: fit-content;
+    background: var(--card-warm);
+    color: var(--text);
+    box-shadow: var(--shadow);
+}
+.confirm-dialog::backdrop { background: rgba(0, 0, 0, .45); }
+.confirm-dialog-message { margin-bottom: 1.25rem; line-height: 1.5; }
+.confirm-dialog-actions { display: flex; gap: .75rem; justify-content: flex-end; }
+.confirm-dialog-confirm { border-radius: var(--radius); }
+/* .btn-cancel is standaard gestileerd voor een donkere achtergrond
+   (action-bar); op de lichte dialoog-achtergrond overschrijven naar de
+   tekstkleur, net als .action-bar-inline .btn-cancel dat al elders doet. */
+.confirm-dialog .btn-cancel { color: var(--text); border-color: var(--color-border); }
+.confirm-dialog .btn-cancel:hover { border-color: var(--accent); }
 .btn-success {
     padding: .55rem 1.25rem;
     background: var(--color-manual);

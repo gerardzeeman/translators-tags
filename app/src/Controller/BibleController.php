@@ -342,12 +342,24 @@ class BibleController extends AbstractController
      * Strong's lookup — AJAX/Turbo endpoint showing all words with a given number.
      */
     #[Route('/strongs/{number}', name: 'app_strongs', requirements: ['number' => '[HGhg]\d+[A-Za-z]?'])]
-    public function strongs(string $number): Response
+    public function strongs(Request $request, string $number): Response
     {
-        return $this->render('bible/strongs.html.twig', [
+        $context = [
             'strongs_number' => $number,
             'strongs_entry'  => $this->linkingRepository->fetchStrongsEntry($number),
-        ]);
+        ];
+
+        // Normaal laadt Turbo dit binnen het bestaande <turbo-frame id="strongs-panel">
+        // op de lees-/koppelpagina (Turbo stuurt dan een Turbo-Frame-header mee).
+        // Zonder die header is dit een top-level navigatie — een gedeelde link, een
+        // "open in nieuw tabblad" (zoals historical_verse.html.twig al doet), of een
+        // rechtstreeks bezoek — en moet de volledige pagina (met navigatie) worden
+        // gerenderd in plaats van het kale paneel-fragment.
+        if (!$request->headers->has('Turbo-Frame')) {
+            return $this->render('bible/strongs_page.html.twig', $context);
+        }
+
+        return $this->render('bible/strongs.html.twig', $context);
     }
 
     /**

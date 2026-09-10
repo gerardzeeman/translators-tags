@@ -21,6 +21,7 @@
     {% if entries is empty %}
         <p class="hist-align-help">Nog geen bibliotheek-items toegevoegd.</p>
     {% else %}
+    <div class="table-scroll">
     <table class="hist-align-overview-table">
         <thead>
             <tr><th>Type</th><th>Bron</th><th>Doel</th><th>Toegevoegd</th><th></th></tr>
@@ -37,6 +38,7 @@
             {% endfor %}
         </tbody>
     </table>
+    </div>
     {% endif %}
 </div>
 {% endblock %}

@@ -14,12 +14,12 @@
 
     {% for label, messages in app.flashes %}
         {% for message in messages %}
-        <div class="alert alert-{{ label }}">{{ message }}</div>
+        <div class="alert alert-{{ label }}" role="alert">{{ message }}</div>
         {% endfor %}
     {% endfor %}
 
     {% if error %}
-    <div class="alert alert-error">{{ error }}</div>
+    <div class="alert alert-error" role="alert">{{ error }}</div>
     {% endif %}
 
     <form method="post" action="{{ path('app_blog_publish', {slug: blog.slug}) }}" class="form-inline blog-publish-form">

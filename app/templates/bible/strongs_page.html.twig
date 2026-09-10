@@ -1,0 +1,10 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}{{ strongs_number }} – Strong's Lexicon – Bijbel Vergelijking{% endblock %}
+
+{% block body %}
+<div class="container container--narrow strongs-standalone">
+    <p class="strongs-standalone-back"><a href="{{ path('app_home') }}">&larr; Terug naar de Bijbel</a></p>
+    {{ include('bible/strongs.html.twig') }}
+</div>
+{% endblock %}

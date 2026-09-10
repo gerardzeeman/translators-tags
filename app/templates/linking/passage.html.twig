@@ -51,7 +51,7 @@
 
     {# ── Status bar ───────────────────────────────────────────────────────── #}
     <div class="linking-status-bar">
-        <span class="linking-status" data-word-linker-target="status">
+        <span class="linking-status" role="status" aria-live="polite" data-word-linker-target="status">
             Klik een bronwoord om te selecteren, dan klik één of meerdere Nederlandse woorden.
         </span>
         {% set proposal_count = passage.source_words|filter(w => w.propagated is defined and w.propagated and w.links|length > 0)|length %}
@@ -59,8 +59,16 @@
         <button type="button"
                 class="btn-confirm-proposals"
                 data-action="click->word-linker#confirmAllProposals"
+                data-word-linker-target="confirmProposalsButton"
                 title="Bevestig alle {{ proposal_count }} voorstellen als handmatige koppeling">
             ✓ Bevestig alle voorstellen ({{ proposal_count }})
+        </button>
+        <button type="button"
+                class="btn-cancel-proposals"
+                hidden
+                data-action="click->word-linker#cancelConfirmAllProposals"
+                data-word-linker-target="cancelProposalsButton">
+            Annuleren
         </button>
         {% endif %}
     </div>
@@ -86,6 +94,10 @@
                 {% set is_propagated = word.propagated is defined and word.propagated %}
 
                 <div class="src-word method-border-{{ best_method }}{% if is_propagated %} src-word-propagated{% endif %}"
+                     role="button"
+                     tabindex="0"
+                     aria-pressed="false"
+                     aria-label="{{ word.word_text }}{% if word.strongs %} ({{ word.strongs }}){% endif %}"
                      data-manually-empty="{{ word.is_manually_empty ? '1' : '0' }}"
                      data-source-id="{{ word.id }}"
                      data-lang="{{ lang }}"
@@ -93,7 +105,7 @@
                      data-strongs-url="{{ word.strongs ? path('app_strongs', {number: word.strongs}) : '' }}"
                      {% if is_granted('ROLE_LINKER') %}data-word-links-url="{{ path('api_linking_word_links', {lang: lang, sourceId: word.id}) }}"{% endif %}
                      data-linked-tw-ids="{{ linked_tw_ids }}"
-                     data-action="click->word-linker#selectSource"
+                     data-action="click->word-linker#selectSource keydown.enter->word-linker#selectSource keydown.space->word-linker#selectSource"
                      data-word-linker-target="sourceWord">
 
                     <span class="src-text">{{ word.word_text }}</span>
@@ -115,15 +127,19 @@
                         {% for link in word.links %}
                         {% if link.link_id is not null %}
                         <span class="link-chip method-{{ link.method }}"
+                              role="button"
+                              tabindex="0"
+                              aria-label="Verwijder koppeling ({{ link.method }})"
                               data-link-id="{{ link.link_id }}"
                               data-tw-id="{{ link.tw_id }}"
-                              title="{{ link.method }}: {{ ((link.score ?? 0) * 100)|round }}%">
+                              data-action="click->word-linker#deleteLink keydown.enter->word-linker#deleteLink"
+                              title="{{ link.method }}: {{ ((link.score ?? 0) * 100)|round }}% — klik om te verwijderen">
                             ×
                         </span>
                         {% endif %}
                         {% endfor %}
                         {% if word.is_manually_empty %}
-                        <span class="link-chip method-manual-empty" title="Handmatig: geen koppeling">∅</span>
+                        <span class="link-chip method-manual-empty" tabindex="0" title="Handmatig: geen koppeling">∅</span>
                         {% endif %}
                     </div>
                 </div>
@@ -134,7 +150,8 @@
         {# Dutch translation panel #}
         <section class="link-panel link-panel-dutch">
             <h2 class="panel-label">
-                <span class="lang-badge lang-nl">NL</span> {{ translation.name }}
+                <span class="lang-badge lang-nl">NL</span>
+                {{ translation.name }}{% if translation.abbreviation %} {{ translation.abbreviation }}{% endif %}
             </h2>
 
             <div class="dutch-words-flow">
@@ -143,8 +160,11 @@
                 {% set best_method = linked ? word.links|first.method : 'none' %}
 
                 <span class="nl-word method-underline-{{ best_method }}{% if word.is_filler %} word-filler{% endif %}"
+                      role="button"
+                      tabindex="0"
+                      aria-pressed="false"
                       data-tw-id="{{ word.id }}"
-                      data-action="click->word-linker#selectDutch"
+                      data-action="click->word-linker#selectDutch keydown.enter->word-linker#selectDutch keydown.space->word-linker#selectDutch"
                       data-word-linker-target="dutchWord">
                     {{- word.word_text -}}
                 </span>{{- word.punct_after ?? '' -}}{{ ' ' }}

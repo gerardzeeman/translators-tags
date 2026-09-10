@@ -29,12 +29,16 @@
         {% set is_target = word.strongs == strongs %}
 
         <div class="src-word method-border-{{ best_method }} {% if is_target %}src-word-target{% endif %}"
+             role="button"
+             tabindex="0"
+             aria-pressed="false"
+             aria-label="{{ word.word_text }}{% if word.strongs %} ({{ word.strongs }}){% endif %}"
              data-source-id="{{ word.id }}"
              data-lang="{{ lang }}"
              data-strongs="{{ word.strongs }}"
              data-linked-tw-ids="{{ linked_tw_ids }}"
              data-manually-empty="{{ word.is_manually_empty ? '1' : '0' }}"
-             data-action="click->word-linker#selectSource"
+             data-action="click->word-linker#selectSource keydown.enter->word-linker#selectSource keydown.space->word-linker#selectSource"
              data-word-linker-target="sourceWord">
 
             <span class="src-text">{{ word.word_text }}</span>
@@ -50,11 +54,16 @@
             <div class="src-links">
                 {% for link in word.links %}
                 <span class="link-chip method-{{ link.method }}"
+                      role="button"
+                      tabindex="0"
+                      aria-label="Verwijder koppeling ({{ link.method }})"
                       data-link-id="{{ link.link_id }}"
-                      data-tw-id="{{ link.tw_id }}">×</span>
+                      data-tw-id="{{ link.tw_id }}"
+                      data-action="click->word-linker#deleteLink keydown.enter->word-linker#deleteLink"
+                      title="{{ link.method }}: {{ ((link.score ?? 0) * 100)|round }}% — klik om te verwijderen">×</span>
                 {% endfor %}
                 {% if word.is_manually_empty %}
-                <span class="link-chip method-manual-empty" title="Handmatig: geen koppeling">∅</span>
+                <span class="link-chip method-manual-empty" tabindex="0" title="Handmatig: geen koppeling">∅</span>
                 {% endif %}
             </div>
         </div>
@@ -66,8 +75,11 @@
         {% for word in v.dutch_words %}
         {% set best_method = word.links|length > 0 ? word.links|first.method : 'none' %}
         <span class="nl-word method-underline-{{ best_method }}"
+              role="button"
+              tabindex="0"
+              aria-pressed="false"
               data-tw-id="{{ word.id }}"
-              data-action="click->word-linker#selectDutch"
+              data-action="click->word-linker#selectDutch keydown.enter->word-linker#selectDutch keydown.space->word-linker#selectDutch"
               data-word-linker-target="dutchWord">
             {{- word.word_text -}}
         </span>

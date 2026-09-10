@@ -1,12 +1,13 @@
 // assets/controllers/word_linker_controller.js
 import { Controller } from '@hotwired/stimulus'
+import { confirmDialog } from '../confirm_dialog.js'
 
 function csrfToken() {
     return document.querySelector('meta[name="csrf-token"]')?.content ?? ''
 }
 
 export default class extends Controller {
-    static targets = ['sourceWord', 'dutchWord', 'actionBar', 'selectedLabel', 'status']
+    static targets = ['sourceWord', 'dutchWord', 'actionBar', 'selectedLabel', 'status', 'confirmProposalsButton', 'cancelProposalsButton']
     static values  = { saveUrl: String, deleteUrl: String, refreshUrl: String, progressUrl: String, translationId: Number }
 
     #selectedSourceId   = null
@@ -17,6 +18,7 @@ export default class extends Controller {
     // ── Source word selected ──────────────────────────────────────────────────
 
     selectSource(event) {
+        event.preventDefault() // ook aangeroepen via keydown.space — voorkomt scrollen
         event.stopPropagation()
         const el       = event.currentTarget
         const sourceId = el.dataset.sourceId
@@ -34,6 +36,7 @@ export default class extends Controller {
         this.#selectedSourceLang = lang
 
         el.classList.add('src-word-active')
+        el.setAttribute('aria-pressed', 'true')
 
         // Pre-select already-linked Dutch words
         const linkedIds = (el.dataset.linkedTwIds || '')
@@ -47,7 +50,7 @@ export default class extends Controller {
         linkedIds.forEach(id => {
             this.#selectedTwIds.add(id)
             const dw = this.#findDutchWord(id)
-            if (dw) dw.classList.add('nl-word-selected')
+            if (dw) { dw.classList.add('nl-word-selected'); dw.setAttribute('aria-pressed', 'true') }
         })
 
         this.#showActionBar(el)
@@ -58,6 +61,7 @@ export default class extends Controller {
     // ── Dutch word toggled ────────────────────────────────────────────────────
 
     selectDutch(event) {
+        event.preventDefault() // ook aangeroepen via keydown.space — voorkomt scrollen
         event.stopPropagation()
 
         // Silently ignore if no source word is active
@@ -69,9 +73,45 @@ export default class extends Controller {
         if (this.#selectedTwIds.has(twId)) {
             this.#selectedTwIds.delete(twId)
             el.classList.remove('nl-word-selected')
+            el.setAttribute('aria-pressed', 'false')
         } else {
             this.#selectedTwIds.add(twId)
             el.classList.add('nl-word-selected')
+            el.setAttribute('aria-pressed', 'true')
+        }
+    }
+
+    // ── Eén koppeling verwijderen (klik op de "×"-chip) ─────────────────────────
+    // De chip zit binnen .src-word, dus zonder stopPropagation zou een klik
+    // hier doorbubbelen naar selectSource en het hele woord (de-)selecteren
+    // in plaats van alleen deze ene koppeling te verwijderen.
+
+    async deleteLink(event) {
+        event.preventDefault()
+        event.stopPropagation()
+
+        const chip   = event.currentTarget
+        const linkId = chip.dataset.linkId
+        if (!linkId) return
+
+        try {
+            const resp = await fetch(this.#deleteUrl(linkId), {
+                method:  'DELETE',
+                headers: { 'X-CSRF-Token': csrfToken() },
+            })
+            if (!resp.ok) throw new Error('' + resp.status)
+
+            chip.remove()
+            this.#setStatus('✓ Koppeling verwijderd.')
+
+            if (this.hasRefreshUrlValue) {
+                await this.#refreshVerseBlock()
+                await this.#refreshProgressBar()
+            } else {
+                setTimeout(() => this.#reloadCurrentView(), 400)
+            }
+        } catch {
+            this.#setStatus('Verwijderen van de koppeling is mislukt. Controleer je verbinding en probeer opnieuw.')
         }
     }
 
@@ -90,6 +130,9 @@ export default class extends Controller {
     async saveLinks(event) {
         event.stopPropagation()
         if (!this.#selectedSourceId) return
+
+        const button = event.currentTarget
+        button.disabled = true // voorkomt dubbele indiening bij dubbelklik / trage verbinding
 
         const twIds = [...this.#selectedTwIds]
 
@@ -114,28 +157,29 @@ export default class extends Controller {
                 await this.#refreshVerseBlock()        // replaces this.element in DOM
                 await this.#refreshProgressBar()       // updates counters & bar widths
             } else {
-                // ── Passage view: full reload (single verse, fast enough) ──
+                // ── Passage view ──
                 this.#updateSourceWordDOM(twIds, data.empty)
                 this.#setStatus(data.empty
                     ? '✓ Opgeslagen: geen koppeling (handmatig leeg).'
                     : `✓ ${data.linked} koppeling(en) opgeslagen.`)
                 this.#reset()
-                setTimeout(() => window.location.reload(), 600)
+                setTimeout(() => this.#reloadCurrentView(), 600)
             }
 
-        } catch (err) {
-            this.#setStatus(`Fout bij opslaan: ${err.message}`)
+        } catch {
+            this.#setStatus('Opslaan is mislukt. Controleer je internetverbinding en probeer opnieuw.')
+            button.disabled = false
         }
     }
 
     // ── Confirm all proposals ────────────────────────────────────────────────
 
-    #confirmPending = false
+    #confirmPending  = false
+    #confirmAbort    = null
 
     async confirmAllProposals(event) {
         event?.stopPropagation()
         if (this.#confirmPending) return
-        this.#confirmPending = true
 
         const proposals = this.sourceWordTargets.filter(el =>
             el.classList.contains('src-word-propagated') &&
@@ -144,21 +188,27 @@ export default class extends Controller {
 
         if (proposals.length === 0) {
             this.#setStatus('Geen voorstellen gevonden om te bevestigen.')
-            this.#confirmPending = false
             return
         }
 
-        if (!confirm(`${proposals.length} voorstellen bevestigen als handmatige koppeling?`)) {
-            this.#confirmPending = false
-            return
-        }
+        const confirmed = await confirmDialog(
+            `${proposals.length} voorstellen bevestigen als handmatige koppeling?`,
+            { confirmLabel: 'Bevestig alle', danger: false }
+        )
+        if (!confirmed) return
 
+        this.#confirmPending = true
+        this.#confirmAbort   = new AbortController()
+        this.#toggleConfirmButtons(true)
         this.#setStatus(`Bezig met opslaan (0 / ${proposals.length})…`)
 
         let saved = 0
+        let cancelled = false
         const errors = []
 
         for (const el of proposals) {
+            if (this.#confirmAbort.signal.aborted) { cancelled = true; break }
+
             const twIds = el.dataset.linkedTwIds
                 .split(',').map(s => s.trim()).filter(Boolean).map(Number)
             if (!twIds.length) continue
@@ -167,6 +217,7 @@ export default class extends Controller {
                 const resp = await fetch(this.saveUrlValue, {
                     method:  'POST',
                     headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken() },
+                    signal:  this.#confirmAbort.signal,
                     body: JSON.stringify({
                         lang:           el.dataset.lang,
                         source_word_id: parseInt(el.dataset.sourceId),
@@ -178,20 +229,41 @@ export default class extends Controller {
                 if (!data.success) throw new Error(data.error || 'Save failed')
                 saved++
             } catch (err) {
-                errors.push(`woord ${el.dataset.sourceId}: ${err.message}`)
+                if (err.name === 'AbortError') { cancelled = true; break }
+                errors.push(el.dataset.sourceId)
             }
 
             this.#setStatus(`Bezig met opslaan (${saved} / ${proposals.length})…`)
         }
 
-        if (errors.length) {
-            this.#setStatus(`${saved} opgeslagen, ${errors.length} mislukt. Pagina wordt herladen…`)
-            console.warn('confirmAllProposals errors:', errors)
+        this.#confirmPending = false
+        this.#confirmAbort   = null
+        this.#toggleConfirmButtons(false)
+
+        if (cancelled) {
+            this.#setStatus(`Geannuleerd na ${saved} van ${proposals.length} koppeling(en). Pagina wordt ververst…`)
+        } else if (errors.length) {
+            this.#setStatus(`${saved} opgeslagen, ${errors.length} mislukt. Pagina wordt ververst…`)
+            console.warn('confirmAllProposals mislukt voor woord-id\'s:', errors)
         } else {
-            this.#setStatus(`✓ ${saved} koppeling(en) bevestigd. Pagina wordt herladen…`)
+            this.#setStatus(`✓ ${saved} koppeling(en) bevestigd. Pagina wordt ververst…`)
         }
 
-        setTimeout(() => window.location.reload(), 800)
+        setTimeout(() => this.#reloadCurrentView(), 800)
+    }
+
+    cancelConfirmAllProposals(event) {
+        event?.stopPropagation()
+        this.#confirmAbort?.abort()
+    }
+
+    #toggleConfirmButtons(running) {
+        if (this.hasConfirmProposalsButtonTarget) {
+            this.confirmProposalsButtonTargets.forEach(el => { el.hidden = running })
+        }
+        if (this.hasCancelProposalsButtonTarget) {
+            this.cancelProposalsButtonTargets.forEach(el => { el.hidden = !running })
+        }
     }
 
     // ── Cancel ────────────────────────────────────────────────────────────────
@@ -202,6 +274,17 @@ export default class extends Controller {
         this.#setStatus('Koppeling geannuleerd.')
     }
 
+    // Turbo-visit i.p.v. een harde reload — zelfde patroon als elders in de
+    // app (zie historical_alignment_controller.js): geen volledige page-flash,
+    // geen opnieuw laden van fonts/CSS, behoudt de Turbo-navigatiehistorie.
+    #reloadCurrentView() {
+        if (window.Turbo) {
+            window.Turbo.visit(window.location.href, { action: 'replace' })
+        } else {
+            window.location.reload()
+        }
+    }
+
     // ── Private helpers ───────────────────────────────────────────────────────
 
     // clearPanels is false when #reset() is called right before selecting a
@@ -209,8 +292,8 @@ export default class extends Controller {
     // new selection) — fresh panel content is about to load anyway, so
     // flashing the placeholder first would just be visual noise.
     #reset(clearStatus = true, clearPanels = true) {
-        this.sourceWordTargets.forEach(el => el.classList.remove('src-word-active'))
-        this.dutchWordTargets.forEach(el => el.classList.remove('nl-word-selected'))
+        this.sourceWordTargets.forEach(el => { el.classList.remove('src-word-active'); el.setAttribute('aria-pressed', 'false') })
+        this.dutchWordTargets.forEach(el => { el.classList.remove('nl-word-selected'); el.setAttribute('aria-pressed', 'false') })
 
         this.#selectedSourceId   = null
         this.#selectedSourceLang = null
@@ -295,7 +378,10 @@ export default class extends Controller {
         }
 
         try {
-            const resp = await fetch(url, { headers: { 'Accept': 'text/html' } })
+            // Turbo-Frame-header meesturen zodat de server dit als een frame-verzoek
+            // herkent en het lichte fragment teruggeeft i.p.v. de volledige pagina
+            // (die de backend nu rendert voor top-level navigaties zonder deze header).
+            const resp = await fetch(url, { headers: { 'Accept': 'text/html', 'Turbo-Frame': frameId } })
             if (!resp.ok) return
 
             const html = await resp.text()
