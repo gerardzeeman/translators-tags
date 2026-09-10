@@ -1,0 +1,17 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Er ging iets mis – Alef–Omega{% endblock %}
+
+{% block body %}
+<div class="container container--narrow error-page">
+    <h1 class="error-page-code">{{ status_code|default(500) }}</h1>
+    <p class="error-page-message">
+        {% if status_code == 403 %}
+            Je hebt geen toegang tot deze pagina.
+        {% else %}
+            Er is een onverwachte fout opgetreden. Probeer het later opnieuw.
+        {% endif %}
+    </p>
+    <a href="{{ path('app_home') }}" class="btn btn-primary">&larr; Terug naar de Bijbel</a>
+</div>
+{% endblock %}

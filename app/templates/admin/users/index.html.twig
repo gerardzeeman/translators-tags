@@ -12,10 +12,11 @@
 
     {% for label, messages in app.flashes %}
         {% for message in messages %}
-        <div class="alert alert-{{ label }}">{{ message }}</div>
+        <div class="alert alert-{{ label }}" role="alert">{{ message }}</div>
         {% endfor %}
     {% endfor %}
 
+    <div class="table-scroll">
     <table class="admin-table">
         <thead>
             <tr>
@@ -46,7 +47,10 @@
                 <td>
                     <a href="{{ path('admin_users_edit', {id: user.id}) }}">Bewerken</a>
                     {% if user != app.user %}
-                    <form method="post" action="{{ path('admin_users_delete', {id: user.id}) }}" class="form-inline" onsubmit="return confirm('Gebruiker {{ user.email|e('js') }} verwijderen?')">
+                    <form method="post" action="{{ path('admin_users_delete', {id: user.id}) }}" class="form-inline"
+                          data-controller="confirm-submit"
+                          data-confirm-submit-message-value="Gebruiker {{ user.email }} verwijderen?"
+                          data-action="submit->confirm-submit#submit">
                         <input type="hidden" name="_csrf_token" value="{{ csrf_token('admin_user_delete_' ~ user.id) }}">
                         <button type="submit" class="btn-danger-inline">Verwijderen</button>
                     </form>
@@ -58,6 +62,7 @@
         {% endfor %}
         </tbody>
     </table>
+    </div>
 
 </div>
 {% endblock %}

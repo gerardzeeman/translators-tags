@@ -54,6 +54,9 @@
         <div class="source-words {% if passage.testament == 'OT' %}dir-rtl{% endif %}">
             {% for word in passage.source_words %}
             <div class="source-word"
+                 role="button"
+                 tabindex="0"
+                 aria-label="{{ word.word_text }}{% if word.strongs %} ({{ word.strongs }}){% endif %}"
                  data-source-id="{{ word.id }}"
                  data-lang="{{ passage.testament == 'OT' ? 'HE' : 'GR' }}"
                  data-strongs="{{ word.strongs }}"
@@ -87,12 +90,13 @@
                         {% for link in word.links_sv %}
                         {% set score = link.score|default(0) %}
                         <span class="link-dot method-{{ link.method }}"
+                              tabindex="0"
                               title="{{ link.word_text }} ({{ link.method }}: {{ (score * 100)|round }}%)">
                             {{ link.word_text }}
                         </span>
                         {% endfor %}
                     {% else %}
-                        <span class="no-link-badge" title="Geen koppeling SV">—</span>
+                        <span class="no-link-badge" tabindex="0" title="Geen koppeling SV">—</span>
                     {% endif %}
                 </div>
                 <div class="link-indicators hsv-indicators">
@@ -101,12 +105,13 @@
                         {% set score = link.score|default(0) %}
                         {% set isPropagated = link.method in ['auto_source_pivot','auto_sequence','auto_positional'] %}
                         <span class="link-dot method-{{ link.method }}{% if isPropagated %} link-dot-propagated{% endif %}"
+                              tabindex="0"
                               title="{{ link.word_text }} ({{ link.method }}: {{ score is not null ? (score * 100)|round ~ '%' : '✓' }})">
                             {{ link.word_text }}
                         </span>
                         {% endfor %}
                     {% else %}
-                        <span class="no-link-badge" title="Geen koppeling HSV">—</span>
+                        <span class="no-link-badge" tabindex="0" title="Geen koppeling HSV">—</span>
                     {% endif %}
                 </div>
                 <div class="link-indicators svgbs-indicators">
@@ -115,12 +120,13 @@
                         {% set score = link.score|default(0) %}
                         {% set isPropagated = link.method in ['auto_source_pivot','auto_sequence','auto_positional'] %}
                         <span class="link-dot method-{{ link.method }}{% if isPropagated %} link-dot-propagated{% endif %}"
+                              tabindex="0"
                               title="{{ link.word_text }} ({{ link.method }}: {{ score is not null ? (score * 100)|round ~ '%' : '✓' }})">
                             {{ link.word_text }}
                         </span>
                         {% endfor %}
                     {% else %}
-                        <span class="no-link-badge" title="Geen koppeling SV(GBS)">—</span>
+                        <span class="no-link-badge" tabindex="0" title="Geen koppeling SV(GBS)">—</span>
                     {% endif %}
                 </div>
                 <div class="link-indicators sv1657-indicators">
@@ -129,12 +135,13 @@
                         {% set score = link.score|default(0) %}
                         {% set isPropagated = link.method in ['auto_source_pivot','auto_sequence','auto_positional'] %}
                         <span class="link-dot method-{{ link.method }}{% if isPropagated %} link-dot-propagated{% endif %}"
+                              tabindex="0"
                               title="{{ link.word_text }} ({{ link.method }}: {{ score is not null ? (score * 100)|round ~ '%' : '✓' }})">
                             {{ link.word_text }}
                         </span>
                         {% endfor %}
                     {% else %}
-                        <span class="no-link-badge" title="Geen koppeling SV(1657)">—</span>
+                        <span class="no-link-badge" tabindex="0" title="Geen koppeling SV(1657)">—</span>
                     {% endif %}
                 </div>
 
@@ -166,6 +173,8 @@
             {% include 'bible/_cross_ref_marker.html.twig' with {markers: passage.cross_ref_prefix_sv1657, translation_code: 'SV1657'} only %}
             {% for word in passage.dutch_verse_sv1657 %}
             <span class="dutch-word{% if word.is_filler %} word-filler{% endif %}"
+                  role="button"
+                  tabindex="0"
                   data-tw-id="{{ word.word_id }}"
                   data-method="{{ word.best_method ?? 'none' }}"
                   data-score="{{ word.best_score ?? 0 }}"
@@ -201,6 +210,8 @@
             {% include 'bible/_cross_ref_marker.html.twig' with {markers: passage.cross_ref_prefix_sv, translation_code: 'SV'} only %}
             {% for word in passage.dutch_verse_sv %}
             <span class="dutch-word"
+                  role="button"
+                  tabindex="0"
                   data-tw-id="{{ word.word_id }}"
                   data-method="{{ word.best_method ?? 'none' }}"
                   data-score="{{ word.best_score ?? 0 }}"
@@ -234,6 +245,8 @@
             {% include 'bible/_cross_ref_marker.html.twig' with {markers: passage.cross_ref_prefix_svgbs, translation_code: 'SVGBS'} only %}
             {% for word in passage.dutch_verse_svgbs %}
             <span class="dutch-word{% if word.is_filler %} word-filler{% endif %}"
+                  role="button"
+                  tabindex="0"
                   data-tw-id="{{ word.word_id }}"
                   data-method="{{ word.best_method ?? 'none' }}"
                   data-score="{{ word.best_score ?? 0 }}"
@@ -270,6 +283,8 @@
             {% include 'bible/_cross_ref_marker.html.twig' with {markers: passage.cross_ref_prefix_hsv, translation_code: 'HSV'} only %}
             {% for word in passage.dutch_verse_hsv %}
             <span class="dutch-word{% if word.is_filler %} word-filler{% endif %}"
+                  role="button"
+                  tabindex="0"
                   data-tw-id="{{ word.word_id }}"
                   data-method="{{ word.best_method ?? 'none' }}"
                   data-score="{{ word.best_score ?? 0 }}"

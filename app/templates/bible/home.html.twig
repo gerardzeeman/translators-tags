@@ -95,6 +95,13 @@
         {% endif %}
 
     </div>
+    {% else %}
+    <section class="home-anon-cta">
+        <p>Log in om alle bijbelboeken en hoofdstukken te doorbladeren.</p>
+        <div class="home-anon-cta-actions">
+            <a href="{{ path('app_login') }}" class="btn btn-primary" data-turbo="false">Inloggen</a>
+        </div>
+    </section>
     {% endif %}
 </div>
 {% endblock %}
