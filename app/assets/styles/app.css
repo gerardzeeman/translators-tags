@@ -1823,32 +1823,9 @@ a:hover { text-decoration: underline; }
         font-family: var(--font-ui);
     }
 
-    /* Action-bar: blijft onderaan het scherm zichtbaar op mobiel. Sticky i.p.v.
-       fixed — fixed glitcht op mobiele browsers zodra de adresbalk in-/uitschuift
-       tijdens scrollen (de balk verdwijnt dan tijdelijk of springt mee). Sticky
-       wordt, net als .site-header (position: sticky; top: 0), gewoon door de
-       normale document-flow/scroll gerekend en heeft dat probleem niet.
-       Voorvoegsel-klasse .page-linking: margin-top/border worden verderop ook
-       onvoorwaardelijk gezet — zonder de hogere specificiteit hier zou die
-       latere regel margin-top en de volle rand terugzetten. */
-    .page-linking .action-bar-inline {
-        position: sticky;
-        bottom: 0;
-        z-index: 400;
-        margin-top: 0;
-        border-radius: 0;
-        border: none;
-        border-top: 1px solid var(--color-border);
-        box-shadow: 0 -4px 20px rgba(0, 0, 0, .25);
-        background: var(--nav);
-        padding: .75rem 1.5rem;
-    }
-    /* .page-linking-voorvoegsel: dezelfde reden als hierboven bij de
-       ouder-regel — anders wint de latere, onvoorwaardelijke (voor de lichte
-       .action-bar-inline-achtergrond bedoelde) tekstkleur alsnog, en wordt
-       de tekst hier onleesbaar donker-op-donker. */
-    .page-linking .action-bar-inline .action-label { color: var(--nav-text); }
-    .page-linking .action-bar-inline .action-hint   { color: var(--nav-text); opacity: .75; }
+    /* Action-bar: sticky bottom-behavior en donkere achtergrond zijn nu
+       onvoorwaardelijk op .action-bar-inline gezet (geldt op alle
+       breedtes) — hier geen mobiel-specifieke override meer nodig. */
 
     .translation-switcher { display: none; }
     .translation-switcher-mobile {
@@ -1864,7 +1841,6 @@ a:hover { text-decoration: underline; }
         cursor: pointer;
     }
     .translation-switcher-mobile:focus { outline: none; border-color: var(--accent); }
-    .page-linking .action-bar-inline .btn-cancel { color: var(--nav-text); border-color: rgba(255,255,255,.2); }
 
     /* Strong's: bottom sheet op mobiel */
     .strongs-sidebar {
@@ -2198,6 +2174,34 @@ a:hover { text-decoration: underline; }
 .action-bar-inline .action-label { color: var(--text); }
 .action-bar-inline .action-hint  { color: var(--color-ink-muted); }
 .action-bar-inline .btn-cancel   { color: var(--text); border-color: var(--color-border); }
+
+/* Op de koppelpagina (één actiebalk voor de hele pagina) plakt de balk aan
+   de onderkant van het scherm, over de volle breedte — op alle formaten,
+   niet alleen mobiel. left:50%/margin-left:-50vw is de standaardtruc om
+   buiten .page-linking/.site-main (gecentreerd, max-width) uit te breken
+   tot volle viewportbreedte, zonder position:fixed nodig te hebben (sticky
+   blijft, anders dan fixed, gewoon meetellen in de documentflow). Bewust
+   scoped tot .page-linking: op de Strong's-pagina staat per vers een eigen
+   .action-bar-inline in de lijst — die moet inline blijven, niet vastplakken
+   aan het scherm. */
+.page-linking .action-bar-inline {
+    position: sticky;
+    bottom: 0;
+    left: 50%;
+    width: 100vw;
+    margin-left: -50vw;
+    z-index: 400;
+    margin-top: 0;
+    border-radius: 0;
+    border: none;
+    border-top: 1px solid var(--color-border);
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, .25);
+    background: var(--nav);
+    padding: .75rem 1.5rem;
+}
+.page-linking .action-bar-inline .action-label { color: var(--nav-text); }
+.page-linking .action-bar-inline .action-hint  { color: var(--nav-text); opacity: .75; }
+.page-linking .action-bar-inline .btn-cancel   { color: var(--nav-text); border-color: rgba(255,255,255,.2); }
 
 .strongs-header {
     background: var(--bg);
