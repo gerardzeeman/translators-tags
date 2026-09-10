@@ -52,3 +52,8 @@ TEHMC - Translators Expansion of Hebrew Morphology Codes - STEPBible.org CC BY.t
 # into the ingest container at run time (see ingest/parse_statenvertaling_1657.py),
 # never committed, same as the other one-off ingest source dumps above.
 /_sta001stat02_01.xml
+
+# One-off HSV filler-word repair (ingest/repair_hsv_filler_words.py) working data:
+# full dev/prod CSV exports, the applied SQL patch, apply logs, and a pre-apply
+# production backup -- 100MB+ of DB dumps, same reasoning as the dumps above.
+/ingest/hsv_repair_data/
