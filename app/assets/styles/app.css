@@ -1843,7 +1843,12 @@ a:hover { text-decoration: underline; }
         background: var(--nav);
         padding: .75rem 1.5rem;
     }
-    .action-bar-inline .action-label { color: var(--nav-text); }
+    /* .page-linking-voorvoegsel: dezelfde reden als hierboven bij de
+       ouder-regel — anders wint de latere, onvoorwaardelijke (voor de lichte
+       .action-bar-inline-achtergrond bedoelde) tekstkleur alsnog, en wordt
+       de tekst hier onleesbaar donker-op-donker. */
+    .page-linking .action-bar-inline .action-label { color: var(--nav-text); }
+    .page-linking .action-bar-inline .action-hint   { color: var(--nav-text); opacity: .75; }
 
     .translation-switcher { display: none; }
     .translation-switcher-mobile {
@@ -1859,7 +1864,7 @@ a:hover { text-decoration: underline; }
         cursor: pointer;
     }
     .translation-switcher-mobile:focus { outline: none; border-color: var(--accent); }
-    .action-bar-inline .btn-cancel   { color: var(--nav-text); border-color: rgba(255,255,255,.2); }
+    .page-linking .action-bar-inline .btn-cancel { color: var(--nav-text); border-color: rgba(255,255,255,.2); }
 
     /* Strong's: bottom sheet op mobiel */
     .strongs-sidebar {
