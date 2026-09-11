@@ -4535,7 +4535,12 @@ a:hover { text-decoration: underline; }
 .embed-dutch { margin: 0; }
 
 /* ── Blog editor: embed-picker toolbar + dialog ─────────────────────────── */
-.blog-editor-toolbar { display: flex; gap: .5rem; margin-bottom: .5rem; align-items: center; }
+/* flex-wrap: de knoptekst gebruikt sinds de overstap naar .btn/.btn-sm het
+   iets bredere --font-serif (net als "Bewerken" elders in de app) i.p.v.
+   het compactere geërfde ui-font van de oude .btn-secondary -- zonder wrap
+   kromp de rij de knoppen smaller dan hun tekst nodig had, met een
+   afgebroken "+ Institutie- tekst" op twee regels tot gevolg. */
+.blog-editor-toolbar { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: .5rem; align-items: center; }
 .btn-toolbar { padding: .35rem .8rem; font-size: .85rem; }
 .blog-editor-image-status { font-size: .85rem; color: var(--color-ink-muted); margin: -.25rem 0 .5rem; }
 .blog-editor-image-status.is-error { color: #922; }
