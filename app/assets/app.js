@@ -26,7 +26,7 @@ import MobileNavController           from './controllers/mobile_nav_controller.j
 import ConfirmSubmitController       from './controllers/confirm_submit_controller.js'
 import SelectNavigateController      from './controllers/select_navigate_controller.js'
 import StrongsTranslateController    from './controllers/strongs_translate_controller.js'
-import AdminUsersSearchController    from './controllers/admin_users_search_controller.js'
+import ListSearchController          from './controllers/list_search_controller.js'
 
 app.register('verse-compare',        VerseCompareController)
 app.register('source-word',          SourceWordController)
@@ -43,4 +43,4 @@ app.register('mobile-nav',           MobileNavController)
 app.register('confirm-submit',       ConfirmSubmitController)
 app.register('select-navigate',      SelectNavigateController)
 app.register('strongs-translate',    StrongsTranslateController)
-app.register('admin-users-search',   AdminUsersSearchController)
+app.register('list-search',          ListSearchController)

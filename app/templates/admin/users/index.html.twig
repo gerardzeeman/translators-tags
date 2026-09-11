@@ -3,7 +3,7 @@
 {% block title %}Gebruikersbeheer – Bijbel Vergelijking{% endblock %}
 
 {% block body %}
-<div class="container container--wide" data-controller="admin-users-search">
+<div class="container container--wide" data-controller="list-search">
 
     <div class="admin-page-header">
         <h1>Gebruikersbeheer</h1>
@@ -18,11 +18,11 @@
 
     {% if users is not empty %}
     <input type="search"
-           class="admin-users-search"
+           class="list-search-input"
            placeholder="Zoek op naam of e-mailadres…"
            aria-label="Zoek op naam of e-mailadres"
-           data-admin-users-search-target="input"
-           data-action="input->admin-users-search#filter">
+           data-list-search-target="input"
+           data-action="input->list-search#filter">
     {% endif %}
 
     <div class="table-scroll admin-users-table-wrap">
@@ -40,7 +40,7 @@
         </thead>
         <tbody>
         {% for user in users %}
-            <tr data-admin-users-search-target="row" data-search="{{ (user.displayName ~ ' ' ~ user.email)|lower }}">
+            <tr data-list-search-target="row" data-search="{{ (user.displayName ~ ' ' ~ user.email)|lower }}">
                 <td>{{ user.displayName }}</td>
                 <td>{{ user.email }}</td>
                 <td>
@@ -69,9 +69,6 @@
         {% else %}
             <tr class="empty-row"><td colspan="7">Geen gebruikers gevonden.</td></tr>
         {% endfor %}
-        {% if users is not empty %}
-            <tr class="empty-row" data-admin-users-search-target="empty" hidden><td colspan="7">Geen gebruikers gevonden voor deze zoekopdracht.</td></tr>
-        {% endif %}
         </tbody>
     </table>
     </div>
@@ -82,7 +79,7 @@
     {% if users is not empty %}
     <div class="admin-users-cards">
         {% for user in users %}
-        <div class="admin-users-card" data-admin-users-search-target="card" data-search="{{ (user.displayName ~ ' ' ~ user.email)|lower }}">
+        <div class="admin-users-card" data-list-search-target="card" data-search="{{ (user.displayName ~ ' ' ~ user.email)|lower }}">
             <div class="admin-users-card-name">{{ user.displayName }}</div>
             <div class="admin-users-card-email">{{ user.email }}</div>
 
@@ -115,6 +112,14 @@
         </div>
         {% endfor %}
     </div>
+    {% endif %}
+
+    {# Buiten zowel de tabel (desktop) als de kaarten (mobiel) -- die
+       wisselen elkaar af via display:none op basis van viewportbreedte, dus
+       een melding bínnen een van de twee zou op het andere formaat
+       onzichtbaar blijven. #}
+    {% if users is not empty %}
+    <p class="text-muted list-search-empty" data-list-search-target="empty" hidden>Geen gebruikers gevonden voor deze zoekopdracht.</p>
     {% endif %}
 
 </div>

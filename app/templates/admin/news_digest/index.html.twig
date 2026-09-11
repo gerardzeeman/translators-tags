@@ -3,7 +3,7 @@
 {% block title %}Nieuwsoverzicht-historie – Bijbel Vergelijking{% endblock %}
 
 {% block body %}
-<div class="container container--wide">
+<div class="container container--wide" data-controller="list-search">
 
     <div class="admin-page-header">
         <h1>Nieuwsoverzicht-historie</h1>
@@ -15,6 +15,16 @@
         {% endfor %}
     {% endfor %}
 
+    {% if digests is not empty %}
+    <input type="search"
+           class="list-search-input"
+           placeholder="Zoek op titel…"
+           aria-label="Zoek op titel"
+           data-list-search-target="input"
+           data-action="input->list-search#filter">
+    {% endif %}
+
+    <div class="table-scroll admin-news-digest-table-wrap">
     <table class="admin-table">
         <thead>
             <tr>
@@ -28,7 +38,7 @@
         </thead>
         <tbody>
         {% for digest in digests %}
-            <tr>
+            <tr data-list-search-target="row" data-search="{{ digest.title|lower }}">
                 <td>{{ digest.sentAt|date('d-m-Y H:i', 'Europe/Amsterdam') }}</td>
                 {# title/body/url komen van een systeem buiten deze applicatie
                    (de scheduled task) en worden dus als niet-vertrouwde tekst
@@ -39,7 +49,11 @@
                 <td>{{ digest.successCount }}</td>
                 <td>{{ digest.failureCount }}</td>
                 <td>
-                    <form method="post" action="{{ path('admin_news_digest_resend', {id: digest.id}) }}" class="form-inline" onsubmit="return confirm('&quot;{{ digest.title|e('js') }}&quot; opnieuw versturen naar alle abonnees?')">
+                    <form method="post" action="{{ path('admin_news_digest_resend', {id: digest.id}) }}" class="form-inline"
+                          data-controller="confirm-submit"
+                          data-confirm-submit-message-value="&quot;{{ digest.title }}&quot; opnieuw versturen naar alle abonnees?"
+                          data-confirm-submit-confirm-label-value="Opnieuw versturen"
+                          data-action="submit->confirm-submit#submit">
                         <input type="hidden" name="_csrf_token" value="{{ csrf_token('news_digest_resend_' ~ digest.id) }}">
                         <button type="submit" class="btn-inline">Opnieuw versturen</button>
                     </form>
@@ -50,6 +64,46 @@
         {% endfor %}
         </tbody>
     </table>
+    </div>
+
+    {# Mobiel: dezelfde data als kaarten i.p.v. een scrollende tabel -- zie
+       .admin-news-digest-table-wrap / .admin-news-digest-cards in app.css
+       voor de media query die tussen de twee schakelt. #}
+    {% if digests is not empty %}
+    <div class="admin-news-digest-cards">
+        {% for digest in digests %}
+        <div class="admin-news-digest-card" data-list-search-target="card" data-search="{{ digest.title|lower }}">
+            <div class="admin-news-digest-card-title">{{ digest.title }}</div>
+
+            <dl class="admin-news-digest-card-meta">
+                <div><dt>Verstuurd</dt><dd>{{ digest.sentAt|date('d-m-Y H:i', 'Europe/Amsterdam') }}</dd></div>
+                <div class="admin-news-digest-card-link-row"><dt>Link</dt><dd>{{ digest.url ?: '–' }}</dd></div>
+                <div><dt>Geslaagd</dt><dd>{{ digest.successCount }}</dd></div>
+                <div><dt>Mislukt</dt><dd>{{ digest.failureCount }}</dd></div>
+            </dl>
+
+            <div class="admin-news-digest-card-actions">
+                <form method="post" action="{{ path('admin_news_digest_resend', {id: digest.id}) }}" class="form-inline"
+                      data-controller="confirm-submit"
+                      data-confirm-submit-message-value="&quot;{{ digest.title }}&quot; opnieuw versturen naar alle abonnees?"
+                      data-confirm-submit-confirm-label-value="Opnieuw versturen"
+                      data-action="submit->confirm-submit#submit">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token('news_digest_resend_' ~ digest.id) }}">
+                    <button type="submit" class="btn btn-sm">Opnieuw versturen</button>
+                </form>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {# Buiten zowel de tabel (desktop) als de kaarten (mobiel) -- die
+       wisselen elkaar af via display:none op basis van viewportbreedte, dus
+       een melding bínnen een van de twee zou op het andere formaat
+       onzichtbaar blijven. #}
+    {% if digests is not empty %}
+    <p class="text-muted list-search-empty" data-list-search-target="empty" hidden>Geen overzichten gevonden voor deze zoekopdracht.</p>
+    {% endif %}
 
 </div>
 {% endblock %}
