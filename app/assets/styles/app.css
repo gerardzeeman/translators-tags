@@ -4431,6 +4431,16 @@ a:hover { text-decoration: underline; }
     color: var(--color-ink);
 }
 .blog-editor-form .form-control { width: 100%; }
+/* .form-group input[type="text"]/select (hierboven, regel ~3071) is door de
+   [type="text"]-attribuutselector specifieker dan .form-control alleen en
+   wint daardoor het lettertype-gevecht -- title en de zichtbaarheid-select
+   toonden hierdoor de oude serif-stijl i.p.v. --font-ui, inconsistent met de
+   rest van dit scherm (knoppen, kop, toolbar, textarea). Extra klasse (drie
+   in totaal) om gegarandeerd te winnen ongeacht volgorde in dit bestand. */
+.blog-editor-form .form-group input.form-control,
+.blog-editor-form .form-group select.form-control {
+    font-family: var(--font-ui);
+}
 .blog-editor-textarea { font-family: var(--font-mono); font-size: .85rem; line-height: 1.5; resize: vertical; }
 .blog-slug-field { display: flex; align-items: center; gap: .3rem; }
 .blog-slug-field .form-control { width: auto; flex: 1; }
