@@ -3262,6 +3262,39 @@ a:hover { text-decoration: underline; }
 .btn-inline { background: none; border: none; color: var(--color-accent-2); cursor: pointer; padding: 0; margin-left: .75rem; text-decoration: underline; }
 .form-inline { display: inline; }
 
+/* Mobiel: kaarten i.p.v. een scrollende tabel op Gebruikersbeheer -- zelfde
+   aanpak als .hist-align-overview-table-wrap / .blog-mine-table-wrap, met
+   een label:waarde-lijstje voor de drie datapunten (Aangemaakt/Laatste
+   login/Apparaten) i.p.v. een kale bullet-regel: bij drie losse getallen/
+   data zonder context is een label nodig om leesbaar te blijven. */
+.admin-users-cards { display: none; }
+@media (max-width: 768px) {
+    .admin-users-table-wrap { display: none; }
+    .admin-users-cards { display: flex; flex-direction: column; gap: .6rem; margin-top: .5rem; }
+    .admin-users-card {
+        padding: .75rem .9rem;
+        background: var(--card-warm);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius);
+    }
+    .admin-users-card-name { font-weight: 600; }
+    .admin-users-card-email { font-size: .85rem; color: var(--color-ink-muted); word-break: break-word; margin-bottom: .5rem; }
+    .admin-users-card-roles { margin-bottom: .6rem; }
+    .admin-users-card-roles .role-badge { margin: .1rem .3rem .1rem 0; }
+
+    .admin-users-card-meta {
+        border-top: 1px solid var(--color-border-light);
+        border-bottom: 1px solid var(--color-border-light);
+        padding: .5rem 0;
+        margin: 0 0 .6rem;
+    }
+    .admin-users-card-meta > div { display: flex; justify-content: space-between; gap: 1rem; padding: .15rem 0; }
+    .admin-users-card-meta dt { font-size: .78rem; color: var(--color-ink-muted); }
+    .admin-users-card-meta dd { margin: 0; font-family: var(--font-mono); font-size: .82rem; text-align: right; }
+
+    .admin-users-card-actions { display: flex; align-items: center; justify-content: space-between; }
+}
+
 /* ── Institutio: hoofdpagina (inhoudsopgave) ────────────────────────────────── */
 .page-institutio-home { max-width: 700px; margin: 0 auto; padding: 2rem 1.25rem 3rem; }
 .institutio-home-header { text-align: center; margin-bottom: 2.5rem; }
