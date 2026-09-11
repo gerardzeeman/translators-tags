@@ -4441,6 +4441,14 @@ a:hover { text-decoration: underline; }
 .blog-editor-form .form-group select.form-control {
     font-family: var(--font-ui);
 }
+/* Dropdowns oogden zwaarder dan de rest van het scherm op de eigen 1rem
+   van .form-control -- iets kleiner brengt ze in balans met de labels
+   (.85rem) en de rest van de knoppen/tekst op deze pagina en in de
+   Bijbelvers-/Institutie-tekst-dialogen (die dezelfde .form-control-selects
+   gebruiken). */
+.blog-editor-form .form-group select.form-control {
+    font-size: .9rem;
+}
 .blog-editor-textarea { font-family: var(--font-mono); font-size: .85rem; line-height: 1.5; resize: vertical; }
 .blog-slug-field { display: flex; align-items: center; gap: .3rem; }
 .blog-slug-field .form-control { width: auto; flex: 1; }
