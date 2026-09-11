@@ -1,10 +1,11 @@
-// assets/controllers/admin_users_search_controller.js
+// assets/controllers/list_search_controller.js
 //
-// Live zoekbalk op /admin/users: filtert client-side op naam of e-mailadres,
-// zonder serververzoek. Werkt op de tabelrijen (desktop) en de kaarten
-// (mobiel) tegelijk -- welke van de twee zichtbaar is bepaalt de CSS media
-// query, deze controller houdt ze allebei gesynchroniseerd zodat filteren
-// werkt ongeacht schermbreedte of resize.
+// Generieke live zoekbalk voor een tabel+kaarten-lijst (bv. gebruikersbeheer,
+// nieuwsoverzicht-historie): filtert client-side, zonder serververzoek, op
+// een vooraf berekend data-search-attribuut per rij/kaart. Werkt op de
+// tabelrijen (desktop) en de kaarten (mobiel) tegelijk -- welke van de twee
+// zichtbaar is bepaalt de CSS media query, deze controller houdt ze allebei
+// gesynchroniseerd zodat filteren werkt ongeacht schermbreedte of resize.
 
 import { Controller } from '@hotwired/stimulus'
 

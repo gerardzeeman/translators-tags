@@ -3219,7 +3219,7 @@ a:hover { text-decoration: underline; }
 .container--wide { max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
 .admin-page-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 1.5rem; }
 .admin-page-header h1 { font-family: var(--font-serif); font-size: 1.6rem; font-weight: 400; }
-.admin-users-search {
+.list-search-input {
     display: block;
     width: 100%;
     max-width: 340px;
@@ -3232,7 +3232,7 @@ a:hover { text-decoration: underline; }
     color: var(--text);
     margin-bottom: 1.25rem;
 }
-.admin-users-search:focus { outline: 2px solid var(--color-accent-2); outline-offset: 1px; }
+.list-search-input:focus { outline: 2px solid var(--color-accent-2); outline-offset: 1px; }
 .admin-table {
     width: 100%;
     border-collapse: collapse;
@@ -3307,6 +3307,36 @@ a:hover { text-decoration: underline; }
     .admin-users-card-meta dd { margin: 0; font-family: var(--font-mono); font-size: .82rem; text-align: right; }
 
     .admin-users-card-actions { display: flex; align-items: center; justify-content: space-between; }
+}
+
+/* Mobiel: kaarten i.p.v. een scrollende tabel op Nieuwsoverzicht-historie --
+   zelfde aanpak/opmaak als .admin-users-cards. De "Link"-rij krijgt een
+   eigen modifier: URL's hebben geen spaties om op te wrappen, dus zonder
+   overflow-wrap: anywhere zou een lange link de kaart breder duwen dan het
+   scherm (in tegenstelling tot .hist-align-word eerder, kan deze kaart niet
+   opzij scrollen -- hier is wél "anywhere" de juiste keuze). */
+.admin-news-digest-cards { display: none; }
+@media (max-width: 768px) {
+    .admin-news-digest-table-wrap { display: none; }
+    .admin-news-digest-cards { display: flex; flex-direction: column; gap: .6rem; margin-top: .5rem; }
+    .admin-news-digest-card {
+        padding: .75rem .9rem;
+        background: var(--card-warm);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius);
+    }
+    .admin-news-digest-card-title { font-weight: 600; margin-bottom: .5rem; }
+
+    .admin-news-digest-card-meta {
+        border-top: 1px solid var(--color-border-light);
+        border-bottom: 1px solid var(--color-border-light);
+        padding: .5rem 0;
+        margin: 0 0 .6rem;
+    }
+    .admin-news-digest-card-meta > div { display: flex; justify-content: space-between; gap: 1rem; padding: .15rem 0; }
+    .admin-news-digest-card-meta dt { font-size: .78rem; color: var(--color-ink-muted); flex-shrink: 0; }
+    .admin-news-digest-card-meta dd { margin: 0; font-family: var(--font-mono); font-size: .82rem; text-align: right; }
+    .admin-news-digest-card-link-row dd { overflow-wrap: anywhere; }
 }
 
 /* ── Institutio: hoofdpagina (inhoudsopgave) ────────────────────────────────── */
@@ -4265,6 +4295,7 @@ a:hover { text-decoration: underline; }
 
 /* ── Generieke helpers (formulieren/knoppen die admin- en blogpagina's delen) ── */
 .text-muted { color: var(--color-ink-muted); }
+.list-search-empty { margin-top: 1rem; }
 .btn-secondary {
     padding: .55rem 1.25rem;
     background: transparent;
