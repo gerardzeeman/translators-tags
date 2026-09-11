@@ -4703,7 +4703,18 @@ a:hover { text-decoration: underline; }
     background: transparent;
     transition: background .12s, border-color .12s, opacity .12s;
     user-select: none;
-    overflow-wrap: anywhere;
+    /* Geen overflow-wrap: anywhere -- .hist-align-table is table-layout:auto
+       met min-width:900px binnen een horizontaal scrollende .hist-align-columns
+       (bewust: elke kolom groeit mee met haar breedste woord, overflow lost
+       de rest op via scroll). overflow-wrap: anywhere geeft de auto-table-
+       layout een kleinere "min-content"-breedte om mee te rekenen, waardoor
+       de browser een kolom te smal voor het woord kiest en het woord
+       midden-in-een-letter afbreekt i.p.v. de kolom te laten groeien -- op
+       mobiel (waar bijna elke kolom smaller dan menig woord is) gebeurde dat
+       voortdurend. white-space: normal (het default) laat het woord gewoon
+       heel blijven en de kolom zijn bedoelde breedte krijgen.
+       overflow-wrap: normal per woord is de eigenlijke fix. */
+    overflow-wrap: normal;
 }
 .hist-align-word:hover,
 .hist-align-word:focus-visible {
