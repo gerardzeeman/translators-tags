@@ -7,7 +7,10 @@
 
     {# ── Top bar: Strong's number selector ───────────────────────────────── #}
     <div class="translate-topbar">
-        <form class="translate-selector-form" id="strongs-selector-form">
+        <form class="translate-selector-form"
+              data-controller="strongs-translate"
+              data-strongs-translate-home-url-value="{{ path('app_strongs_translate_home') }}"
+              data-action="submit->strongs-translate#navigate">
             <label for="strongs-input" class="translate-selector-label">Strong's nummer</label>
             <input
                 type="text"
@@ -17,8 +20,9 @@
                 value="{{ strongs_id ?? '' }}"
                 autocomplete="off"
                 autofocus
+                data-strongs-translate-target="input"
             >
-            <button type="button" class="btn-primary" id="strongs-open-btn">Openen</button>
+            <button type="button" class="btn-primary" data-action="click->strongs-translate#navigate">Openen</button>
         </form>
         {% if saved %}
         <div class="translate-saved-notice">✓ Opgeslagen</div>
@@ -119,21 +123,4 @@
     {% endif %}
 
 </div>{# /.translate-screen #}
-{% endblock %}
-
-{% block javascripts %}
-{{ parent() }}
-<script>
-function strongsNavigate() {
-    const val = document.getElementById('strongs-input').value.trim().toUpperCase();
-    if (val) {
-        window.location.href = '{{ path('app_strongs_translate_home') }}/' + encodeURIComponent(val);
-    }
-}
-document.getElementById('strongs-selector-form').addEventListener('submit', function (e) {
-    e.preventDefault();
-    strongsNavigate();
-});
-document.getElementById('strongs-open-btn').addEventListener('click', strongsNavigate);
-</script>
 {% endblock %}

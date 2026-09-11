@@ -25,6 +25,7 @@ import TranslationSelectorController from './controllers/translation_selector_co
 import MobileNavController           from './controllers/mobile_nav_controller.js'
 import ConfirmSubmitController       from './controllers/confirm_submit_controller.js'
 import SelectNavigateController      from './controllers/select_navigate_controller.js'
+import StrongsTranslateController    from './controllers/strongs_translate_controller.js'
 
 app.register('verse-compare',        VerseCompareController)
 app.register('source-word',          SourceWordController)
@@ -40,3 +41,4 @@ app.register('translation-selector', TranslationSelectorController)
 app.register('mobile-nav',           MobileNavController)
 app.register('confirm-submit',       ConfirmSubmitController)
 app.register('select-navigate',      SelectNavigateController)
+app.register('strongs-translate',    StrongsTranslateController)

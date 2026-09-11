@@ -19,6 +19,7 @@
     {% if blogs is empty %}
     <p class="text-muted">Nog geen blogs.</p>
     {% else %}
+    <div class="table-scroll blog-mine-table-wrap">
     <table class="admin-table">
         <thead>
             <tr>
@@ -46,6 +47,28 @@
         {% endfor %}
         </tbody>
     </table>
+    </div>
+
+    {# Mobiel: dezelfde data als kaarten i.p.v. een scrollende tabel -- zie
+       .blog-mine-table-wrap / .blog-mine-cards in app.css voor de media
+       query die tussen de twee schakelt. #}
+    <div class="blog-mine-cards">
+        {% for blog in blogs %}
+        <div class="blog-mine-card">
+            <div class="blog-mine-card-head">
+                <span class="blog-mine-card-title">{{ blog.title }}</span>
+                <span class="badge-status badge-status--{{ blog.status }}">{{ blog.status == 'published' ? 'Gepubliceerd' : 'Concept' }}</span>
+            </div>
+            <div class="blog-mine-card-meta">
+                {{ blog.author.displayName }} · {{ blog.visibility == 'logged_in' ? 'Alleen ingelogd' : 'Publiek' }} · {{ blog.updatedAt|date('d-m-Y H:i') }}
+            </div>
+            <div class="blog-mine-card-actions">
+                <a class="btn btn-sm btn-primary" href="{{ path('app_blog_edit', {slug: blog.slug}) }}">Bewerken</a>
+                <a class="btn btn-sm" href="{{ path('app_blog_show', {slug: blog.slug}) }}">Bekijken</a>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
     {% endif %}
 
 </div>
