@@ -27,7 +27,7 @@
         </div>
     </div>
 
-    <div class="table-scroll">
+    <div class="table-scroll hist-align-overview-table-wrap">
     <table class="hist-align-overview-table">
         <thead>
             <tr><th>Hoofdstuk</th><th>Verzen</th><th>Score</th><th></th></tr>
@@ -51,6 +51,28 @@
             {% endfor %}
         </tbody>
     </table>
+    </div>
+
+    {# Mobiel: dezelfde data als kaarten i.p.v. een scrollende tabel -- zie
+       .hist-align-overview-table-wrap / .hist-align-chapter-cards in app.css
+       voor de media-query die tussen de twee schakelt. #}
+    <div class="hist-align-chapter-cards">
+        {% for ch, c in chapters %}
+        <div class="hist-align-chapter-card">
+            <div class="hist-align-chapter-card-head">
+                <span class="hist-align-chapter-card-num">Hoofdstuk {{ ch }}</span>
+                <span class="hist-align-chapter-card-verses">{{ c.verse_count }} verzen</span>
+            </div>
+            <div class="hist-align-score-bar">
+                <div class="hist-align-score-bar-fill" style="width: {{ c.percent }}%"></div>
+                <span>{{ c.percent|round(1) }}%</span>
+            </div>
+            <div class="hist-align-chapter-card-actions">
+                <a class="btn btn-sm" href="{{ path('app_hist_align_chapter', {usfm: usfm, chapter: ch}|merge(topo_param)) }}">Verzen</a>
+                <a class="btn btn-sm btn-primary" href="{{ path('app_hist_align_verse', {usfm: usfm, chapter: ch, verse: c.first_gap_verse}|merge(topo_param)) }}">Review</a>
+            </div>
+        </div>
+        {% endfor %}
     </div>
 </div>
 {% endblock %}

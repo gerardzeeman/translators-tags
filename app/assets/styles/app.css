@@ -4832,3 +4832,30 @@ a:hover { text-decoration: underline; }
     font-family: var(--font-mono);
     font-size: .8rem;
 }
+
+/* Mobiel: kaarten i.p.v. een scrollende tabel. De tabel blijft in de DOM
+   (desktop-weergave, ongewijzigd) -- op smalle schermen wisselen we alleen
+   welk van de twee zichtbaar is, dezelfde aanpak als .translation-switcher
+   / .translation-switcher-mobile op de koppelpagina. */
+.hist-align-chapter-cards { display: none; }
+@media (max-width: 768px) {
+    .hist-align-overview-table-wrap { display: none; }
+    .hist-align-chapter-cards { display: flex; flex-direction: column; gap: .6rem; margin-top: .5rem; }
+    .hist-align-chapter-card {
+        padding: .75rem .9rem;
+        background: var(--card-warm);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius);
+    }
+    .hist-align-chapter-card-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        margin-bottom: .5rem;
+    }
+    .hist-align-chapter-card-num { font-weight: 600; }
+    .hist-align-chapter-card-verses { font-family: var(--font-mono); font-size: .8rem; color: var(--color-ink-muted); }
+    .hist-align-chapter-card .hist-align-score-bar { width: 100%; margin-bottom: .6rem; }
+    .hist-align-chapter-card-actions { display: flex; gap: .5rem; }
+    .hist-align-chapter-card-actions .btn { flex: 1; text-align: center; }
+}
