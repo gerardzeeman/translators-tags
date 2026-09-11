@@ -3219,6 +3219,20 @@ a:hover { text-decoration: underline; }
 .container--wide { max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
 .admin-page-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 1.5rem; }
 .admin-page-header h1 { font-family: var(--font-serif); font-size: 1.6rem; font-weight: 400; }
+.admin-users-search {
+    display: block;
+    width: 100%;
+    max-width: 340px;
+    padding: .5rem .75rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    font-family: var(--font-ui);
+    font-size: .9rem;
+    background: var(--card-warm);
+    color: var(--text);
+    margin-bottom: 1.25rem;
+}
+.admin-users-search:focus { outline: 2px solid var(--color-accent-2); outline-offset: 1px; }
 .admin-table {
     width: 100%;
     border-collapse: collapse;
