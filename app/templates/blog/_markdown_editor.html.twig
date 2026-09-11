@@ -16,9 +16,9 @@
     <label for="content_md">Inhoud (Markdown)</label>
 
     <div class="blog-editor-toolbar">
-        <button type="button" class="btn-secondary btn-toolbar" data-action="blog-editor#openBible">+ Bijbelvers</button>
-        <button type="button" class="btn-secondary btn-toolbar" data-action="blog-editor#openInstitutie">+ Institutie-tekst</button>
-        <button type="button" class="btn-secondary btn-toolbar" data-action="blog-editor#openImageUpload">+ Afbeelding</button>
+        <button type="button" class="btn btn-sm" data-action="blog-editor#openBible">+ Bijbelvers</button>
+        <button type="button" class="btn btn-sm" data-action="blog-editor#openInstitutie">+ Institutie-tekst</button>
+        <button type="button" class="btn btn-sm" data-action="blog-editor#openImageUpload">+ Afbeelding</button>
         <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden
                data-blog-editor-target="imageInput" data-action="change->blog-editor#onImageFileSelected">
     </div>
@@ -86,8 +86,8 @@
         </div>
 
         <div class="form-actions">
-            <button type="button" class="btn-primary" data-action="blog-editor#confirmBible">Invoegen</button>
-            <button type="button" class="btn-secondary" data-action="blog-editor#closeBible">Annuleren</button>
+            <button type="button" class="btn btn-primary" data-action="blog-editor#confirmBible">Invoegen</button>
+            <button type="button" class="btn" data-action="blog-editor#closeBible">Annuleren</button>
         </div>
     </dialog>
 
@@ -131,7 +131,7 @@
         <div class="form-group" data-blog-editor-target="instTekenGroup" hidden>
             <label>Tekenbereik <small class="text-muted">(optioneel: selecteer met de muis een deel van de tekst hieronder)</small></label>
             <div class="embed-zin-text" data-blog-editor-target="instZinText" data-action="mouseup->blog-editor#onInstTextSelect"></div>
-            <button type="button" class="btn-secondary btn-toolbar" data-action="blog-editor#clearInstTekenRange">Selectie wissen</button>
+            <button type="button" class="btn btn-sm" data-action="blog-editor#clearInstTekenRange">Selectie wissen</button>
         </div>
 
         <div class="form-group" data-blog-editor-target="instLayoutGroup">
@@ -143,8 +143,8 @@
         </div>
 
         <div class="form-actions">
-            <button type="button" class="btn-primary" data-action="blog-editor#confirmInstitutie">Invoegen</button>
-            <button type="button" class="btn-secondary" data-action="blog-editor#closeInstitutie">Annuleren</button>
+            <button type="button" class="btn btn-primary" data-action="blog-editor#confirmInstitutie">Invoegen</button>
+            <button type="button" class="btn" data-action="blog-editor#closeInstitutie">Annuleren</button>
         </div>
     </dialog>
 

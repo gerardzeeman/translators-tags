@@ -22,16 +22,16 @@
         <div class="form-group">
             <label for="visibility">Zichtbaarheid (na publiceren)</label>
             <select id="visibility" name="visibility" class="form-control">
-                <option value="public">Publiek (iedereen, ook niet-ingelogd)</option>
-                <option value="logged_in">Alleen ingelogde gebruikers</option>
+                <option value="public">👁 Publiek (iedereen, ook niet-ingelogd)</option>
+                <option value="logged_in">🔑 Alleen ingelogde gebruikers</option>
             </select>
         </div>
 
         {% include 'blog/_markdown_editor.html.twig' with {content_md: ''} %}
 
         <div class="form-actions">
-            <button type="submit" class="btn-primary">Concept aanmaken</button>
-            <a href="{{ path('app_blog_index') }}" class="btn-secondary">Annuleren</a>
+            <button type="submit" class="btn btn-primary">Concept aanmaken</button>
+            <a href="{{ path('app_blog_index') }}" class="btn">Annuleren</a>
         </div>
     </form>
 

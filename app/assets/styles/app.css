@@ -4431,6 +4431,16 @@ a:hover { text-decoration: underline; }
     color: var(--color-ink);
 }
 .blog-editor-form .form-control { width: 100%; }
+/* .form-group input[type="text"]/select (hierboven, regel ~3071) is door de
+   [type="text"]-attribuutselector specifieker dan .form-control alleen en
+   wint daardoor het lettertype-gevecht -- title en de zichtbaarheid-select
+   toonden hierdoor de oude serif-stijl i.p.v. --font-ui, inconsistent met de
+   rest van dit scherm (knoppen, kop, toolbar, textarea). Extra klasse (drie
+   in totaal) om gegarandeerd te winnen ongeacht volgorde in dit bestand. */
+.blog-editor-form .form-group input.form-control,
+.blog-editor-form .form-group select.form-control {
+    font-family: var(--font-ui);
+}
 .blog-editor-textarea { font-family: var(--font-mono); font-size: .85rem; line-height: 1.5; resize: vertical; }
 .blog-slug-field { display: flex; align-items: center; gap: .3rem; }
 .blog-slug-field .form-control { width: auto; flex: 1; }
@@ -4525,7 +4535,12 @@ a:hover { text-decoration: underline; }
 .embed-dutch { margin: 0; }
 
 /* ── Blog editor: embed-picker toolbar + dialog ─────────────────────────── */
-.blog-editor-toolbar { display: flex; gap: .5rem; margin-bottom: .5rem; align-items: center; }
+/* flex-wrap: de knoptekst gebruikt sinds de overstap naar .btn/.btn-sm het
+   iets bredere --font-serif (net als "Bewerken" elders in de app) i.p.v.
+   het compactere geërfde ui-font van de oude .btn-secondary -- zonder wrap
+   kromp de rij de knoppen smaller dan hun tekst nodig had, met een
+   afgebroken "+ Institutie- tekst" op twee regels tot gevolg. */
+.blog-editor-toolbar { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: .5rem; align-items: center; }
 .btn-toolbar { padding: .35rem .8rem; font-size: .85rem; }
 .blog-editor-image-status { font-size: .85rem; color: var(--color-ink-muted); margin: -.25rem 0 .5rem; }
 .blog-editor-image-status.is-error { color: #922; }
