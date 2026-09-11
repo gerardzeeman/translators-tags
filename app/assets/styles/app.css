@@ -2309,6 +2309,7 @@ a:hover { text-decoration: underline; }
 }
 .translate-topbar {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 1.5rem;
     background: var(--bg);
@@ -2320,6 +2321,7 @@ a:hover { text-decoration: underline; }
 .alignment-segment-nav { display: flex; gap: .4rem; }
 .translate-selector-form {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: .75rem;
 }
