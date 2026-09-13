@@ -1,0 +1,66 @@
+{% extends 'base.html.twig' %}
+{% import 'institutio/_macros.html.twig' as m %}
+{% block title %}{{ title }} {{ chapter }} – Bijbel Vergelijking{% endblock %}
+
+{% block nav_bijbel %}
+<a href="{{ path('app_confession_index') }}" class="nav-book-btn">Belijdenisgeschriften</a>
+{% endblock %}
+{% block nav_center %}{% endblock %}
+
+{% block body %}
+<div class="page-institutio">
+
+    <nav class="chapter-nav" aria-label="Belijdenisgeschriften navigatie">
+        <a href="{{ path('app_confession_toc', {werk: werk}) }}" class="chapter-nav-book">{{ title }}</a>
+        <span class="chapter-nav-sep">›</span>
+        <span class="chapter-nav-current">Hoofdstuk {{ chapter }}</span>
+
+        <div class="chapter-nav-arrows">
+            {% if nav.prev %}
+            <a href="{{ path('app_confession_chapter', {werk: werk, chapter: nav.prev}) }}" class="nav-btn" title="Vorig hoofdstuk">‹</a>
+            {% endif %}
+            {% if nav.next %}
+            <a href="{{ path('app_confession_chapter', {werk: werk, chapter: nav.next}) }}" class="nav-btn" title="Volgend hoofdstuk">›</a>
+            {% endif %}
+        </div>
+    </nav>
+
+    <div class="institutio-heading institutio-heading-solo">{{ heading }}</div>
+
+    <div class="institutio-sections">
+        {% for s in articles %}
+        <div class="institutio-section" id="art-{{ s.section }}">
+            <span class="institutio-section-num">{{ s.section }}</span>
+            <div class="institutio-sentence-group">
+                <div class="institutio-sentence-row">
+                    <p class="institutio-sentence-la">{% for part in s.parts %}{%- if part.type == 'text' -%}{{ part.content }}{%- else -%}{{ m.word_hover(part.content, part.lemma, part.gloss) }}{%- endif -%}{% endfor %}</p>
+                    {% if is_granted('ROLE_EDIT_INSTITUTIO_TRNL') %}
+                    <a href="{{ path('app_confession_edit_text', {id: s.id}) }}" class="institutio-edit-btn" title="Brontekst corrigeren">✎</a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    {% if rejections %}
+    <h2 class="institutio-heading-nl" style="margin-top:2rem">Rejectio Errorum</h2>
+    <div class="institutio-sections">
+        {% for s in rejections %}
+        <div class="institutio-section" id="verw-{{ s.section }}">
+            <span class="institutio-section-num">{{ s.section }}</span>
+            <div class="institutio-sentence-group">
+                <div class="institutio-sentence-row">
+                    <p class="institutio-sentence-la">{% for part in s.parts %}{%- if part.type == 'text' -%}{{ part.content }}{%- else -%}{{ m.word_hover(part.content, part.lemma, part.gloss) }}{%- endif -%}{% endfor %}</p>
+                    {% if is_granted('ROLE_EDIT_INSTITUTIO_TRNL') %}
+                    <a href="{{ path('app_confession_edit_text', {id: s.id}) }}" class="institutio-edit-btn" title="Brontekst corrigeren">✎</a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+</div>
+{% endblock %}

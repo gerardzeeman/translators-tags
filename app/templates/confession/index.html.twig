@@ -1,0 +1,29 @@
+{% extends 'base.html.twig' %}
+{% block title %}Belijdenisgeschriften – Bijbel Vergelijking{% endblock %}
+
+{% block nav_bijbel %}
+<a href="{{ path('app_confession_index') }}" class="nav-book-btn">Belijdenisgeschriften</a>
+{% endblock %}
+{% block nav_center %}{% endblock %}
+
+{% block body %}
+<div class="page-institutio-home">
+    <div class="institutio-home-header">
+        <h1>Belijdenisgeschriften</h1>
+        <p class="institutio-home-subtitle">Latijnse tekst van de Drie Formulieren van Enigheid, woord voor woord doorzoekbaar</p>
+    </div>
+
+    <nav class="institutio-toc" aria-label="Belijdenisgeschriften">
+        {% for w in works %}
+        <a href="{{ path('app_confession_toc', {werk: w.slug}) }}" class="institutio-toc-entry">
+            <span class="institutio-toc-titles">
+                <span class="institutio-toc-title">{{ w.title }}</span>
+                <span class="institutio-toc-title institutio-toc-title-latin">{{ w.subtitle }}</span>
+            </span>
+        </a>
+        {% else %}
+        <p class="no-verse">Nog geen belijdenisgeschriften ingelezen.</p>
+        {% endfor %}
+    </nav>
+</div>
+{% endblock %}

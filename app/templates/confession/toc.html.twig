@@ -1,0 +1,44 @@
+{% extends 'base.html.twig' %}
+{% block title %}{{ title }} – Bijbel Vergelijking{% endblock %}
+
+{% block nav_bijbel %}
+<a href="{{ path('app_confession_index') }}" class="nav-book-btn">Belijdenisgeschriften</a>
+{% endblock %}
+{% block nav_center %}{% endblock %}
+
+{% block body %}
+<div class="page-institutio-home">
+    <div class="institutio-home-header">
+        <h1>{{ title }}</h1>
+        <p class="institutio-home-subtitle">{{ subtitle }}</p>
+    </div>
+
+    <nav class="institutio-toc" aria-label="Inhoudsopgave">
+        {% if has_voorwoord %}
+        <a href="{{ path('app_confession_front', {werk: werk}) }}" class="institutio-toc-entry institutio-toc-front">
+            <span class="institutio-toc-num">—</span>
+            <span class="institutio-toc-titles"><span class="institutio-toc-title">Voorwoord</span></span>
+        </a>
+        {% endif %}
+
+        {% for c in chapters %}
+        <a href="{{ path('app_confession_chapter', {werk: werk, chapter: c.chapter}) }}" class="institutio-toc-entry">
+            <span class="institutio-toc-num">{{ c.chapter }}</span>
+            <span class="institutio-toc-titles">
+                <span class="institutio-toc-title institutio-toc-title-latin">{{ c.heading }}</span>
+                <span class="institutio-toc-title-latin">{{ c.article_count }} artikel{{ c.article_count == 1 ? '' : 'en' }}{% if c.rejection_count %}, {{ c.rejection_count }} verwerping{{ c.rejection_count == 1 ? '' : 'en' }}{% endif %}</span>
+            </span>
+        </a>
+        {% else %}
+        <p class="no-verse">Geen inhoudsopgave gevonden.</p>
+        {% endfor %}
+
+        {% if has_besluit %}
+        <a href="{{ path('app_confession_back', {werk: werk}) }}" class="institutio-toc-entry institutio-toc-front">
+            <span class="institutio-toc-num">—</span>
+            <span class="institutio-toc-titles"><span class="institutio-toc-title">Besluit</span></span>
+        </a>
+        {% endif %}
+    </nav>
+</div>
+{% endblock %}
