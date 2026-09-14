@@ -62,6 +62,31 @@ def _clean(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
+def _flatten_and_split(article_tag) -> list[tuple[str, str]]:
+    """(tag_name, text) pairs in document order, with any <p> that has a
+    "Quaestio N." heading buried mid-text split into two entries at that
+    point. Confirmed for question 7: its <p> in the source runs straight on
+    from the end of question 6's answer into "Quaestio 7. ..." with no
+    paragraph break at all, so the per-paragraph is-this-a-question-start
+    check below never sees "Quaestio 7." in isolation -- it silently
+    swallows all of question 7 as trailing text of question 6's answer
+    instead (confirmed only this one occurrence in the whole document).
+    """
+    out: list[tuple[str, str]] = []
+    for tag in article_tag.find_all(["h1", "h2", "h3", "p"]):
+        text = _clean(tag.get_text())
+        if not text or tag.name != "p":
+            out.append((tag.name, text))
+            continue
+        m = re.search(r"Quaestio\s*\d+\.", text, re.IGNORECASE)
+        if m and m.start() > 0:
+            out.append(("p", text[:m.start()].strip()))
+            out.append(("p", text[m.start():].strip()))
+        else:
+            out.append(("p", text))
+    return out
+
+
 def parse(html: str) -> list[dict]:
     soup = BeautifulSoup(html, "lxml")
     article_tag = soup.find("article") or soup.find("div", class_=re.compile("entry-content|post-content"))
@@ -116,13 +141,12 @@ def parse(html: str) -> list[dict]:
         chapter_num += 1
         chapter_heading = heading
 
-    for tag in article_tag.find_all(["h1", "h2", "h3", "p"]):
-        text = _clean(tag.get_text())
+    for tag_name, text in _flatten_and_split(article_tag):
         if not text:
             continue
 
-        if tag.name in ("h1", "h2", "h3"):
-            if tag.name != "h2":
+        if tag_name in ("h1", "h2", "h3"):
+            if tag_name != "h2":
                 # h1 is the page title; h3 headings (e.g. "Primum praeceptum")
                 # mark subsections *within* a part, interspersed between
                 # Quaestio/answer pairs for the Ten Commandments -- neither
@@ -182,7 +206,19 @@ def parse(html: str) -> list[dict]:
                 emit(pending_question, pending_answer_parts)
                 pending_question, pending_answer_parts = None, []
             m = _QUAESTIO_RE.match(text)
-            pending_question = _clean(m.group(2)) if m else _clean(text)
+            rest = _clean(m.group(2)) if m else _clean(text)
+            # The question and its answer are occasionally combined into one
+            # <p> with no paragraph break between them (confirmed for
+            # question ~67: "...deducant? Ita est. Nam Spiritus..." all in a
+            # single tag). Split at the first "?" so the answer isn't
+            # swallowed into pending_question and then wrongly flagged as
+            # missing when no separate answer paragraph ever follows.
+            q_end = rest.find("?")
+            if q_end != -1 and q_end + 1 < len(rest):
+                pending_question = rest[:q_end + 1].strip()
+                pending_answer_parts = [rest[q_end + 1:].strip()]
+            else:
+                pending_question = rest
             continue
 
         # Not a question-start paragraph -> accumulate as (part of) the
