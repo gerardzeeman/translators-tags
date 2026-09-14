@@ -19,10 +19,15 @@ use Doctrine\DBAL\Connection;
  * 1400 lines of already-in-production Institutio code around a second
  * hierarchy shape it was never designed for.
  *
- * No translation/alignment support yet: these works don't have a Dutch
- * translation ingested (see PROJECTDOSSIER.md), so this repository only
- * ever reads text_la + token/lemma_gloss (for the word-hover gloss popup) --
- * no 'llm' translation layer join, unlike InstitutioRepository.
+ * Dutch translations, where they exist, are read generically as a
+ * layer-keyed map (see attachTokens()) rather than a single hardcoded
+ * layer like InstitutioRepository's 'llm' -- a segment can have zero, one,
+ * or (once more Dutch versions are added, per the user's stated plan) many
+ * translation rows, each independently editable/addable without touching
+ * this repository. No alignment/sentence-pairing support yet (these
+ * translations aren't sentence-aligned to the Latin the way Institutio's
+ * 'llm'/'weijenberg1865' layers are) -- each layer is shown as one flowing
+ * block of text per segment.
  */
 class ConfessionRepository
 {
@@ -210,14 +215,30 @@ class ConfessionRepository
             ];
         }
 
+        // Layer-keyed rather than a single hardcoded name: a segment can
+        // have zero, one, or (once more Dutch versions are added) several
+        // translation rows, each shown as its own block in the UI.
+        $translationRows = $this->connection->fetchAllAssociative(
+            'SELECT segment_id, layer, text_nl
+             FROM translation
+             WHERE segment_id IN (' . implode(',', array_fill(0, count($segmentIds), '?')) . ')
+             ORDER BY segment_id, layer',
+            $segmentIds
+        );
+        $translationsBySegment = [];
+        foreach ($translationRows as $t) {
+            $translationsBySegment[(int) $t['segment_id']][$t['layer']] = $t['text_nl'];
+        }
+
         return array_map(
             fn($r) => [
-                'id'      => (int) $r['id'],
-                'section' => (int) $r['section'],
-                'kind'    => $r['kind'],
-                'heading' => $r['heading'],
-                'text_la' => $r['text_la'],
-                'tokens'  => $tokensBySegment[(int) $r['id']] ?? [],
+                'id'           => (int) $r['id'],
+                'section'      => (int) $r['section'],
+                'kind'         => $r['kind'],
+                'heading'      => $r['heading'],
+                'text_la'      => $r['text_la'],
+                'tokens'       => $tokensBySegment[(int) $r['id']] ?? [],
+                'translations' => $translationsBySegment[(int) $r['id']] ?? [],
             ],
             $rows
         );

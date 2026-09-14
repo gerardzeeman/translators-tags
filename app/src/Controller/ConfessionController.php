@@ -210,8 +210,9 @@ class ConfessionController extends AbstractController
                 'id'      => $s['id'],
                 'section' => $s['section'],
                 'kind'    => $s['kind'] ?? null,
-                'heading' => $s['heading'] ?? null,
-                'parts'   => $this->repository->splitTextIntoWordParts($s['text_la'], $s['tokens']),
+                'heading'      => $s['heading'] ?? null,
+                'parts'        => $this->repository->splitTextIntoWordParts($s['text_la'], $s['tokens']),
+                'translations' => $s['translations'] ?? [],
             ],
             $segments
         );
