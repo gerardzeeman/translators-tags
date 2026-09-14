@@ -46,8 +46,15 @@ from bs4 import BeautifulSoup
 
 RAW_PATH = Path("/data/institutio/raw/hc.html")
 
-_QUAESTIO_RE = re.compile(r"^Quaestio\.?\s*(\d+)\.\s*(.*)$", re.DOTALL)
+_QUAESTIO_RE = re.compile(r"^(?:Quaestio\.?\s*)?(\d+)\.\s*(.*)$", re.DOTALL)
 _QUAESTIO_START_RE = re.compile(r"^Quaestio\b", re.IGNORECASE)
+# Exactly one question in the whole document (confirmed: question 43) drops
+# the word "Quaestio" entirely and is labelled with just the bare number --
+# matched separately (rather than loosening _QUAESTIO_START_RE generally)
+# since a bare "N." start is otherwise a plausible false positive elsewhere
+# in the text; confirmed by exhaustive search that this is the only <p> in
+# the whole document starting with a bare "digits + period".
+_BARE_NUMBER_START_RE = re.compile(r"^\d+\.\s")
 _START_MARKER_RE = re.compile(r"^Catechesis\s+relig", re.IGNORECASE)
 # "Prima/Tertia Pars" are <h2> in the source, but "Secunda Pars" is a plain
 # <p> (a markup inconsistency, confirmed by inspection) -- matched separately
@@ -196,7 +203,7 @@ def parse(html: str) -> list[dict]:
         # than one <p> (confirmed around question ~100, split mid-sentence in
         # the source markup), so every non-question paragraph up to the next
         # question-start is accumulated and joined, not paired 1:1.
-        is_question_start = bool(_QUAESTIO_START_RE.match(text))
+        is_question_start = bool(_QUAESTIO_START_RE.match(text)) or bool(_BARE_NUMBER_START_RE.match(text))
         if is_question_start:
             if pending_question is not None:
                 # Two question-start paragraphs in a row with nothing but
