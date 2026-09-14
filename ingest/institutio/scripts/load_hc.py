@@ -1,12 +1,9 @@
 #!/usr/bin/env python3
-"""Load parse_canones.py's segments.jsonl into PostgreSQL.
+"""Load parse_hc.py's segments.jsonl into PostgreSQL.
 
-Same idempotent upsert pattern as load_segments.py (the Institutio's own
-loader): existing segments (same work + ref) are updated, not duplicated.
-A separate script rather than a shared/parametrized one because this work
-also writes segment.kind, which load_segments.py's rows never carry.
+Same idempotent upsert pattern as load_segments.py/load_canones.py.
 
-    python scripts/load_canones.py /data/institutio/canones_segments.jsonl
+    python scripts/load_hc.py /data/institutio/hc_segments.jsonl
 
 Requires: psycopg[binary]
 """
@@ -20,20 +17,26 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from db import get_connection
 
-WORK_SLUG = "canones-dordraceni"
-WORK_TITLE = "Canones Synodi Dordrechtanae (1619)"
+WORK_SLUG = "heidelbergse-catechismus"
+WORK_TITLE = "Catechesis Palatina / Heidelbergse Catechismus (1563)"
 WORK_SOURCE = (
-    "Philip Schaff, Creeds of Christendom, Vol. III (1877), pp. 550-580 -- "
-    "clean transcribed text, not raw OCR (ccel.org/ccel/schaff/creeds3.iv.xvi.html). "
-    "Latin is the original synodical language (not a later translation): the Canones "
-    "were drafted and ratified in Latin at the Synod of Dort, 1618-1619."
+    "heidelblog.net -- editorially reviewed transcribed text, not OCR "
+    "(https://heidelblog.net/catechesis/, fetched via a Wayback Machine snapshot "
+    "since the live site blocks non-browser requests). Latin translation by "
+    "Josua Lagus and Lambertus Pithopoeus, 1563 -- not the original drafting "
+    "language (German). Known source-quality caveat: the printed question numbers "
+    "in this transcription are unreliable and were ignored in favour of positional "
+    "counting; 127 of the 129 official questions were found as distinct 'Quaestio' "
+    "paragraphs, two are marked with a visible [Antwoord/Quaestio ontbreekt in bron] "
+    "gap, and up to two more official questions' content may be merged into a "
+    "neighbouring segment rather than split out -- see parse_hc.py's docstring."
 )
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("jsonl", type=Path, nargs="?",
-                    default=Path("/data/institutio/canones_segments.jsonl"))
+                    default=Path("/data/institutio/hc_segments.jsonl"))
     args = ap.parse_args()
 
     rows = [json.loads(line) for line in args.jsonl.read_text(encoding="utf-8").splitlines()

@@ -31,6 +31,23 @@ class ConfessionController extends AbstractController
         'canones-dordraceni' => [
             'title'    => 'Dordtse Leerregels',
             'subtitle' => 'Canones Synodi Dordrechtanae, 1619 — Latijnse tekst (oertaal van de synode)',
+            'type'     => 'chapters',
+            'voorwoord_prefix' => 'Canones voorwoord',
+            'besluit_prefix'   => 'Canones besluit',
+        ],
+        'ngb' => [
+            'title'    => 'Nederlandse Geloofsbelijdenis',
+            'subtitle' => 'Confessio Belgica, 1561/1619 — Latijnse vertaling (Hommius, herzien door de Synode van Dordrecht)',
+            'type'     => 'flat',
+            'voorwoord_prefix' => null,
+            'besluit_prefix'   => null,
+        ],
+        'heidelbergse-catechismus' => [
+            'title'    => 'Heidelbergse Catechismus',
+            'subtitle' => 'Catechesis Palatina, 1563 — Latijnse vertaling (Lagus & Pithopoeus)',
+            'type'     => 'chapters',
+            'voorwoord_prefix' => 'HC voorwoord',
+            'besluit_prefix'   => null,
         ],
     ];
 
@@ -60,13 +77,24 @@ class ConfessionController extends AbstractController
             throw $this->createNotFoundException('Onbekend werk.');
         }
 
+        if ($meta['type'] === 'flat') {
+            return $this->render('confession/flat.html.twig', [
+                'werk'     => $werk,
+                'title'    => $meta['title'],
+                'subtitle' => $meta['subtitle'],
+                'articles' => $this->withWordParts($this->repository->getFlatArticles($werk)),
+            ]);
+        }
+
         return $this->render('confession/toc.html.twig', [
             'werk'          => $werk,
             'title'         => $meta['title'],
             'subtitle'      => $meta['subtitle'],
             'chapters'      => $this->repository->getChapters($werk),
-            'has_voorwoord' => $this->repository->hasUnnumberedSection($werk, 'Canones voorwoord'),
-            'has_besluit'   => $this->repository->hasUnnumberedSection($werk, 'Canones besluit'),
+            'has_voorwoord' => $meta['voorwoord_prefix'] !== null
+                && $this->repository->hasUnnumberedSection($werk, $meta['voorwoord_prefix']),
+            'has_besluit'   => $meta['besluit_prefix'] !== null
+                && $this->repository->hasUnnumberedSection($werk, $meta['besluit_prefix']),
         ]);
     }
 
@@ -74,7 +102,8 @@ class ConfessionController extends AbstractController
     public function front(string $werk): Response
     {
         $this->assertKnownWork($werk);
-        $segments = $this->repository->getUnnumberedSection($werk, 'Canones voorwoord');
+        $prefix = self::WORKS[$werk]['voorwoord_prefix'] ?? null;
+        $segments = $prefix !== null ? $this->repository->getUnnumberedSection($werk, $prefix) : [];
         if (!$segments) {
             throw $this->createNotFoundException('Voorwoord niet gevonden.');
         }
@@ -88,7 +117,8 @@ class ConfessionController extends AbstractController
     public function back(string $werk): Response
     {
         $this->assertKnownWork($werk);
-        $segments = $this->repository->getUnnumberedSection($werk, 'Canones besluit');
+        $prefix = self::WORKS[$werk]['besluit_prefix'] ?? null;
+        $segments = $prefix !== null ? $this->repository->getUnnumberedSection($werk, $prefix) : [];
         if (!$segments) {
             throw $this->createNotFoundException('Besluit niet gevonden.');
         }
@@ -171,7 +201,7 @@ class ConfessionController extends AbstractController
 
     /**
      * @param array<int, array{text_la: string, tokens: array}> $segments
-     * @return array<int, array{id: int, section: int, kind: ?string, parts: array}>
+     * @return array<int, array{id: int, section: int, kind: ?string, heading: ?string, parts: array}>
      */
     private function withWordParts(array $segments): array
     {
@@ -180,6 +210,7 @@ class ConfessionController extends AbstractController
                 'id'      => $s['id'],
                 'section' => $s['section'],
                 'kind'    => $s['kind'] ?? null,
+                'heading' => $s['heading'] ?? null,
                 'parts'   => $this->repository->splitTextIntoWordParts($s['text_la'], $s['tokens']),
             ],
             $segments

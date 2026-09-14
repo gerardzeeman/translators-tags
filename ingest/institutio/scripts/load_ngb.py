@@ -1,12 +1,9 @@
 #!/usr/bin/env python3
-"""Load parse_canones.py's segments.jsonl into PostgreSQL.
+"""Load parse_ngb.py's segments.jsonl into PostgreSQL.
 
-Same idempotent upsert pattern as load_segments.py (the Institutio's own
-loader): existing segments (same work + ref) are updated, not duplicated.
-A separate script rather than a shared/parametrized one because this work
-also writes segment.kind, which load_segments.py's rows never carry.
+Same idempotent upsert pattern as load_segments.py/load_canones.py.
 
-    python scripts/load_canones.py /data/institutio/canones_segments.jsonl
+    python scripts/load_ngb.py /data/institutio/ngb_segments.jsonl
 
 Requires: psycopg[binary]
 """
@@ -20,20 +17,22 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from db import get_connection
 
-WORK_SLUG = "canones-dordraceni"
-WORK_TITLE = "Canones Synodi Dordrechtanae (1619)"
+WORK_SLUG = "ngb"
+WORK_TITLE = "Confessio Belgica (1561/1619)"
 WORK_SOURCE = (
-    "Philip Schaff, Creeds of Christendom, Vol. III (1877), pp. 550-580 -- "
-    "clean transcribed text, not raw OCR (ccel.org/ccel/schaff/creeds3.iv.xvi.html). "
-    "Latin is the original synodical language (not a later translation): the Canones "
-    "were drafted and ratified in Latin at the Synod of Dort, 1618-1619."
+    "heidelblog.net, R. Scott Clark -- clean transcribed text, not OCR "
+    "(https://heidelblog.net/2015/08/confessio-belgica/, fetched via a Wayback "
+    "Machine snapshot since the live site blocks non-browser requests). "
+    "Latin is Festus Hommius's translation as revised by the Synod of Dort, 1619 "
+    "-- not the original drafting language (the Nederlandse Geloofsbelijdenis was "
+    "first written in French by Guido de Bres, 1561)."
 )
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("jsonl", type=Path, nargs="?",
-                    default=Path("/data/institutio/canones_segments.jsonl"))
+                    default=Path("/data/institutio/ngb_segments.jsonl"))
     args = ap.parse_args()
 
     rows = [json.loads(line) for line in args.jsonl.read_text(encoding="utf-8").splitlines()

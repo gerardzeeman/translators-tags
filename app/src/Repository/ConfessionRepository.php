@@ -51,7 +51,10 @@ class ConfessionRepository
 
     /**
      * One row per chapter, with its heading and how many articles/rejections
-     * it holds -- powers the table of contents.
+     * it holds -- powers the table of contents. article_count/rejection_count
+     * are only meaningful for works that use segment.kind (currently only
+     * Canones); for others every segment counts as "article" and
+     * rejection_count is always 0, so the template can just show one count.
      * @return array<int, array{chapter: int, heading: ?string, article_count: int, rejection_count: int}>
      */
     public function getChapters(string $workSlug): array
@@ -64,8 +67,8 @@ class ConfessionRepository
         $rows = $this->connection->fetchAllAssociative(
             "SELECT chapter,
                     max(heading) AS heading,
-                    count(*) FILTER (WHERE kind = 'article')   AS article_count,
-                    count(*) FILTER (WHERE kind = 'rejection') AS rejection_count
+                    count(*) FILTER (WHERE kind = 'article' OR kind IS NULL) AS article_count,
+                    count(*) FILTER (WHERE kind = 'rejection')               AS rejection_count
              FROM segment
              WHERE work_id = :work_id AND chapter IS NOT NULL
              GROUP BY chapter
@@ -123,10 +126,37 @@ class ConfessionRepository
         }
 
         $withTokens = $this->attachTokens($rows);
-        $articles = array_values(array_filter($withTokens, fn($r) => $r['kind'] === 'article'));
+        // Works that don't use the article/rejection split (e.g. the HC)
+        // have kind = NULL on every segment -- those count as "articles" too,
+        // matching getChapters()'s count query.
+        $articles = array_values(array_filter($withTokens, fn($r) => $r['kind'] !== 'rejection'));
         $rejections = array_values(array_filter($withTokens, fn($r) => $r['kind'] === 'rejection'));
 
         return ['heading' => $rows[0]['heading'], 'articles' => $articles, 'rejections' => $rejections];
+    }
+
+    /**
+     * All segments of a flat (no chapter grouping) work, in order -- e.g.
+     * the NGB's 37 articles. book/chapter are both NULL for every segment
+     * of such a work, same convention as Institutio front matter.
+     * @return array<int, array{id: int, section: int, heading: ?string, text_la: string, tokens: array}>
+     */
+    public function getFlatArticles(string $workSlug): array
+    {
+        $workId = $this->getWorkId($workSlug);
+        if ($workId === null) {
+            return [];
+        }
+
+        $rows = $this->connection->fetchAllAssociative(
+            'SELECT id, section, kind, heading, text_la
+             FROM segment
+             WHERE work_id = :work_id AND chapter IS NULL
+             ORDER BY seq',
+            ['work_id' => $workId]
+        );
+
+        return $this->attachTokens($rows);
     }
 
     /**
