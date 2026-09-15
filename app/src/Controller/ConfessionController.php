@@ -44,7 +44,7 @@ class ConfessionController extends AbstractController
         ],
         'heidelbergse-catechismus' => [
             'title'    => 'Heidelbergse Catechismus',
-            'subtitle' => 'Catechesis Palatina — Latijnse tekst uit de academische commentaartraditie (o.a. Rudolph, 1697), niet de editio princeps van Lagus & Pithopoeus (1563)',
+            'subtitle' => 'Catechesis Palatina — Latijnse tekst uit de academische commentaartraditie (o.a. Rudolph, 1697), met de editio princeps van Lagus & Pithopoeus (1563) als aanvullende laag',
             'type'     => 'chapters',
             'voorwoord_prefix' => 'HC voorwoord',
             'besluit_prefix'   => null,
