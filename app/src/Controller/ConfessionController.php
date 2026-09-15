@@ -44,16 +44,99 @@ class ConfessionController extends AbstractController
         ],
         'heidelbergse-catechismus' => [
             'title'    => 'Heidelbergse Catechismus',
-            'subtitle' => 'Catechesis Palatina, 1563 — Latijnse vertaling (Lagus & Pithopoeus)',
+            'subtitle' => 'Catechesis Palatina — Latijnse tekst uit de academische commentaartraditie (o.a. Rudolph, 1697), niet de editio princeps van Lagus & Pithopoeus (1563)',
             'type'     => 'chapters',
             'voorwoord_prefix' => 'HC voorwoord',
             'besluit_prefix'   => null,
         ],
     ];
 
+    /**
+     * Zondag (Lord's Day) number => the first HC question number it
+     * covers. This is the catechism's fixed 16th-century structure -- the
+     * 129 questions were divided into 52 "Zondagen" for weekly preaching
+     * through the year -- not something derived from the ingest, so it's
+     * hardcoded here rather than stored per segment. Verified against the
+     * question ranges published at heidelbergse-catechismus.nl and
+     * online-bijbel.nl (e.g. Zondag 30 = Q80-82, the Mass/papacy
+     * questions; Zondag 45 = Q116-119, on prayer) -- the 52 start numbers
+     * below partition all 129 questions with no gaps or overlaps.
+     */
+    private const HC_ZONDAG_STARTS = [
+        1 => 1, 2 => 3, 3 => 6, 4 => 9, 5 => 12, 6 => 16, 7 => 20, 8 => 24,
+        9 => 26, 10 => 27, 11 => 29, 12 => 31, 13 => 33, 14 => 35, 15 => 37,
+        16 => 40, 17 => 45, 18 => 46, 19 => 50, 20 => 53, 21 => 54, 22 => 57,
+        23 => 59, 24 => 62, 25 => 65, 26 => 69, 27 => 72, 28 => 75, 29 => 78,
+        30 => 80, 31 => 83, 32 => 86, 33 => 88, 34 => 92, 35 => 96, 36 => 99,
+        37 => 101, 38 => 103, 39 => 104, 40 => 105, 41 => 108, 42 => 110,
+        43 => 112, 44 => 113, 45 => 116, 46 => 120, 47 => 122, 48 => 123,
+        49 => 124, 50 => 125, 51 => 126, 52 => 127,
+    ];
+
+    /**
+     * Chapter number => the traditional Dutch title of that Pars, as used
+     * across Dutch Reformed churches (matches the headings embedded in the
+     * Den Heijer transcription -- see parse_hc_nl_denheijer.py's
+     * _TRAILING_HEADING_RE, which strips these same three strings back out
+     * of the answer text they get scraped into). Chapter 1 (Q1-2) isn't
+     * itself a "deel" in this scheme -- it's the general introduction
+     * before the three-part division starts at Q3 -- so it has no entry.
+     */
+    private const HC_CHAPTER_TITLE_NL = [
+        2 => 'Het eerste deel: Van des mensen ellende',
+        3 => 'Het tweede deel: Van des mensen verlossing',
+        4 => 'Het derde deel: Van de dankbaarheid, die men Gode voor de verlossing schuldig is',
+    ];
+
+    /**
+     * Chapter number => [first, last] global HC question number it spans
+     * (chapter 1 is the Q1-2 introduction before the tripartite division;
+     * 2/3/4 are Prima/Secunda/Tertia Pars). Used only to work out which
+     * Zondagen fall in which chapter for the table-of-contents links --
+     * the chapter page itself doesn't need this, since hcZondagStartingAt()
+     * there works straight off each segment's own ref.
+     */
+    private const HC_CHAPTER_QUESTION_RANGES = [
+        1 => [1, 2],
+        2 => [3, 11],
+        3 => [12, 85],
+        4 => [86, 129],
+    ];
+
     public function __construct(
         private readonly ConfessionRepository $repository,
     ) {}
+
+    /**
+     * Returns the Zondag number if $ref (e.g. "HC 34") is that Zondag's
+     * first question, so the template can insert a "Zondag N" sub-heading
+     * right before this segment -- null for every other question, and for
+     * any non-HC ref (only the HC uses this structure).
+     */
+    private function hcZondagStartingAt(?string $ref): ?int
+    {
+        if ($ref === null || !preg_match('/^HC (\d+)$/', $ref, $m)) {
+            return null;
+        }
+        $zondag = array_search((int) $m[1], self::HC_ZONDAG_STARTS, true);
+        return $zondag === false ? null : $zondag;
+    }
+
+    /**
+     * @return array<int, array<int, int>> chapter number => list of Zondag
+     *     numbers that begin within it, for the table-of-contents page.
+     */
+    private function hcZondagenByChapter(): array
+    {
+        $byChapter = [];
+        foreach (self::HC_CHAPTER_QUESTION_RANGES as $chapter => [$first, $last]) {
+            $byChapter[$chapter] = array_values(array_filter(
+                array_keys(self::HC_ZONDAG_STARTS),
+                fn($zondag) => self::HC_ZONDAG_STARTS[$zondag] >= $first && self::HC_ZONDAG_STARTS[$zondag] <= $last
+            ));
+        }
+        return $byChapter;
+    }
 
     #[Route('/belijdenisgeschriften', name: 'app_confession_index')]
     public function index(): Response
@@ -87,13 +170,15 @@ class ConfessionController extends AbstractController
         }
 
         return $this->render('confession/toc.html.twig', [
-            'werk'          => $werk,
-            'title'         => $meta['title'],
-            'subtitle'      => $meta['subtitle'],
-            'chapters'      => $this->repository->getChapters($werk),
-            'has_voorwoord' => $meta['voorwoord_prefix'] !== null
+            'werk'             => $werk,
+            'title'            => $meta['title'],
+            'subtitle'         => $meta['subtitle'],
+            'chapters'         => $this->repository->getChapters($werk),
+            'zondagen_by_chapter' => $werk === 'heidelbergse-catechismus' ? $this->hcZondagenByChapter() : [],
+            'chapter_title_nl' => $werk === 'heidelbergse-catechismus' ? self::HC_CHAPTER_TITLE_NL : [],
+            'has_voorwoord'    => $meta['voorwoord_prefix'] !== null
                 && $this->repository->hasUnnumberedSection($werk, $meta['voorwoord_prefix']),
-            'has_besluit'   => $meta['besluit_prefix'] !== null
+            'has_besluit'      => $meta['besluit_prefix'] !== null
                 && $this->repository->hasUnnumberedSection($werk, $meta['besluit_prefix']),
         ]);
     }
@@ -201,19 +286,36 @@ class ConfessionController extends AbstractController
 
     /**
      * @param array<int, array{text_la: string, tokens: array}> $segments
-     * @return array<int, array{id: int, section: int, kind: ?string, heading: ?string, parts: array}>
+     * @return array<int, array{id: int, section: int, kind: ?string, heading: ?string, parts: array, qa: array}>
      */
     private function withWordParts(array $segments): array
     {
         return array_map(
-            fn($s) => [
-                'id'      => $s['id'],
-                'section' => $s['section'],
-                'kind'    => $s['kind'] ?? null,
-                'heading'      => $s['heading'] ?? null,
-                'parts'        => $this->repository->splitTextIntoWordParts($s['text_la'], $s['tokens']),
-                'translations' => $s['translations'] ?? [],
-            ],
+            function ($s) {
+                $parts = $this->repository->splitTextIntoWordParts($s['text_la'], $s['tokens']);
+                $translations = $s['translations'] ?? [];
+                return [
+                    'id'      => $s['id'],
+                    'section' => $s['section'],
+                    'kind'    => $s['kind'] ?? null,
+                    'heading' => $s['heading'] ?? null,
+                    'zondag'  => $this->hcZondagStartingAt($s['ref'] ?? null),
+                    'parts'   => $parts,
+                    // Vraag/Antwoord split for works that store one Q+A pair
+                    // per segment (currently the HC) -- see
+                    // ConfessionRepository::splitPartsAtQuestionMark(). Cheap
+                    // to compute unconditionally; the template decides
+                    // per-work whether to render this or the combined 'parts'.
+                    'qa' => [
+                        'latin' => $this->repository->splitPartsAtQuestionMark($parts),
+                        'nl'    => array_map(
+                            fn($text) => $this->repository->splitTextAtQuestionMark($text),
+                            $translations
+                        ),
+                    ],
+                    'translations' => $translations,
+                ];
+            },
             $segments
         );
     }

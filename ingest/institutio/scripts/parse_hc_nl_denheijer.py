@@ -42,6 +42,22 @@ MODEL = "manual-transcription"
 
 _HEADER_RE = re.compile(r"HEIDELBERGSE CATECHISMUS\s*\nPagina \d+ van \d+\s*\n?")
 _QA_SPLIT_RE = re.compile(r"Vraag en antwoord (\d+)\s*\n")
+# A "Klik hier voor / de 1e pagina." page-nav link is scattered mid-text at
+# page breaks (e.g. inside question 77, well before its answer ends), not
+# just trailing -- so it's stripped globally, anywhere it occurs.
+_PAGE_NAV_RE = re.compile(r"Klik hier voor\s*\n\s*de 1e pagina\.\s*")
+# Section/Sunday headings are interleaved in the flowing PDF text with no
+# marker of their own, so they land at the *end* of whichever question
+# happens to precede them (confirmed: 51 of 129 questions affected).
+# Stripped as trailing lines, iteratively, since several of these can stack
+# (e.g. "Zondag 5" preceded by "Van des mensen verlossing" preceded by
+# "Het tweede deel:", all before question 12 starts). The word after "Van"
+# is lowercase in this text ("Van des mensen ellende", "Van de Wet"), so
+# only the capital "V" -- heading-only in this transcription, mid-sentence
+# "van" is always lowercase -- distinguishes it from ordinary prose.
+_TRAILING_HEADING_RE = re.compile(
+    r"(?:Zondag\s+\d+|Het (?:eerste|tweede|derde) deel:?|Van\s+[^\n]*)\s*$"
+)
 
 
 def parse(pdf_path: Path) -> list[dict]:
@@ -56,7 +72,14 @@ def parse(pdf_path: Path) -> list[dict]:
     for i in range(1, len(parts), 2):
         number = int(parts[i])
         body = re.sub(r"[ \t]+", " ", parts[i + 1]).strip()
+        body = _PAGE_NAV_RE.sub(" ", body)
+        while True:
+            stripped = _TRAILING_HEADING_RE.sub("", body).strip()
+            if stripped == body:
+                break
+            body = stripped
         body = re.sub(r"\s*\n\s*", " ", body)
+        body = re.sub(r" {2,}", " ", body).strip()
         rows.append({"ref": f"HC {number}", "layer": LAYER, "text": body, "model": MODEL})
 
     rows.sort(key=lambda r: int(r["ref"].split()[1]))

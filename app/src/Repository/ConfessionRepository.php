@@ -120,7 +120,7 @@ class ConfessionRepository
         }
 
         $rows = $this->connection->fetchAllAssociative(
-            'SELECT id, section, kind, heading, text_la
+            'SELECT id, ref, section, kind, heading, text_la
              FROM segment
              WHERE work_id = :work_id AND chapter = :chapter
              ORDER BY seq',
@@ -233,6 +233,7 @@ class ConfessionRepository
         return array_map(
             fn($r) => [
                 'id'           => (int) $r['id'],
+                'ref'          => $r['ref'] ?? null,
                 'section'      => (int) $r['section'],
                 'kind'         => $r['kind'],
                 'heading'      => $r['heading'],
@@ -279,6 +280,69 @@ class ConfessionRepository
             $parts[] = ['type' => 'text', 'content' => $remaining];
         }
         return $parts;
+    }
+
+    /**
+     * Splits a word-parts array (see splitTextIntoWordParts) into its
+     * question and answer halves at the first "?" -- used for the
+     * Heidelbergse Catechismus, whose segments each store one
+     * Vraag+Antwoord pair as a single flowing text (see parse_hc.py), but
+     * are shown as two visually separate lines. Only the "text"-type part
+     * containing the "?" is actually split; word parts (with their
+     * lemma/gloss) are passed through untouched on whichever side they
+     * fall on, so word-hover keeps working across the split.
+     *
+     * Not meaningful for works without a question/answer structure (NGB's
+     * flat articles, Canones' Articulus/Rejectio) -- those never contain a
+     * literal "?", so 'answer' comes back empty and the caller should fall
+     * back to rendering 'question' as the whole text.
+     *
+     * @param array<int, array{type: string, content: string, lemma?: ?string, gloss?: ?string}> $parts
+     * @return array{question: array, answer: array}
+     */
+    public function splitPartsAtQuestionMark(array $parts): array
+    {
+        $question = [];
+        $answer = [];
+        $found = false;
+        foreach ($parts as $part) {
+            if ($found) {
+                $answer[] = $part;
+                continue;
+            }
+            if ($part['type'] === 'text' && str_contains($part['content'], '?')) {
+                $pos = mb_strpos($part['content'], '?');
+                $before = mb_substr($part['content'], 0, $pos + 1);
+                $after = ltrim(mb_substr($part['content'], $pos + 1));
+                if ($before !== '') {
+                    $question[] = ['type' => 'text', 'content' => $before];
+                }
+                if ($after !== '') {
+                    $answer[] = ['type' => 'text', 'content' => $after];
+                }
+                $found = true;
+                continue;
+            }
+            $question[] = $part;
+        }
+        return $found ? ['question' => $question, 'answer' => $answer] : ['question' => $parts, 'answer' => []];
+    }
+
+    /**
+     * Same split as splitPartsAtQuestionMark(), for a plain translated
+     * string rather than a tokenised parts array.
+     * @return array{question: string, answer: string}
+     */
+    public function splitTextAtQuestionMark(string $text): array
+    {
+        $pos = mb_strpos($text, '?');
+        if ($pos === false) {
+            return ['question' => $text, 'answer' => ''];
+        }
+        return [
+            'question' => trim(mb_substr($text, 0, $pos + 1)),
+            'answer'   => trim(mb_substr($text, $pos + 1)),
+        ];
     }
 
     /**

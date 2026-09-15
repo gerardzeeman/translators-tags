@@ -26,9 +26,19 @@
             <span class="institutio-toc-num">{{ c.chapter }}</span>
             <span class="institutio-toc-titles">
                 <span class="institutio-toc-title institutio-toc-title-latin">{{ c.heading }}</span>
+                {% if chapter_title_nl[c.chapter] is defined %}
+                <span class="institutio-toc-title">{{ chapter_title_nl[c.chapter] }}</span>
+                {% endif %}
                 <span class="institutio-toc-title-latin">{{ c.article_count }} artikel{{ c.article_count == 1 ? '' : 'en' }}{% if c.rejection_count %}, {{ c.rejection_count }} verwerping{{ c.rejection_count == 1 ? '' : 'en' }}{% endif %}</span>
             </span>
         </a>
+        {% if zondagen_by_chapter[c.chapter] is defined and zondagen_by_chapter[c.chapter] %}
+        <div class="institutio-toc-zondagen">
+            {% for z in zondagen_by_chapter[c.chapter] %}
+            <a href="{{ path('app_confession_chapter', {werk: werk, chapter: c.chapter}) }}#zondag-{{ z }}" class="institutio-toc-zondag-link">Zondag {{ z }}</a>
+            {% endfor %}
+        </div>
+        {% endif %}
         {% else %}
         <p class="no-verse">Geen inhoudsopgave gevonden.</p>
         {% endfor %}
