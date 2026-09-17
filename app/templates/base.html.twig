@@ -90,6 +90,22 @@
             {% endblock %}
 
             <div class="nav-sep"></div>
+            {# Belijdenisgeschriften — de knop is zelf ook een link naar het overzicht
+               (app_confession_index), de hover-dropdown erbij geeft direct toegang tot
+               elk van de drie werken. Bewust GEEN nav-dropdown-btn-klasse: die klasse
+               is waar mobile_nav_controller.js op matcht om op mobiel te togglen i.p.v.
+               te navigeren -- hier is meteen doornavigeren naar het overzicht op mobiel
+               juist gewenst (dat overzicht toont de drie werken toch al). #}
+            <div class="nav-dropdown">
+                <a href="{{ path('app_confession_index') }}" class="nav-book-btn">Belijdenisgeschriften ▾</a>
+                <div class="nav-dropdown-menu">
+                    <a href="{{ path('app_confession_toc', {werk: 'ngb'}) }}">Nederlandse Geloofsbelijdenis</a>
+                    <a href="{{ path('app_confession_toc', {werk: 'canones-dordraceni'}) }}">Dordtse Leerregels</a>
+                    <a href="{{ path('app_confession_toc', {werk: 'heidelbergse-catechismus'}) }}">Heidelbergse Catechismus</a>
+                </div>
+            </div>
+
+            <div class="nav-sep"></div>
             <a href="{{ path('app_blog_index') }}" class="nav-book-btn">Blog</a>
 
             {# Editor-dropdown — alleen als gebruiker ten minste één editorrole heeft #}
