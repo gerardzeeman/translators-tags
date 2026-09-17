@@ -1,0 +1,41 @@
+{% extends 'base.html.twig' %}
+{% block title %}Brontekst corrigeren · {{ segment.ref }} – Bijbel Vergelijking{% endblock %}
+
+{% block nav_bijbel %}
+<a href="{{ path('app_confession_index') }}" class="nav-book-btn">Belijdenisgeschriften</a>
+{% endblock %}
+{% block nav_center %}{% endblock %}
+
+{% block body %}
+<div class="page-institutio">
+    <h1>Brontekst corrigeren — {{ segment.ref }}</h1>
+    <p class="institutio-home-subtitle">
+        Wijzig hier alleen om een fout in de gedigitaliseerde Latijnse brontekst te herstellen
+        (bijv. een OCR-/overtypfout). Na opslaan moet <code>tokenize_latin.py</code> opnieuw
+        draaien voor dit segment voordat woord-hover-glossen weer kloppen.
+    </p>
+
+    <form method="post" action="{{ path('app_confession_save_text', {id: segment.id}) }}">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token('confession_edit_text') }}">
+        <textarea name="text_la" rows="6" style="width:100%; font-family:serif; font-size:1.1rem;">{{ segment.text_la }}</textarea>
+        <p>
+            <label for="note">Notitie (optioneel, waarom deze correctie):</label><br>
+            <input type="text" id="note" name="note" style="width:100%">
+        </p>
+        <button type="submit" class="nav-user-btn">Opslaan</button>
+    </form>
+
+    {% if history %}
+    <h2 style="margin-top:2rem">Correctiehistorie</h2>
+    <ul>
+        {% for h in history %}
+        <li>
+            <strong>{{ h.created_at|date('Y-m-d H:i') }}</strong>
+            {% if h.note %} — {{ h.note }}{% endif %}<br>
+            <span style="color:#888">{{ h.old_text }}</span> → {{ h.new_text }}
+        </li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+</div>
+{% endblock %}

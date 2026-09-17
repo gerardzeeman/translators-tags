@@ -57,3 +57,15 @@ TEHMC - Translators Expansion of Hebrew Morphology Codes - STEPBible.org CC BY.t
 # full dev/prod CSV exports, the applied SQL patch, apply logs, and a pre-apply
 # production backup -- 100MB+ of DB dumps, same reasoning as the dumps above.
 /ingest/hsv_repair_data/
+
+# Belijdenisgeschriften Dutch-translation source PDFs (parse_ngb_nl.py,
+# parse_canones_nl.py, parse_hc_nl_denheijer.py) -- bind-mounted/read locally
+# at ingest time, never committed, same reasoning as the other one-off ingest
+# sources above.
+/nederlandse-geloofsbelijdenis.pdf
+/Dordtse-Leerregels-klassieke-versie.pdf
+/Heidelbergse-Catechismus-denheijer.pdf
+/Catechesis Palatina.pdf
+
+# Claude Code tooling (worktrees, local session state)
+.claude/
