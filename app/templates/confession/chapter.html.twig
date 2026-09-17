@@ -52,7 +52,10 @@
                 {% if werk == 'heidelbergse-catechismus' %}
                 {% set ep = s.qa.nl['editio-princeps-1563'] ?? null %}
                 {% set nl = s.qa.nl['denheijer'] ?? null %}
-                {% set zw = s.qa.nl['zwanepol-hsv'] ?? null %}
+                {# Zwanepol-HSV is a copyrighted modern translation, unlike
+                   denheijer/editio-princeps-1563 -- gated the same way the
+                   Bible-side HSV column is (see chapter_view.html.twig). #}
+                {% set zw = is_granted('ROLE_VIEWER_HSV') ? (s.qa.nl['zwanepol-hsv'] ?? null) : null %}
                 {% set other_layers = s.qa.nl|filter((v, k) => k not in ['editio-princeps-1563', 'denheijer', 'zwanepol-hsv']) %}
                 {% set col_count = 1 + (ep ? 1 : 0) + (nl ? 1 : 0) + (zw ? 1 : 0) + other_layers|length %}
                 {% set col_style = '--hc-cols: ' ~ col_count %}
