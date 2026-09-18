@@ -3,7 +3,7 @@
 {% import _self as self %}
 {% block title %}{{ title }} {{ chapter }} – Bijbel Vergelijking{% endblock %}
 
-{% macro la_parts(parts) %}{% import 'institutio/_macros.html.twig' as m %}{% for part in parts %}{%- if part.type == 'text' -%}{{ part.content }}{%- else -%}{{ m.word_hover(part.content, part.lemma, part.gloss) }}{%- endif -%}{% endfor %}{% endmacro %}
+{% macro la_parts(parts) %}{% import 'institutio/_macros.html.twig' as m %}{% for part in parts %}{%- if part.type == 'text' -%}{{ part.content }}{%- else -%}{{ m.word_hover(part.content, part.lemma, part.gloss, part.differs ?? false) }}{%- endif -%}{% endfor %}{% endmacro %}
 
 {# Human-readable labels for translation/variant layers -- purely cosmetic,
    falls back to the raw layer key for any not listed here. Kept local to
@@ -40,6 +40,19 @@
     </nav>
 
     <div class="institutio-heading institutio-heading-solo">{{ heading }}</div>
+
+    {% if werk == 'heidelbergse-catechismus' %}
+    <div class="institutio-hc-diff-bar" data-controller="hc-diff-toggle">
+        <button type="button"
+                class="institutio-hc-diff-btn"
+                data-hc-diff-toggle-target="button"
+                data-action="hc-diff-toggle#toggle"
+                aria-pressed="false">
+            Toon verschillen 1697 t.o.v. 1563
+        </button>
+        <span class="institutio-hc-diff-hint">Gemarkeerde woorden in de 1697-kolom wijken af van de editio princeps 1563.</span>
+    </div>
+    {% endif %}
 
     <div class="institutio-sections">
         {% for s in articles %}

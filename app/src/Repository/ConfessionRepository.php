@@ -283,6 +283,140 @@ class ConfessionRepository
     }
 
     /**
+     * Tokenizes $text on whitespace into words with codepoint (not byte)
+     * offsets, matching the char_start/char_end convention the LatinCy
+     * tokens already use (see splitTextIntoWordParts). Deliberately not
+     * regex-with-PREG_OFFSET_CAPTURE, which returns byte offsets --
+     * wrong the moment the text contains a non-ASCII character like the
+     * æ ligature these Latin texts actually use.
+     * @return array<int, array{word: string, start: int, end: int}>
+     */
+    private function tokenizeWithOffsets(string $text): array
+    {
+        $chars = mb_str_split($text);
+        $n = count($chars);
+        $tokens = [];
+        $i = 0;
+        while ($i < $n) {
+            while ($i < $n && ctype_space($chars[$i])) {
+                $i++;
+            }
+            if ($i >= $n) {
+                break;
+            }
+            $start = $i;
+            while ($i < $n && !ctype_space($chars[$i])) {
+                $i++;
+            }
+            $tokens[] = ['word' => implode('', array_slice($chars, $start, $i - $start)), 'start' => $start, 'end' => $i];
+        }
+        return $tokens;
+    }
+
+    /**
+     * Longest-common-subsequence match flags: for each word in $wordsA,
+     * whether it participates in the LCS with $wordsB (true = unchanged,
+     * false = differs). Standard O(n*m) DP -- texts here are a single
+     * question/answer (at most a few hundred words), so this is cheap.
+     * @param string[] $wordsA
+     * @param string[] $wordsB
+     * @return bool[] same length as $wordsA
+     */
+    private function lcsMatchFlags(array $wordsA, array $wordsB): array
+    {
+        $n = count($wordsA);
+        $m = count($wordsB);
+        $dp = array_fill(0, $n + 1, array_fill(0, $m + 1, 0));
+        for ($i = $n - 1; $i >= 0; $i--) {
+            for ($j = $m - 1; $j >= 0; $j--) {
+                $dp[$i][$j] = $wordsA[$i] === $wordsB[$j]
+                    ? $dp[$i + 1][$j + 1] + 1
+                    : max($dp[$i + 1][$j], $dp[$i][$j + 1]);
+            }
+        }
+        $matched = array_fill(0, $n, false);
+        $i = 0;
+        $j = 0;
+        while ($i < $n && $j < $m) {
+            if ($wordsA[$i] === $wordsB[$j]) {
+                $matched[$i] = true;
+                $i++;
+                $j++;
+            } elseif ($dp[$i + 1][$j] >= $dp[$i][$j + 1]) {
+                $i++;
+            } else {
+                $j++;
+            }
+        }
+        return $matched;
+    }
+
+    /**
+     * Word-level diff between two Latin readings of the same segment
+     * (currently: the main text_la and the editio-princeps-1563 layer) --
+     * returns the [start, end) codepoint ranges in $textA where a word
+     * has no counterpart in the LCS with $textB, i.e. genuinely differs
+     * rather than just having shifted position. Punctuation stays
+     * attached to its word (a punctuation-only change, e.g. "?" vs "!",
+     * is still a real difference worth flagging).
+     * @return array<int, array{0: int, 1: int}>
+     */
+    public function computeLatinDiffRanges(string $textA, string $textB): array
+    {
+        if ($textA === $textB) {
+            return [];
+        }
+        $tokensA = $this->tokenizeWithOffsets($textA);
+        $tokensB = $this->tokenizeWithOffsets($textB);
+        $matched = $this->lcsMatchFlags(
+            array_column($tokensA, 'word'),
+            array_column($tokensB, 'word')
+        );
+        $ranges = [];
+        foreach ($tokensA as $idx => $tok) {
+            if (!$matched[$idx]) {
+                $ranges[] = [$tok['start'], $tok['end']];
+            }
+        }
+        return $ranges;
+    }
+
+    /**
+     * Annotates each 'word'-type part (see splitTextIntoWordParts) with
+     * 'differs' => bool, true when its span overlaps one of $diffRanges.
+     * $parts must cover the same text computeLatinDiffRanges() was given
+     * as $textA, in order from offset 0 -- true for the full-segment
+     * parts array before it's split at "?" (splitPartsAtQuestionMark just
+     * redistributes existing part arrays, so the flag survives that).
+     * @param array<int, array{type: string, content: string}> $parts
+     * @param array<int, array{0: int, 1: int}> $diffRanges
+     * @return array<int, array{type: string, content: string}>
+     */
+    public function markWordPartsDiffering(array $parts, array $diffRanges): array
+    {
+        if (!$diffRanges) {
+            return $parts;
+        }
+        $cursor = 0;
+        foreach ($parts as &$part) {
+            $start = $cursor;
+            $end = $cursor + mb_strlen($part['content']);
+            $cursor = $end;
+            if ($part['type'] !== 'word') {
+                continue;
+            }
+            foreach ($diffRanges as [$rangeStart, $rangeEnd]) {
+                if ($start < $rangeEnd && $end > $rangeStart) {
+                    $part['differs'] = true;
+                    break;
+                }
+            }
+        }
+        unset($part);
+        return $parts;
+    }
+
+    /**
      * Splits a word-parts array (see splitTextIntoWordParts) into its
      * question and answer halves at the first "?" -- used for the
      * Heidelbergse Catechismus, whose segments each store one

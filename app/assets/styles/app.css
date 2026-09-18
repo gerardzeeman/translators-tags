@@ -3442,6 +3442,51 @@ a:hover { text-decoration: underline; }
     line-height: 1.4;
 }
 .institutio-heading-solo { margin-bottom: 2rem; }
+
+/* HC-only: toggle for highlighting where the main (1697-traditie) Latin
+   column differs from the editio-princeps-1563 column. Off by default --
+   .institutio-word-hc-diff carries no visible styling until :root gets
+   data-hc-diff="on" from hc_diff_toggle_controller.js. */
+.institutio-hc-diff-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .6rem;
+    margin: 0 0 1.6rem;
+}
+.institutio-hc-diff-btn {
+    font-family: var(--font-ui);
+    font-size: .8rem;
+    font-weight: 600;
+    color: var(--col-label);
+    background: var(--card-warm);
+    border: 1px solid var(--divider);
+    border-radius: 999px;
+    padding: .4rem .9rem;
+    cursor: pointer;
+    transition: background .1s, color .1s, border-color .1s;
+}
+.institutio-hc-diff-btn:hover {
+    background: var(--hover-warm);
+}
+.institutio-hc-diff-btn[aria-pressed="true"] {
+    color: #fff;
+    background: var(--accent);
+    border-color: var(--accent);
+}
+.institutio-hc-diff-hint {
+    font-family: var(--font-ui);
+    font-size: .78rem;
+    font-style: italic;
+    color: var(--col-label);
+}
+.institutio-word-hc-diff {
+    border-radius: 3px;
+}
+:root[data-hc-diff="on"] .institutio-word-hc-diff {
+    background: color-mix(in srgb, var(--accent) 22%, transparent);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent);
+}
 .institutio-heading-ref {
     font-style: normal;
     font-family: var(--font-mono);

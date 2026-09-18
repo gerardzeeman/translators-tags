@@ -27,6 +27,7 @@ import ConfirmSubmitController       from './controllers/confirm_submit_controll
 import SelectNavigateController      from './controllers/select_navigate_controller.js'
 import StrongsTranslateController    from './controllers/strongs_translate_controller.js'
 import ListSearchController          from './controllers/list_search_controller.js'
+import HcDiffToggleController        from './controllers/hc_diff_toggle_controller.js'
 
 app.register('verse-compare',        VerseCompareController)
 app.register('source-word',          SourceWordController)
@@ -44,3 +45,4 @@ app.register('confirm-submit',       ConfirmSubmitController)
 app.register('select-navigate',      SelectNavigateController)
 app.register('strongs-translate',    StrongsTranslateController)
 app.register('list-search',          ListSearchController)
+app.register('hc-diff-toggle',       HcDiffToggleController)

@@ -294,6 +294,18 @@ class ConfessionController extends AbstractController
             function ($s) {
                 $parts = $this->repository->splitTextIntoWordParts($s['text_la'], $s['tokens']);
                 $translations = $s['translations'] ?? [];
+                // Toggleable 1563-vs-1697 diff highlighting (see the HC
+                // chapter template): mark which words in the main Latin
+                // text differ from the editio-princeps-1563 layer, when
+                // that layer exists for this segment. Computed
+                // unconditionally (cheap: an immediate equality check
+                // short-circuits the 121 identical questions) so the
+                // client-side toggle needs no round-trip.
+                $editioPrinceps1563 = $translations['editio-princeps-1563'] ?? null;
+                if ($editioPrinceps1563 !== null) {
+                    $diffRanges = $this->repository->computeLatinDiffRanges($s['text_la'], $editioPrinceps1563);
+                    $parts = $this->repository->markWordPartsDiffering($parts, $diffRanges);
+                }
                 return [
                     'id'      => $s['id'],
                     'section' => $s['section'],
