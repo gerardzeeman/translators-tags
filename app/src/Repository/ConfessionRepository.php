@@ -31,6 +31,14 @@ use Doctrine\DBAL\Connection;
  */
 class ConfessionRepository
 {
+    /**
+     * The only `translation.layer` value that is itself Latin (the HC's
+     * editio-princeps-1563 reading) rather than a Dutch translation --
+     * see db/migrate_add_translation_token.sql and
+     * tokenize_translation_latin.py.
+     */
+    private const LATIN_TRANSLATION_LAYER = 'editio-princeps-1563';
+
     public function __construct(
         private readonly Connection $connection,
     ) {}
@@ -219,27 +227,71 @@ class ConfessionRepository
         // have zero, one, or (once more Dutch versions are added) several
         // translation rows, each shown as its own block in the UI.
         $translationRows = $this->connection->fetchAllAssociative(
-            'SELECT segment_id, layer, text_nl
+            'SELECT id, segment_id, layer, text_nl
              FROM translation
              WHERE segment_id IN (' . implode(',', array_fill(0, count($segmentIds), '?')) . ')
              ORDER BY segment_id, layer',
             $segmentIds
         );
         $translationsBySegment = [];
+        $latinTranslationIdBySegment = [];
         foreach ($translationRows as $t) {
             $translationsBySegment[(int) $t['segment_id']][$t['layer']] = $t['text_nl'];
+            // Only the HC's editio-princeps-1563 layer is Latin (every
+            // other layer is Dutch and was never run through LatinCy) --
+            // see db/migrate_add_translation_token.sql.
+            if ($t['layer'] === self::LATIN_TRANSLATION_LAYER) {
+                $latinTranslationIdBySegment[(int) $t['segment_id']] = (int) $t['id'];
+            }
+        }
+
+        // Word-hover parts for that Latin translation layer, built the
+        // same way as the segment's own text_la (see
+        // splitTextIntoWordParts) but from translation_token instead of
+        // token, so a reading that differs from text_la still gets its
+        // own correct lemmas rather than falling back to plain text.
+        $latinTranslationPartsBySegment = [];
+        if ($latinTranslationIdBySegment) {
+            $translationIds = array_values($latinTranslationIdBySegment);
+            $translationTokenRows = $this->connection->fetchAllAssociative(
+                'SELECT tt.translation_id, tt.char_start, tt.char_end, tt.lemma, lg.gloss_nl
+                 FROM translation_token tt
+                 LEFT JOIN lemma_gloss lg ON lg.lemma = tt.lemma
+                 WHERE tt.translation_id IN (' . implode(',', array_fill(0, count($translationIds), '?')) . ')
+                   AND tt.is_word
+                 ORDER BY tt.translation_id, tt.char_start',
+                $translationIds
+            );
+            $tokensByTranslationId = [];
+            foreach ($translationTokenRows as $t) {
+                $tokensByTranslationId[(int) $t['translation_id']][] = [
+                    'char_start' => (int) $t['char_start'],
+                    'char_end'   => (int) $t['char_end'],
+                    'lemma'      => $t['lemma'],
+                    'gloss'      => $t['gloss_nl'],
+                ];
+            }
+            foreach ($latinTranslationIdBySegment as $segId => $translationId) {
+                if (isset($tokensByTranslationId[$translationId])) {
+                    $latinTranslationPartsBySegment[$segId] = $this->splitTextIntoWordParts(
+                        $translationsBySegment[$segId][self::LATIN_TRANSLATION_LAYER],
+                        $tokensByTranslationId[$translationId]
+                    );
+                }
+            }
         }
 
         return array_map(
             fn($r) => [
-                'id'           => (int) $r['id'],
-                'ref'          => $r['ref'] ?? null,
-                'section'      => (int) $r['section'],
-                'kind'         => $r['kind'],
-                'heading'      => $r['heading'],
-                'text_la'      => $r['text_la'],
-                'tokens'       => $tokensBySegment[(int) $r['id']] ?? [],
-                'translations' => $translationsBySegment[(int) $r['id']] ?? [],
+                'id'                    => (int) $r['id'],
+                'ref'                   => $r['ref'] ?? null,
+                'section'               => (int) $r['section'],
+                'kind'                  => $r['kind'],
+                'heading'               => $r['heading'],
+                'text_la'               => $r['text_la'],
+                'tokens'                => $tokensBySegment[(int) $r['id']] ?? [],
+                'translations'          => $translationsBySegment[(int) $r['id']] ?? [],
+                'latinTranslationParts' => $latinTranslationPartsBySegment[(int) $r['id']] ?? null,
             ],
             $rows
         );
