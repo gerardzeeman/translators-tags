@@ -292,7 +292,8 @@ class ConfessionController extends AbstractController
     {
         return array_map(
             function ($s) {
-                $parts = $this->repository->splitTextIntoWordParts($s['text_la'], $s['tokens']);
+                $basePartsForReuse = $this->repository->splitTextIntoWordParts($s['text_la'], $s['tokens']);
+                $parts = $basePartsForReuse;
                 $translations = $s['translations'] ?? [];
                 // Toggleable 1563-vs-1697 diff highlighting (see the HC
                 // chapter template): mark which words in the main Latin
@@ -301,8 +302,24 @@ class ConfessionController extends AbstractController
                 // unconditionally (cheap: an immediate equality check
                 // short-circuits the 121 identical questions) so the
                 // client-side toggle needs no round-trip.
+                //
+                // The 1563 layer itself was never run through LatinCy (only
+                // segment.text_la is tokenized), so it has no lemmas of its
+                // own to hover. For the 121/129 questions where it's byte-
+                // identical to the main text, that's not a loss: the same
+                // string has the same lemmas, so main text_la's own parts
+                // (pre-diff-marking, since 'differs' is meaningless applied
+                // to the 1563 side) are reused as-is. The 8 questions that
+                // do differ fall back to plain, non-hoverable text via
+                // splitTextAtQuestionMark() below -- giving them real
+                // lemmas would need tokenizing the 1563 layer in its own
+                // right, which is a bigger pipeline change than this.
                 $editioPrinceps1563 = $translations['editio-princeps-1563'] ?? null;
+                $editioPrincepsQa = null;
                 if ($editioPrinceps1563 !== null) {
+                    if ($editioPrinceps1563 === $s['text_la']) {
+                        $editioPrincepsQa = $this->repository->splitPartsAtQuestionMark($basePartsForReuse);
+                    }
                     $diffRanges = $this->repository->computeLatinDiffRanges($s['text_la'], $editioPrinceps1563);
                     $parts = $this->repository->markWordPartsDiffering($parts, $diffRanges);
                 }
@@ -319,7 +336,8 @@ class ConfessionController extends AbstractController
                     // to compute unconditionally; the template decides
                     // per-work whether to render this or the combined 'parts'.
                     'qa' => [
-                        'latin' => $this->repository->splitPartsAtQuestionMark($parts),
+                        'latin'              => $this->repository->splitPartsAtQuestionMark($parts),
+                        'editioPrinceps1563' => $editioPrincepsQa,
                         'nl'    => array_map(
                             fn($text) => $this->repository->splitTextAtQuestionMark($text),
                             $translations

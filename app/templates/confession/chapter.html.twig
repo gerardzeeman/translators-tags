@@ -83,7 +83,7 @@
                 </div>
                 <div class="institutio-sentence-row institutio-sentence-row--triple" style="{{ col_style }}">
                     {% if ep %}
-                    <p class="institutio-sentence-la"><strong>V:</strong> {{ ep.question }}</p>
+                    <p class="institutio-sentence-la"><strong>V:</strong> {% if s.qa.editioPrinceps1563 %}{{ self.la_parts(s.qa.editioPrinceps1563.question) }}{% else %}{{ ep.question }}{% endif %}</p>
                     {% endif %}
                     <p class="institutio-sentence-la"><strong>V:</strong> {{ self.la_parts(s.qa.latin.question) }}</p>
                     {% if nl %}
@@ -98,7 +98,7 @@
                 </div>
                 <div class="institutio-sentence-row institutio-sentence-row--triple" style="{{ col_style }}">
                     {% if ep %}
-                    <p class="institutio-sentence-la"><strong>A:</strong> {{ ep.answer }}</p>
+                    <p class="institutio-sentence-la"><strong>A:</strong> {% if s.qa.editioPrinceps1563 %}{{ self.la_parts(s.qa.editioPrinceps1563.answer) }}{% else %}{{ ep.answer }}{% endif %}</p>
                     {% endif %}
                     <p class="institutio-sentence-la"><strong>A:</strong> {{ self.la_parts(s.qa.latin.answer) }}</p>
                     {% if nl %}
