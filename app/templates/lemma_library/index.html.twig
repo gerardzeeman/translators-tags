@@ -1,0 +1,76 @@
+{% extends 'base.html.twig' %}
+{% block title %}Lemma-bibliotheek – Bijbel Vergelijking{% endblock %}
+
+{% block nav_bijbel %}
+<span class="nav-book-btn">Lemma-bibliotheek</span>
+{% endblock %}
+{% block nav_center %}{% endblock %}
+
+{% set work_labels = {
+    'institutio-1559': 'Institutie',
+    'canones-dordraceni': 'Canones',
+    'ngb': 'NGB',
+    'heidelbergse-catechismus': 'HC',
+} %}
+
+{% block body %}
+<div class="container container--wide">
+
+    <div class="admin-page-header">
+        <h1>Lemma-bibliotheek</h1>
+        <span class="lemma-total">{{ total }} lemma{{ total != 1 ? "'s" : '' }}{% if search %} gevonden voor “{{ search }}”{% endif %}</span>
+    </div>
+
+    <p class="institutio-home-subtitle">
+        Elk Latijns lemma dat voorkomt in de Institutie en de drie belijdenisgeschriften
+        (Dordtse Leerregels, Nederlandse Geloofsbelijdenis, Heidelbergse Catechismus),
+        genummerd naar frequentie over het hele corpus — nummer 1 is het meest voorkomende lemma.
+    </p>
+
+    <form method="get" class="lemma-search-form">
+        <input type="search" name="q" value="{{ search }}" placeholder="Zoek op lemma of betekenis…" class="lemma-search-input">
+        <button type="submit" class="nav-btn">Zoeken</button>
+        {% if search %}<a href="{{ path('app_lemma_library') }}" class="lemma-search-clear">Wissen</a>{% endif %}
+    </form>
+
+    <table class="admin-table lemma-table">
+        <thead>
+            <tr>
+                <th>Nr.</th>
+                <th>Woord</th>
+                <th>Betekenis</th>
+                <th>Werken</th>
+                <th>Aantal</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for l in lemmas %}
+            <tr>
+                <td class="lemma-number">{{ l.number }}</td>
+                <td class="lemma-word">
+                    <a href="{{ path('app_lemma_library_detail', {lemma: l.lemma}) }}" class="lemma-word-link">{{ l.lemma }}</a>
+                </td>
+                <td>{{ l.gloss_nl ?? '–' }}</td>
+                <td class="lemma-work-tags">
+                    {% for w in l.works %}<span class="lemma-work-tag">{{ work_labels[w] ?? w }}</span>{% endfor %}
+                </td>
+                <td>{{ l.freq }}</td>
+            </tr>
+        {% else %}
+            <tr class="empty-row"><td colspan="5">Geen lemma's gevonden.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+    <nav class="lemma-pagination" aria-label="Paginering">
+        {% if page > 1 %}
+        <a href="{{ path('app_lemma_library', {page: page - 1, q: search}) }}" class="nav-btn" title="Vorige pagina">‹</a>
+        {% endif %}
+        <span class="lemma-pagination-current">Pagina {{ page }} van {{ last_page }}</span>
+        {% if page < last_page %}
+        <a href="{{ path('app_lemma_library', {page: page + 1, q: search}) }}" class="nav-btn" title="Volgende pagina">›</a>
+        {% endif %}
+    </nav>
+
+</div>
+{% endblock %}

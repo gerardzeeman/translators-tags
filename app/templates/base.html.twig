@@ -92,6 +92,11 @@
             <div class="nav-sep"></div>
             <a href="{{ path('app_blog_index') }}" class="nav-book-btn">Blog</a>
 
+            {% if is_granted('ROLE_VIEWER') %}
+            <div class="nav-sep"></div>
+            <a href="{{ path('app_lemma_library') }}" class="nav-book-btn">Lemma's</a>
+            {% endif %}
+
             {# Editor-dropdown — alleen als gebruiker ten minste één editorrole heeft #}
             {% if is_granted('ROLE_LINKER') or is_granted('ROLE_EDIT_STRONG_TRNL') or is_granted('ROLE_BLOGGER') %}
             <div class="nav-sep"></div>
