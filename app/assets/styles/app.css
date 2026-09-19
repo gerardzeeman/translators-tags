@@ -4112,6 +4112,7 @@ a:hover { text-decoration: underline; }
     margin: 1.5rem 0;
 }
 .lemma-pagination-current { color: var(--color-ink-muted); font-size: .85rem; }
+.lemma-pagination-ellipsis { color: var(--color-ink-muted); padding: 0 .1rem; }
 
 .lemma-word details > summary {
     cursor: pointer;

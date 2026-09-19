@@ -1,4 +1,5 @@
 {% extends 'base.html.twig' %}
+{% import 'lemma_library/_pagination.html.twig' as paginator %}
 
 {% block title %}{{ lemma }} – Lemma-bibliotheek – Bijbel Vergelijking{% endblock %}
 
@@ -93,15 +94,7 @@
         {% endfor %}
     </div>
 
-    <nav class="lemma-pagination" aria-label="Paginering">
-        {% if page > 1 %}
-        <a href="{{ path('app_lemma_library_detail', {lemma: lemma, page: page - 1}) }}" class="nav-btn" title="Vorige pagina">‹</a>
-        {% endif %}
-        <span class="lemma-pagination-current">Pagina {{ page }} van {{ last_page }}</span>
-        {% if page < last_page %}
-        <a href="{{ path('app_lemma_library_detail', {lemma: lemma, page: page + 1}) }}" class="nav-btn" title="Volgende pagina">›</a>
-        {% endif %}
-    </nav>
+    {{ paginator.pager('app_lemma_library_detail', {lemma: lemma}, page, last_page) }}
 
 </div>
 {% endblock %}
