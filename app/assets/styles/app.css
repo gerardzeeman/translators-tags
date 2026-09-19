@@ -4192,6 +4192,9 @@ a:hover { text-decoration: underline; }
    Institutio-only /institutie/lemma-detailpagina die dezelfde
    .lemma-detail-word-klasse hergebruikt. */
 .lemma-detail-word--library { font-style: normal; font-weight: 700; }
+/* Alleen de primaire betekenis (gloss_nl), niet de Alternatieven/Noot-rijen
+   die dezelfde .lemma-detail-gloss-value-klasse hergebruiken. */
+.lemma-detail-primary-gloss { font-weight: 700; font-style: normal; }
 .lemma-detail-gloss {
     background: var(--card-warm);
     border: 1px solid var(--color-border);
