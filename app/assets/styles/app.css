@@ -4231,6 +4231,10 @@ a:hover { text-decoration: underline; }
     margin: 0 0 .5rem 0;
     font-size: .85rem;
 }
+.lemma-variant-table--standalone th:first-child,
+.lemma-variant-table--standalone td:first-child {
+    padding-left: .75rem;
+}
 .lemma-occurrence-list {
     display: flex;
     flex-direction: column;
