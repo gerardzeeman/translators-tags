@@ -3442,6 +3442,51 @@ a:hover { text-decoration: underline; }
     line-height: 1.4;
 }
 .institutio-heading-solo { margin-bottom: 2rem; }
+
+/* HC-only: toggle for highlighting where the main (1697-traditie) Latin
+   column differs from the editio-princeps-1563 column. Off by default --
+   .institutio-word-hc-diff carries no visible styling until :root gets
+   data-hc-diff="on" from hc_diff_toggle_controller.js. */
+.institutio-hc-diff-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .6rem;
+    margin: 0 0 1.6rem;
+}
+.institutio-hc-diff-btn {
+    font-family: var(--font-ui);
+    font-size: .8rem;
+    font-weight: 600;
+    color: var(--col-label);
+    background: var(--card-warm);
+    border: 1px solid var(--divider);
+    border-radius: 999px;
+    padding: .4rem .9rem;
+    cursor: pointer;
+    transition: background .1s, color .1s, border-color .1s;
+}
+.institutio-hc-diff-btn:hover {
+    background: var(--hover-warm);
+}
+.institutio-hc-diff-btn[aria-pressed="true"] {
+    color: #fff;
+    background: var(--accent);
+    border-color: var(--accent);
+}
+.institutio-hc-diff-hint {
+    font-family: var(--font-ui);
+    font-size: .78rem;
+    font-style: italic;
+    color: var(--col-label);
+}
+.institutio-word-hc-diff {
+    border-radius: 3px;
+}
+:root[data-hc-diff="on"] .institutio-word-hc-diff {
+    background: color-mix(in srgb, var(--accent) 22%, transparent);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent);
+}
 .institutio-heading-ref {
     font-style: normal;
     font-family: var(--font-mono);
@@ -3697,6 +3742,12 @@ a:hover { text-decoration: underline; }
     display: block;
     margin-top: 2px;
 }
+.institutio-word-lemma-link {
+    color: inherit;
+    text-decoration: underline;
+    font-style: normal;
+}
+.institutio-word-lemma-link:hover { color: var(--nav-text); }
 .institutio-word:hover .institutio-word-popup,
 .institutio-word:focus-within .institutio-word-popup {
     display: block;
@@ -4060,14 +4111,42 @@ a:hover { text-decoration: underline; }
 .lemma-table td:first-child, .lemma-table th:first-child { width: 6rem; }
 .lemma-table td:last-child, .lemma-table th:last-child { width: 6rem; }
 .lemma-word { font-family: var(--font-serif); font-style: italic; font-size: 1rem; }
+/* Lemma-bibliotheek (algemeen): woord vetgedrukt i.p.v. cursief, zelfde als
+   op de mobiele kaarten -- alleen deze tabel, niet de Institutio-only
+   /institutie/lemmas-pagina die dezelfde .lemma-word/.admin-table-klassen
+   hergebruikt. */
+.lemma-table--library .lemma-word { font-style: normal; font-weight: 700; }
 .lemma-pagination {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: center;
     gap: 1rem;
     margin: 1.5rem 0;
 }
 .lemma-pagination-current { color: var(--color-ink-muted); font-size: .85rem; }
+.lemma-pagination-ellipsis { color: var(--color-ink-muted); padding: 0 .1rem; }
+.lemma-pagination--right { justify-content: flex-end; margin: 0; }
+
+.lemma-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin: 1.25rem 0 1.5rem;
+}
+.lemma-toolbar .lemma-search-form { margin: 0; }
+
+.lemma-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin: 1.75rem 0 .75rem;
+}
+.lemma-section-header .lemma-detail-heading { margin: 0; }
 
 .lemma-word details > summary {
     cursor: pointer;
@@ -4115,6 +4194,14 @@ a:hover { text-decoration: underline; }
     font-family: var(--font-serif);
     font-style: italic;
 }
+/* Lemma-bibliotheek (algemeen): woord vetgedrukt i.p.v. cursief, zelfde als
+   de tabel/kaarten op de indexpagina -- alleen hier, niet de
+   Institutio-only /institutie/lemma-detailpagina die dezelfde
+   .lemma-detail-word-klasse hergebruikt. */
+.lemma-detail-word--library { font-style: normal; font-weight: 700; }
+/* Alleen de primaire betekenis (gloss_nl), niet de Alternatieven/Noot-rijen
+   die dezelfde .lemma-detail-gloss-value-klasse hergebruiken. */
+.lemma-detail-primary-gloss { font-weight: 700; font-style: normal; }
 .lemma-detail-gloss {
     background: var(--card-warm);
     border: 1px solid var(--color-border);
@@ -4164,6 +4251,10 @@ a:hover { text-decoration: underline; }
     margin: 0 0 .5rem 0;
     font-size: .85rem;
 }
+.lemma-variant-table--standalone th:first-child,
+.lemma-variant-table--standalone td:first-child {
+    padding-left: .75rem;
+}
 .lemma-occurrence-list {
     display: flex;
     flex-direction: column;
@@ -4202,6 +4293,100 @@ a:hover { text-decoration: underline; }
 }
 @media (max-width: 600px) {
     .lemma-occurrence { flex-direction: column; gap: .2rem; }
+}
+
+/* ── Lemma-bibliotheek (algemeen, alle werken) ──────────────────────────────── */
+.lemma-search-form {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    margin: 1.25rem 0 1.5rem;
+}
+.lemma-search-input {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 24rem;
+    font-family: var(--font-ui);
+    font-size: .9rem;
+    padding: .45rem .8rem;
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    background: var(--card-warm);
+    color: inherit;
+}
+.lemma-search-clear {
+    font-size: .8rem;
+    color: var(--color-ink-muted);
+}
+@media (max-width: 600px) {
+    /* Input weigert anders te krimpen naast de knop/link (automatische
+       flex-minimumbreedte); op smalle schermen laten we het hele
+       zoekformulier daarom wrappen zodat het invoerveld zijn eigen regel
+       krijgt in plaats van de pagina horizontaal te laten scrollen. */
+    .lemma-search-form { flex-wrap: wrap; }
+    .lemma-search-input { flex: 1 1 100%; max-width: none; }
+}
+.lemma-number {
+    font-family: var(--font-mono);
+    color: var(--color-ink-muted);
+}
+.lemma-detail-number {
+    font-family: var(--font-ui);
+    font-style: normal;
+    font-size: .8rem;
+    font-weight: 600;
+    color: var(--color-ink-muted);
+    margin-left: .6rem;
+    vertical-align: middle;
+}
+.lemma-work-tags { display: flex; flex-wrap: wrap; gap: .3rem; }
+.lemma-work-tag {
+    font-family: var(--font-ui);
+    font-size: .68rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    color: var(--color-ink-muted);
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+    padding: .05rem .5rem;
+}
+.lemma-occurrence--no-link { cursor: default; }
+.lemma-occurrence--no-link:hover { background: none; }
+
+/* Mobiel: kaarten i.p.v. een scrollende tabel op de lemma-bibliotheek --
+   zelfde aanpak/opmaak als .admin-users-cards. Anders dan die kaarten heeft
+   een lemma-rij maar één bestemming (de detailpagina), dus is de hele kaart
+   hier zelf de link i.p.v. een los "Bewerken"-linkje erin. */
+.lemma-cards { display: none; }
+.lemma-cards-empty { display: none; }
+@media (max-width: 768px) {
+    .lemma-table-wrap { display: none; }
+    .lemma-cards { display: flex; flex-direction: column; gap: .6rem; margin-top: .5rem; }
+    .lemma-cards-empty { display: block; }
+    .lemma-card {
+        display: block;
+        padding: .75rem .9rem;
+        background: var(--card-warm);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius);
+        text-decoration: none;
+        color: var(--text);
+    }
+    .lemma-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: .6rem; margin-bottom: .6rem; }
+    .lemma-card-title { display: flex; align-items: baseline; flex-wrap: wrap; gap: .5rem; min-width: 0; }
+    .lemma-card-word { font-family: var(--font-serif); font-weight: 700; font-size: 1.05rem; }
+    .lemma-card-number { font-family: var(--font-mono); font-size: .78rem; color: var(--color-ink-muted); white-space: nowrap; }
+    .lemma-card-gloss { color: var(--color-ink-light); }
+    .lemma-card-foot {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: .6rem;
+        border-top: 1px solid var(--color-border-light);
+        padding-top: .5rem;
+    }
+    .lemma-card-freq { font-family: var(--font-mono); font-size: .82rem; color: var(--color-ink-muted); white-space: nowrap; }
 }
 
 /* ── Institutio alignment editor ─────────────────────────────────────────────── */

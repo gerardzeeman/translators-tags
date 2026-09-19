@@ -1,0 +1,107 @@
+{% extends 'base.html.twig' %}
+{% import 'lemma_library/_pagination.html.twig' as paginator %}
+{% block title %}Lemma-bibliotheek – Bijbel Vergelijking{% endblock %}
+
+{% block nav_bijbel %}
+<span class="nav-book-btn">Lemma-bibliotheek</span>
+{% endblock %}
+{% block nav_center %}{% endblock %}
+
+{% set work_labels = {
+    'institutio-1559': 'Inst',
+    'canones-dordraceni': 'DL',
+    'ngb': 'NGB',
+    'heidelbergse-catechismus': 'HC',
+} %}
+{% set work_titles = {
+    'institutio-1559': 'Institutie',
+    'canones-dordraceni': 'Dordtse Leerregels',
+    'ngb': 'Nederlandse Geloofsbelijdenis',
+    'heidelbergse-catechismus': 'Heidelbergse Catechismus',
+} %}
+
+{% block body %}
+<div class="container container--wide">
+
+    <div class="admin-page-header">
+        <h1>Lemma-bibliotheek</h1>
+        <span class="lemma-total">{{ total|number_format(0, ',', '.') }} lemma{{ total != 1 ? "'s" : '' }}{% if search %} gevonden voor “{{ search }}”{% endif %}</span>
+    </div>
+
+    <p class="institutio-home-subtitle">
+        Elk Latijns lemma dat voorkomt in de Institutie en de drie belijdenisgeschriften
+        (Dordtse Leerregels, Nederlandse Geloofsbelijdenis, Heidelbergse Catechismus),
+        genummerd naar frequentie over het hele corpus — nummer 1 is het meest voorkomende lemma.
+    </p>
+
+    <div class="lemma-toolbar">
+        <form method="get" class="lemma-search-form">
+            <input type="search" name="q" value="{{ search }}" placeholder="Zoek op lemma of betekenis…" class="lemma-search-input">
+            <button type="submit" class="nav-btn nav-btn-text">Zoeken</button>
+            {% if search %}<a href="{{ path('app_lemma_library') }}" class="lemma-search-clear">Wissen</a>{% endif %}
+        </form>
+        {{ paginator.pager('app_lemma_library', {q: search}, page, last_page) }}
+    </div>
+
+    <div class="table-scroll lemma-table-wrap">
+    <table class="admin-table lemma-table lemma-table--library">
+        <thead>
+            <tr>
+                <th>Nr.</th>
+                <th>Woord</th>
+                <th>Betekenis</th>
+                <th>Werken</th>
+                <th>Aantal</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for l in lemmas %}
+            <tr>
+                <td class="lemma-number">L{{ l.number }}</td>
+                <td class="lemma-word">
+                    <a href="{{ path('app_lemma_library_detail', {number: 'l' ~ l.number}) }}" class="lemma-word-link">{{ l.lemma }}</a>
+                </td>
+                <td>{{ l.gloss_nl ?? '–' }}</td>
+                <td class="lemma-work-tags">
+                    {% for w in l.works %}<span class="lemma-work-tag"{% if work_titles[w] is defined %} title="{{ work_titles[w] }}"{% endif %}>{{ work_labels[w] ?? w }}</span>{% endfor %}
+                </td>
+                <td>{{ l.freq|number_format(0, ',', '.') }}</td>
+            </tr>
+        {% else %}
+            <tr class="empty-row"><td colspan="5">Geen lemma's gevonden.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+
+    {# Mobiel: dezelfde data als kaarten i.p.v. een scrollende tabel -- zie
+       .lemma-table-wrap / .lemma-cards in app.css voor de media query die
+       tussen de twee schakelt (zelfde aanpak als .admin-users-cards). #}
+    {% if lemmas is not empty %}
+    <div class="lemma-cards">
+        {% for l in lemmas %}
+        <a href="{{ path('app_lemma_library_detail', {number: 'l' ~ l.number}) }}" class="lemma-card">
+            <div class="lemma-card-head">
+                <span class="lemma-card-title">
+                    <span class="lemma-card-word">{{ l.lemma }}:</span>
+                    <span class="lemma-card-gloss">{{ l.gloss_nl ?? '–' }}</span>
+                </span>
+                <span class="lemma-card-number">L{{ l.number }}</span>
+            </div>
+            <div class="lemma-card-foot">
+                <span class="lemma-work-tags">
+                    {% for w in l.works %}<span class="lemma-work-tag"{% if work_titles[w] is defined %} title="{{ work_titles[w] }}"{% endif %}>{{ work_labels[w] ?? w }}</span>{% endfor %}
+                </span>
+                <span class="lemma-card-freq">{{ l.freq|number_format(0, ',', '.') }}×</span>
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="no-verse lemma-cards-empty">Geen lemma's gevonden.</p>
+    {% endif %}
+
+    {{ paginator.pager('app_lemma_library', {q: search}, page, last_page) }}
+
+</div>
+{% endblock %}

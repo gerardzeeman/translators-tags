@@ -1,0 +1,25 @@
+{# Gedeelde paginering voor de lemma-bibliotheek: knoppen voor pagina 1, de
+   pagina vóór de huidige, de huidige pagina, de pagina erna, en de laatste
+   pagina -- met "…" op plekken waar pagina's worden overgeslagen. #}
+{% macro pager(route, params, page, last_page) %}
+<nav class="lemma-pagination lemma-pagination--right" aria-label="Paginering">
+    {% set candidates = [1, page - 1, page, page + 1, last_page]
+        |filter(p => p >= 1 and p <= last_page)
+        |sort %}
+    {% set shown = [] %}
+    {% for p in candidates %}
+        {% if p not in shown %}
+            {% set shown = shown|merge([p]) %}
+        {% endif %}
+    {% endfor %}
+    {% set prev_p = null %}
+    {% for p in shown %}
+        {% if prev_p is not null and p - prev_p > 1 %}
+        <span class="lemma-pagination-ellipsis">…</span>
+        {% endif %}
+        <a href="{{ path(route, params|merge({page: p})) }}"
+           class="nav-btn nav-btn-text{% if p == page %} nav-btn-active{% endif %}">{{ p }}</a>
+        {% set prev_p = p %}
+    {% endfor %}
+</nav>
+{% endmacro %}

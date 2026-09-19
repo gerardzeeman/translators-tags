@@ -1,0 +1,109 @@
+{% extends 'base.html.twig' %}
+{% import 'lemma_library/_pagination.html.twig' as paginator %}
+
+{% block title %}{{ lemma }} – Lemma-bibliotheek – Bijbel Vergelijking{% endblock %}
+
+{% block nav_bijbel %}
+<span class="nav-book-btn">Lemma-bibliotheek</span>
+{% endblock %}
+{% block nav_center %}{% endblock %}
+{% block nav_right_extra %}
+<a href="{{ path('app_lemma_library') }}" class="nav-user-btn">‹ Bibliotheek</a>
+{% endblock %}
+
+{% set work_labels = {
+    'institutio-1559': 'Inst',
+    'canones-dordraceni': 'DL',
+    'ngb': 'NGB',
+    'heidelbergse-catechismus': 'HC',
+} %}
+{% set work_titles = {
+    'institutio-1559': 'Institutie',
+    'canones-dordraceni': 'Dordtse Leerregels',
+    'ngb': 'Nederlandse Geloofsbelijdenis',
+    'heidelbergse-catechismus': 'Heidelbergse Catechismus',
+} %}
+
+{% block body %}
+<div class="container container--wide">
+
+    <div class="admin-page-header">
+        <h1 class="lemma-detail-word lemma-detail-word--library">
+            {{ lemma }}
+            {% if gloss and gloss.number %}<span class="lemma-detail-number">L{{ gloss.number }}</span>{% endif %}
+        </h1>
+        <span class="lemma-total">{{ total_freq|number_format(0, ',', '.') }} voorkomen{{ total_freq != 1 ? 's' : '' }}</span>
+    </div>
+
+    {% if gloss %}
+    <div class="lemma-detail-gloss">
+        <div class="lemma-detail-gloss-row">
+            <span class="lemma-detail-gloss-label">Betekenis</span>
+            <span class="lemma-detail-gloss-value lemma-detail-primary-gloss">{{ gloss.gloss_nl ?? '–' }}</span>
+            {% if gloss.gloss_nl %}
+            <span class="lemma-gloss-source lemma-gloss-source-{{ gloss.source }}">
+                {{ gloss.source == 'manual' ? 'handmatig' : 'LLM' }}{% if gloss.reviewed %} · gecontroleerd{% endif %}
+            </span>
+            {% endif %}
+        </div>
+        {% if gloss.gloss_alt %}
+        <div class="lemma-detail-gloss-row">
+            <span class="lemma-detail-gloss-label">Alternatieven</span>
+            <span class="lemma-detail-gloss-value">{{ gloss.gloss_alt|join(', ') }}</span>
+        </div>
+        {% endif %}
+        {% if gloss.note %}
+        <div class="lemma-detail-gloss-row lemma-detail-gloss-row--note">
+            <span class="lemma-detail-gloss-label">Noot</span>
+            <p class="lemma-detail-gloss-value">{{ gloss.note }}</p>
+        </div>
+        {% endif %}
+    </div>
+    {% else %}
+    <p class="institutio-no-translation">Nog geen gloss beschikbaar voor dit lemma.</p>
+    {% endif %}
+
+    <h2 class="lemma-detail-heading">Woordvormen ({{ variants|length|number_format(0, ',', '.') }})</h2>
+    <table class="admin-table lemma-variant-table lemma-variant-table--standalone">
+        <thead>
+            <tr><th>Vorm</th><th>Morfologie</th><th>Aantal</th></tr>
+        </thead>
+        <tbody>
+        {% for v in variants %}
+            <tr>
+                <td class="lemma-variant-form">{{ v.norm }}</td>
+                <td>{{ v.morph_description|default('–') }}</td>
+                <td>{{ v.freq|number_format(0, ',', '.') }}</td>
+            </tr>
+        {% else %}
+            <tr class="empty-row"><td colspan="3">Geen woordvormen gevonden.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="lemma-section-header">
+        <h2 class="lemma-detail-heading">Voorkomens in de tekst</h2>
+        {{ paginator.pager('app_lemma_library_detail', {number: number}, page, last_page) }}
+    </div>
+    <div class="lemma-occurrence-list">
+        {% for o in occurrences %}
+        {% if o.href %}
+        <a href="{{ o.href }}" class="lemma-occurrence">
+            <span class="lemma-occurrence-ref"><span class="lemma-work-tag"{% if work_titles[o.work_slug] is defined %} title="{{ work_titles[o.work_slug] }}"{% endif %}>{{ work_labels[o.work_slug] ?? o.work_slug }}</span> {{ o.ref }}</span>
+            <span class="lemma-occurrence-context">{%- if o.truncated_before -%}…{%- endif -%}{{ o.context_before }}<mark>{{ o.context_word }}</mark>{{ o.context_after }}{%- if o.truncated_after -%}…{%- endif -%}</span>
+        </a>
+        {% else %}
+        <div class="lemma-occurrence lemma-occurrence--no-link">
+            <span class="lemma-occurrence-ref"><span class="lemma-work-tag"{% if work_titles[o.work_slug] is defined %} title="{{ work_titles[o.work_slug] }}"{% endif %}>{{ work_labels[o.work_slug] ?? o.work_slug }}</span> {{ o.ref }}</span>
+            <span class="lemma-occurrence-context">{%- if o.truncated_before -%}…{%- endif -%}{{ o.context_before }}<mark>{{ o.context_word }}</mark>{{ o.context_after }}{%- if o.truncated_after -%}…{%- endif -%}</span>
+        </div>
+        {% endif %}
+        {% else %}
+        <p class="no-verse">Geen voorkomens gevonden.</p>
+        {% endfor %}
+    </div>
+
+    {{ paginator.pager('app_lemma_library_detail', {number: number}, page, last_page) }}
+
+</div>
+{% endblock %}

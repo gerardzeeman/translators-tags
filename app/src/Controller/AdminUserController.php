@@ -22,6 +22,7 @@ class AdminUserController extends AbstractController
         'ROLE_VIEWER_HSV'            => 'Viewer HSV',
         'ROLE_VIEWER_SVGBS'          => 'Viewer SV(GBS)',
         'ROLE_VIEWER_SV1657'         => 'Viewer SV(1657)',
+        'ROLE_VIEWER_LEMMAS'         => 'Viewer Lemma-bibliotheek',
         'ROLE_LINKER'                => 'Linker',
         'ROLE_EDIT_STRONG_TRNL'      => 'Strong\'s vertaling bewerken',
         'ROLE_EDIT_INSTITUTIO_TRNL'  => 'Institutie-vertaalvoorstellen indienen',

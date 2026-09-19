@@ -294,6 +294,28 @@ class ConfessionController extends AbstractController
             function ($s) {
                 $parts = $this->repository->splitTextIntoWordParts($s['text_la'], $s['tokens']);
                 $translations = $s['translations'] ?? [];
+                // Toggleable 1563-vs-1697 diff highlighting (see the HC
+                // chapter template): mark which words in the main Latin
+                // text differ from the editio-princeps-1563 layer, when
+                // that layer exists for this segment. Computed
+                // unconditionally (cheap: an immediate equality check
+                // short-circuits the 121 identical questions) so the
+                // client-side toggle needs no round-trip.
+                $editioPrinceps1563 = $translations['editio-princeps-1563'] ?? null;
+                if ($editioPrinceps1563 !== null) {
+                    $diffRanges = $this->repository->computeLatinDiffRanges($s['text_la'], $editioPrinceps1563);
+                    $parts = $this->repository->markWordPartsDiffering($parts, $diffRanges);
+                }
+                // Word-hover for the 1563 column itself: built from the
+                // layer's own LatinCy tokens (translation_token, via
+                // ConfessionRepository::attachTokens()), not reused from
+                // the main text -- so a question whose 1563 wording
+                // differs still gets correct lemmas, not a plain-text
+                // fallback. Only null if that pipeline step hasn't been
+                // run for this segment yet.
+                $editioPrincepsQa = isset($s['latinTranslationParts'])
+                    ? $this->repository->splitPartsAtQuestionMark($s['latinTranslationParts'])
+                    : null;
                 return [
                     'id'      => $s['id'],
                     'section' => $s['section'],
@@ -307,7 +329,8 @@ class ConfessionController extends AbstractController
                     // to compute unconditionally; the template decides
                     // per-work whether to render this or the combined 'parts'.
                     'qa' => [
-                        'latin' => $this->repository->splitPartsAtQuestionMark($parts),
+                        'latin'              => $this->repository->splitPartsAtQuestionMark($parts),
+                        'editioPrinceps1563' => $editioPrincepsQa,
                         'nl'    => array_map(
                             fn($text) => $this->repository->splitTextAtQuestionMark($text),
                             $translations
