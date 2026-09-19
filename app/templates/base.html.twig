@@ -92,7 +92,7 @@
             <div class="nav-sep"></div>
             <a href="{{ path('app_blog_index') }}" class="nav-book-btn">Blog</a>
 
-            {% if is_granted('ROLE_VIEWER') %}
+            {% if is_granted('ROLE_VIEWER_LEMMAS') %}
             <div class="nav-sep"></div>
             <a href="{{ path('app_lemma_library') }}" class="nav-book-btn">Lemma's</a>
             {% endif %}
