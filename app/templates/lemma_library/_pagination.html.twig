@@ -18,7 +18,7 @@
         <span class="lemma-pagination-ellipsis">…</span>
         {% endif %}
         <a href="{{ path(route, params|merge({page: p})) }}"
-           class="nav-btn{% if p == page %} nav-btn-active{% endif %}">{{ p }}</a>
+           class="nav-btn nav-btn-text{% if p == page %} nav-btn-active{% endif %}">{{ p }}</a>
         {% set prev_p = p %}
     {% endfor %}
 </nav>
