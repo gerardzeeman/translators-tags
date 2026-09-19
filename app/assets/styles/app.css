@@ -3741,6 +3741,12 @@ a:hover { text-decoration: underline; }
     display: block;
     margin-top: 2px;
 }
+.institutio-word-lemma-link {
+    color: inherit;
+    text-decoration: underline;
+    font-style: normal;
+}
+.institutio-word-lemma-link:hover { color: var(--nav-text); }
 .institutio-word:hover .institutio-word-popup,
 .institutio-word:focus-within .institutio-word-popup {
     display: block;

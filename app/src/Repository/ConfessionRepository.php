@@ -204,7 +204,7 @@ class ConfessionRepository
     {
         $segmentIds = array_map(fn($r) => (int) $r['id'], $rows);
         $tokenRows = $this->connection->fetchAllAssociative(
-            'SELECT t.segment_id, t.char_start, t.char_end, t.lemma, lg.gloss_nl
+            'SELECT t.segment_id, t.char_start, t.char_end, t.lemma, lg.gloss_nl, lg.number
              FROM token t
              LEFT JOIN lemma_gloss lg ON lg.lemma = t.lemma
              WHERE t.segment_id IN (' . implode(',', array_fill(0, count($segmentIds), '?')) . ')
@@ -220,6 +220,7 @@ class ConfessionRepository
                 'char_end'   => (int) $t['char_end'],
                 'lemma'      => $t['lemma'],
                 'gloss'      => $t['gloss_nl'],
+                'number'     => $t['number'] !== null ? (int) $t['number'] : null,
             ];
         }
 
@@ -254,7 +255,7 @@ class ConfessionRepository
         if ($latinTranslationIdBySegment) {
             $translationIds = array_values($latinTranslationIdBySegment);
             $translationTokenRows = $this->connection->fetchAllAssociative(
-                'SELECT tt.translation_id, tt.char_start, tt.char_end, tt.lemma, lg.gloss_nl
+                'SELECT tt.translation_id, tt.char_start, tt.char_end, tt.lemma, lg.gloss_nl, lg.number
                  FROM translation_token tt
                  LEFT JOIN lemma_gloss lg ON lg.lemma = tt.lemma
                  WHERE tt.translation_id IN (' . implode(',', array_fill(0, count($translationIds), '?')) . ')
@@ -269,6 +270,7 @@ class ConfessionRepository
                     'char_end'   => (int) $t['char_end'],
                     'lemma'      => $t['lemma'],
                     'gloss'      => $t['gloss_nl'],
+                    'number'     => $t['number'] !== null ? (int) $t['number'] : null,
                 ];
             }
             foreach ($latinTranslationIdBySegment as $segId => $translationId) {
@@ -324,6 +326,7 @@ class ConfessionRepository
                 'content' => mb_substr($text, $start, $end - $start),
                 'lemma'   => $tok['lemma'],
                 'gloss'   => $tok['gloss'],
+                'number'  => $tok['number'] ?? null,
             ];
             $cursor = $end;
         }

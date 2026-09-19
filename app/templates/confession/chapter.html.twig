@@ -3,7 +3,7 @@
 {% import _self as self %}
 {% block title %}{{ title }} {{ chapter }} – Bijbel Vergelijking{% endblock %}
 
-{% macro la_parts(parts) %}{% import 'institutio/_macros.html.twig' as m %}{% for part in parts %}{%- if part.type == 'text' -%}{{ part.content }}{%- else -%}{{ m.word_hover(part.content, part.lemma, part.gloss, part.differs ?? false) }}{%- endif -%}{% endfor %}{% endmacro %}
+{% macro la_parts(parts) %}{% import 'institutio/_macros.html.twig' as m %}{% for part in parts %}{%- if part.type == 'text' -%}{{ part.content }}{%- else -%}{{ m.word_hover(part.content, part.lemma, part.gloss, part.differs ?? false, part.number ?? null) }}{%- endif -%}{% endfor %}{% endmacro %}
 
 {# Human-readable labels for translation/variant layers -- purely cosmetic,
    falls back to the raw layer key for any not listed here. Kept local to
@@ -138,7 +138,7 @@
             <span class="institutio-section-num">{{ s.section }}</span>
             <div class="institutio-sentence-group">
                 <div class="institutio-sentence-row">
-                    <p class="institutio-sentence-la">{% for part in s.parts %}{%- if part.type == 'text' -%}{{ part.content }}{%- else -%}{{ m.word_hover(part.content, part.lemma, part.gloss) }}{%- endif -%}{% endfor %}</p>
+                    <p class="institutio-sentence-la">{% for part in s.parts %}{%- if part.type == 'text' -%}{{ part.content }}{%- else -%}{{ m.word_hover(part.content, part.lemma, part.gloss, false, part.number ?? null) }}{%- endif -%}{% endfor %}</p>
                     {% for layer, text_nl in s.translations %}
                     <p class="institutio-sentence-nl" data-layer="{{ layer }}">{{ text_nl }}</p>
                     {% endfor %}
