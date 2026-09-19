@@ -72,43 +72,49 @@
                 {% set other_layers = s.qa.nl|filter((v, k) => k not in ['editio-princeps-1563', 'denheijer', 'zwanepol-hsv']) %}
                 {% set col_count = 1 + (ep ? 1 : 0) + (nl ? 1 : 0) + (zw ? 1 : 0) + other_layers|length %}
                 {% set col_style = '--hc-cols: ' ~ col_count %}
-                <div class="institutio-sentence-row institutio-sentence-row--triple institutio-sentence-row--labels" style="{{ col_style }}">
-                    {% if ep %}<span class="institutio-layer-label">{{ layer_labels['editio-princeps-1563'] }}</span>{% endif %}
-                    <span class="institutio-layer-label">{{ layer_labels['main-latin-1697'] }}</span>
-                    {% if nl %}<span class="institutio-layer-label">{{ layer_labels['denheijer'] }}</span>{% endif %}
-                    {% if zw %}<span class="institutio-layer-label">{{ layer_labels['zwanepol-hsv'] }}</span>{% endif %}
-                    {% for layer, qa_nl in other_layers %}
-                    <span class="institutio-layer-label">{{ layer_labels[layer] ?? layer }}</span>
-                    {% endfor %}
-                </div>
-                <div class="institutio-sentence-row institutio-sentence-row--triple" style="{{ col_style }}">
+                {# One block per layer (label+V+A kept together) rather than three
+                   parallel rows (all labels, then all V's, then all A's) -- the
+                   latter reads fine on desktop where CSS grid lines each row's
+                   Nth item up in the same column, but collapsing three independent
+                   rows to one column on mobile grouped every label together, then
+                   every question, then every answer, with no visual link back to
+                   which layer any of them belonged to. #}
+                <div class="institutio-hc-layers" style="{{ col_style }}">
                     {% if ep %}
-                    <p class="institutio-sentence-la"><strong>V:</strong> {% if s.qa.editioPrinceps1563 %}{{ self.la_parts(s.qa.editioPrinceps1563.question) }}{% else %}{{ ep.question }}{% endif %}</p>
+                    <div class="institutio-hc-layer">
+                        <span class="institutio-layer-label">{{ layer_labels['editio-princeps-1563'] }}</span>
+                        {# Word-hover for this layer uses its own LatinCy tokens
+                           (s.qa.editioPrinceps1563, see ConfessionRepository::LATIN_TRANSLATION_LAYER)
+                           when available, falling back to plain text otherwise. #}
+                        <p class="institutio-sentence-la"><strong>V:</strong> {% if s.qa.editioPrinceps1563 %}{{ self.la_parts(s.qa.editioPrinceps1563.question) }}{% else %}{{ ep.question }}{% endif %}</p>
+                        <p class="institutio-sentence-la"><strong>A:</strong> {% if s.qa.editioPrinceps1563 %}{{ self.la_parts(s.qa.editioPrinceps1563.answer) }}{% else %}{{ ep.answer }}{% endif %}</p>
+                    </div>
                     {% endif %}
-                    <p class="institutio-sentence-la"><strong>V:</strong> {{ self.la_parts(s.qa.latin.question) }}</p>
+                    <div class="institutio-hc-layer">
+                        <span class="institutio-layer-label">{{ layer_labels['main-latin-1697'] }}</span>
+                        <p class="institutio-sentence-la"><strong>V:</strong> {{ self.la_parts(s.qa.latin.question) }}</p>
+                        <p class="institutio-sentence-la"><strong>A:</strong> {{ self.la_parts(s.qa.latin.answer) }}</p>
+                    </div>
                     {% if nl %}
-                    <p class="institutio-sentence-nl"><strong>V:</strong> {{ nl.question }}</p>
+                    <div class="institutio-hc-layer">
+                        <span class="institutio-layer-label">{{ layer_labels['denheijer'] }}</span>
+                        <p class="institutio-sentence-nl"><strong>V:</strong> {{ nl.question }}</p>
+                        <p class="institutio-sentence-nl"><strong>A:</strong> {{ nl.answer }}</p>
+                    </div>
                     {% endif %}
                     {% if zw %}
-                    <p class="institutio-sentence-nl"><strong>V:</strong> {{ zw.question }}</p>
+                    <div class="institutio-hc-layer">
+                        <span class="institutio-layer-label">{{ layer_labels['zwanepol-hsv'] }}</span>
+                        <p class="institutio-sentence-nl"><strong>V:</strong> {{ zw.question }}</p>
+                        <p class="institutio-sentence-nl"><strong>A:</strong> {{ zw.answer }}</p>
+                    </div>
                     {% endif %}
                     {% for layer, qa_nl in other_layers %}
-                    <p class="institutio-sentence-nl" data-layer="{{ layer }}"><strong>V:</strong> {{ qa_nl.question }}</p>
-                    {% endfor %}
-                </div>
-                <div class="institutio-sentence-row institutio-sentence-row--triple" style="{{ col_style }}">
-                    {% if ep %}
-                    <p class="institutio-sentence-la"><strong>A:</strong> {% if s.qa.editioPrinceps1563 %}{{ self.la_parts(s.qa.editioPrinceps1563.answer) }}{% else %}{{ ep.answer }}{% endif %}</p>
-                    {% endif %}
-                    <p class="institutio-sentence-la"><strong>A:</strong> {{ self.la_parts(s.qa.latin.answer) }}</p>
-                    {% if nl %}
-                    <p class="institutio-sentence-nl"><strong>A:</strong> {{ nl.answer }}</p>
-                    {% endif %}
-                    {% if zw %}
-                    <p class="institutio-sentence-nl"><strong>A:</strong> {{ zw.answer }}</p>
-                    {% endif %}
-                    {% for layer, qa_nl in other_layers %}
-                    <p class="institutio-sentence-nl" data-layer="{{ layer }}"><strong>A:</strong> {{ qa_nl.answer }}</p>
+                    <div class="institutio-hc-layer">
+                        <span class="institutio-layer-label">{{ layer_labels[layer] ?? layer }}</span>
+                        <p class="institutio-sentence-nl" data-layer="{{ layer }}"><strong>V:</strong> {{ qa_nl.question }}</p>
+                        <p class="institutio-sentence-nl" data-layer="{{ layer }}"><strong>A:</strong> {{ qa_nl.answer }}</p>
+                    </div>
                     {% endfor %}
                     {% if is_granted('ROLE_EDIT_INSTITUTIO_TRNL') %}
                     <a href="{{ path('app_confession_edit_text', {id: s.id}) }}" class="institutio-edit-btn" title="Brontekst corrigeren">✎</a>

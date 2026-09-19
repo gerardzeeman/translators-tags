@@ -3553,18 +3553,30 @@ a:hover { text-decoration: underline; }
     gap: 1.5rem;
     align-items: start;
 }
-/* HC shows up to three readings side by side (editio princeps 1563 /
-   commentary-tradition Latin / Dutch) -- three even columns instead of two. */
-/* Column count varies with how many Latin/Dutch layers a question actually
-   has (editio princeps + main Latin + Den Heijer + Zwanepol-HSV, plus any
-   future layer) -- set via the --hc-cols custom property inline per row
-   rather than a fixed class, so this scales without a CSS change each
-   time a layer is added. */
-.institutio-sentence-row--triple {
+/* HC shows up to N readings side by side (editio princeps 1563 / main-Latin /
+   Den Heijer / Zwanepol-HSV, plus any future layer) -- one column per layer,
+   count set via the --hc-cols custom property (see chapter.html.twig) so
+   this scales without a CSS change each time a layer is added. Each layer
+   is its own self-contained block (label+V+A together, not three parallel
+   label/V/A rows) specifically so the mobile collapse below can turn each
+   block into a simple vertical stack without losing which label belongs to
+   which question/answer -- three separate collapsed rows would instead
+   group every label together, then every question, then every answer. */
+.institutio-hc-layers {
+    position: relative;
+    display: grid;
     grid-template-columns: repeat(var(--hc-cols, 3), 1fr);
+    gap: 1.5rem;
+    align-items: start;
+}
+.institutio-hc-layer {
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+    min-width: 0;
 }
 @media (max-width: 960px) {
-    .institutio-sentence-row--triple { grid-template-columns: 1fr; gap: .3rem; }
+    .institutio-hc-layers { grid-template-columns: 1fr; gap: 1.1rem; }
 }
 .institutio-edit-btn {
     position: absolute;
@@ -3621,17 +3633,6 @@ a:hover { text-decoration: underline; }
     letter-spacing: .02em;
     text-transform: uppercase;
     color: var(--col-label);
-}
-/* The labels get their own grid row (see chapter.html.twig) instead of
-   living inside each V-line's <p> -- a fixed min-height on the label was
-   fragile (one label reliably wraps to 3 lines while the others wrap to
-   2, at the widths this grid actually renders at), whereas letting them
-   share one grid row means the row's height auto-sizes to the tallest
-   label and every V-line below starts at the same y regardless of how
-   many lines any individual label wraps to. */
-.institutio-sentence-row--labels {
-    margin-bottom: .3rem;
-    align-items: end;
 }
 
 @media (max-width: 720px) {
