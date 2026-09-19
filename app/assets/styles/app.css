@@ -4353,10 +4353,11 @@ a:hover { text-decoration: underline; }
         text-decoration: none;
         color: var(--text);
     }
-    .lemma-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: .6rem; }
-    .lemma-card-word { font-family: var(--font-serif); font-style: italic; font-size: 1.05rem; }
-    .lemma-card-number { font-family: var(--font-mono); font-size: .78rem; color: var(--color-ink-muted); }
-    .lemma-card-gloss { margin: .3rem 0 .6rem; }
+    .lemma-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: .6rem; margin-bottom: .6rem; }
+    .lemma-card-title { display: flex; align-items: baseline; flex-wrap: wrap; gap: .5rem; min-width: 0; }
+    .lemma-card-word { font-family: var(--font-serif); font-weight: 700; font-size: 1.05rem; }
+    .lemma-card-number { font-family: var(--font-mono); font-size: .78rem; color: var(--color-ink-muted); white-space: nowrap; }
+    .lemma-card-gloss { color: var(--color-ink-light); }
     .lemma-card-foot {
         display: flex;
         align-items: center;

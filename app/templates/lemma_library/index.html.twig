@@ -76,10 +76,12 @@
         {% for l in lemmas %}
         <a href="{{ path('app_lemma_library_detail', {number: 'l' ~ l.number}) }}" class="lemma-card">
             <div class="lemma-card-head">
-                <span class="lemma-card-word">{{ l.lemma }}</span>
+                <span class="lemma-card-title">
+                    <span class="lemma-card-word">{{ l.lemma }}</span>
+                    <span class="lemma-card-gloss">{{ l.gloss_nl ?? '–' }}</span>
+                </span>
                 <span class="lemma-card-number">L{{ l.number }}</span>
             </div>
-            <div class="lemma-card-gloss">{{ l.gloss_nl ?? '–' }}</div>
             <div class="lemma-card-foot">
                 <span class="lemma-work-tags">
                     {% for w in l.works %}<span class="lemma-work-tag">{{ work_labels[w] ?? w }}</span>{% endfor %}
