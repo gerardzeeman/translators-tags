@@ -46,7 +46,7 @@
         <tbody>
         {% for l in lemmas %}
             <tr>
-                <td class="lemma-number">{{ l.number }}</td>
+                <td class="lemma-number">L{{ l.number }}</td>
                 <td class="lemma-word">
                     <a href="{{ path('app_lemma_library_detail', {lemma: l.lemma}) }}" class="lemma-word-link">{{ l.lemma }}</a>
                 </td>

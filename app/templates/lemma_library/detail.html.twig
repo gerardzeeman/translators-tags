@@ -23,7 +23,7 @@
     <div class="admin-page-header">
         <h1 class="lemma-detail-word">
             {{ lemma }}
-            {% if gloss and gloss.number %}<span class="lemma-detail-number">nr. {{ gloss.number }}</span>{% endif %}
+            {% if gloss and gloss.number %}<span class="lemma-detail-number">L{{ gloss.number }}</span>{% endif %}
         </h1>
         <span class="lemma-total">{{ total_freq }} voorkomen{{ total_freq != 1 ? 's' : '' }}</span>
     </div>
