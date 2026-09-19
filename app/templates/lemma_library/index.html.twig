@@ -37,7 +37,7 @@
         {{ paginator.pager('app_lemma_library', {q: search}, page, last_page) }}
     </div>
 
-    <div class="table-scroll">
+    <div class="table-scroll lemma-table-wrap">
     <table class="admin-table lemma-table">
         <thead>
             <tr>
@@ -67,6 +67,31 @@
         </tbody>
     </table>
     </div>
+
+    {# Mobiel: dezelfde data als kaarten i.p.v. een scrollende tabel -- zie
+       .lemma-table-wrap / .lemma-cards in app.css voor de media query die
+       tussen de twee schakelt (zelfde aanpak als .admin-users-cards). #}
+    {% if lemmas is not empty %}
+    <div class="lemma-cards">
+        {% for l in lemmas %}
+        <a href="{{ path('app_lemma_library_detail', {number: 'l' ~ l.number}) }}" class="lemma-card">
+            <div class="lemma-card-head">
+                <span class="lemma-card-word">{{ l.lemma }}</span>
+                <span class="lemma-card-number">L{{ l.number }}</span>
+            </div>
+            <div class="lemma-card-gloss">{{ l.gloss_nl ?? '–' }}</div>
+            <div class="lemma-card-foot">
+                <span class="lemma-work-tags">
+                    {% for w in l.works %}<span class="lemma-work-tag">{{ work_labels[w] ?? w }}</span>{% endfor %}
+                </span>
+                <span class="lemma-card-freq">{{ l.freq }}×</span>
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="no-verse lemma-cards-empty">Geen lemma's gevonden.</p>
+    {% endif %}
 
     {{ paginator.pager('app_lemma_library', {q: search}, page, last_page) }}
 

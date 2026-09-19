@@ -4334,6 +4334,40 @@ a:hover { text-decoration: underline; }
 .lemma-occurrence--no-link { cursor: default; }
 .lemma-occurrence--no-link:hover { background: none; }
 
+/* Mobiel: kaarten i.p.v. een scrollende tabel op de lemma-bibliotheek --
+   zelfde aanpak/opmaak als .admin-users-cards. Anders dan die kaarten heeft
+   een lemma-rij maar één bestemming (de detailpagina), dus is de hele kaart
+   hier zelf de link i.p.v. een los "Bewerken"-linkje erin. */
+.lemma-cards { display: none; }
+.lemma-cards-empty { display: none; }
+@media (max-width: 768px) {
+    .lemma-table-wrap { display: none; }
+    .lemma-cards { display: flex; flex-direction: column; gap: .6rem; margin-top: .5rem; }
+    .lemma-cards-empty { display: block; }
+    .lemma-card {
+        display: block;
+        padding: .75rem .9rem;
+        background: var(--card-warm);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius);
+        text-decoration: none;
+        color: var(--text);
+    }
+    .lemma-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: .6rem; }
+    .lemma-card-word { font-family: var(--font-serif); font-style: italic; font-size: 1.05rem; }
+    .lemma-card-number { font-family: var(--font-mono); font-size: .78rem; color: var(--color-ink-muted); }
+    .lemma-card-gloss { margin: .3rem 0 .6rem; }
+    .lemma-card-foot {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: .6rem;
+        border-top: 1px solid var(--color-border-light);
+        padding-top: .5rem;
+    }
+    .lemma-card-freq { font-family: var(--font-mono); font-size: .82rem; color: var(--color-ink-muted); white-space: nowrap; }
+}
+
 /* ── Institutio alignment editor ─────────────────────────────────────────────── */
 .alignment-screen {
     max-width: 1400px;
