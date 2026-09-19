@@ -41,10 +41,22 @@ class LemmaLibraryRepository
                 'SELECT count(*) FROM lemma_gloss WHERE number IS NOT NULL'
             );
         }
+
+        $number = $this->parseSearchNumber($search);
+        $condition = $number !== null
+            ? '(lemma ILIKE :q OR gloss_nl ILIKE :q OR number = :num)'
+            : '(lemma ILIKE :q OR gloss_nl ILIKE :q)';
+        $params = ['q' => '%' . $search . '%'];
+        $types = [];
+        if ($number !== null) {
+            $params['num'] = $number;
+            $types['num'] = ParameterType::INTEGER;
+        }
+
         return (int) $this->connection->fetchOne(
-            "SELECT count(*) FROM lemma_gloss
-             WHERE number IS NOT NULL AND (lemma ILIKE :q OR gloss_nl ILIKE :q)",
-            ['q' => '%' . $search . '%']
+            "SELECT count(*) FROM lemma_gloss WHERE number IS NOT NULL AND {$condition}",
+            $params,
+            $types
         );
     }
 
@@ -61,8 +73,15 @@ class LemmaLibraryRepository
         $params = ['limit' => $limit, 'offset' => $offset];
         $types = ['limit' => ParameterType::INTEGER, 'offset' => ParameterType::INTEGER];
         if ($search !== null && $search !== '') {
-            $where .= ' AND (lg.lemma ILIKE :q OR lg.gloss_nl ILIKE :q)';
+            $number = $this->parseSearchNumber($search);
+            $where .= $number !== null
+                ? ' AND (lg.lemma ILIKE :q OR lg.gloss_nl ILIKE :q OR lg.number = :num)'
+                : ' AND (lg.lemma ILIKE :q OR lg.gloss_nl ILIKE :q)';
             $params['q'] = '%' . $search . '%';
+            if ($number !== null) {
+                $params['num'] = $number;
+                $types['num'] = ParameterType::INTEGER;
+            }
         }
 
         $rows = $this->connection->fetchAllAssociative(
@@ -228,5 +247,11 @@ class LemmaLibraryRepository
     {
         usort($works, fn($a, $b) => (self::WORK_ORDER[$a] ?? PHP_INT_MAX) <=> (self::WORK_ORDER[$b] ?? PHP_INT_MAX));
         return $works;
+    }
+
+    /** Recognizes a library-number search term ("301" or "l301"/"L301"); null if the term isn't one. */
+    private function parseSearchNumber(string $search): ?int
+    {
+        return preg_match('/^l?(\d+)$/i', trim($search), $m) === 1 ? (int) $m[1] : null;
     }
 }
