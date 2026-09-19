@@ -21,6 +21,14 @@ use Doctrine\DBAL\ParameterType;
  */
 class LemmaLibraryRepository
 {
+    /** Display order for the "Werken" tags, independent of the slugs' own alphabetical order. */
+    private const WORK_ORDER = [
+        'heidelbergse-catechismus' => 0,
+        'ngb'                      => 1,
+        'canones-dordraceni'       => 2,
+        'institutio-1559'          => 3,
+    ];
+
     public function __construct(
         private readonly Connection $connection,
     ) {}
@@ -80,7 +88,7 @@ class LemmaLibraryRepository
                 'lemma'    => $r['lemma'],
                 'gloss_nl' => $r['gloss_nl'],
                 'freq'     => (int) $r['freq'],
-                'works'    => $this->parsePgArray($r['works']),
+                'works'    => $this->sortWorks($this->parsePgArray($r['works'])),
             ],
             $rows
         );
@@ -213,5 +221,12 @@ class LemmaLibraryRepository
             return [];
         }
         return explode(',', trim($literal, '{}'));
+    }
+
+    /** Reorders work slugs per self::WORK_ORDER; unknown slugs sort after the known ones. */
+    private function sortWorks(array $works): array
+    {
+        usort($works, fn($a, $b) => (self::WORK_ORDER[$a] ?? PHP_INT_MAX) <=> (self::WORK_ORDER[$b] ?? PHP_INT_MAX));
+        return $works;
     }
 }
