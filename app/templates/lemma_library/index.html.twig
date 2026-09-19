@@ -28,11 +28,14 @@
         genummerd naar frequentie over het hele corpus — nummer 1 is het meest voorkomende lemma.
     </p>
 
-    <form method="get" class="lemma-search-form">
-        <input type="search" name="q" value="{{ search }}" placeholder="Zoek op lemma of betekenis…" class="lemma-search-input">
-        <button type="submit" class="nav-btn nav-btn-text">Zoeken</button>
-        {% if search %}<a href="{{ path('app_lemma_library') }}" class="lemma-search-clear">Wissen</a>{% endif %}
-    </form>
+    <div class="lemma-toolbar">
+        <form method="get" class="lemma-search-form">
+            <input type="search" name="q" value="{{ search }}" placeholder="Zoek op lemma of betekenis…" class="lemma-search-input">
+            <button type="submit" class="nav-btn nav-btn-text">Zoeken</button>
+            {% if search %}<a href="{{ path('app_lemma_library') }}" class="lemma-search-clear">Wissen</a>{% endif %}
+        </form>
+        {{ paginator.pager('app_lemma_library', {q: search}, page, last_page) }}
+    </div>
 
     <table class="admin-table lemma-table">
         <thead>

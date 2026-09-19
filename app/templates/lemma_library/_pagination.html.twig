@@ -2,7 +2,7 @@
    pagina vóór de huidige, de huidige pagina, de pagina erna, en de laatste
    pagina -- met "…" op plekken waar pagina's worden overgeslagen. #}
 {% macro pager(route, params, page, last_page) %}
-<nav class="lemma-pagination" aria-label="Paginering">
+<nav class="lemma-pagination lemma-pagination--right" aria-label="Paginering">
     {% set candidates = [1, page - 1, page, page + 1, last_page]
         |filter(p => p >= 1 and p <= last_page)
         |sort %}

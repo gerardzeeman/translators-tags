@@ -4113,6 +4113,27 @@ a:hover { text-decoration: underline; }
 }
 .lemma-pagination-current { color: var(--color-ink-muted); font-size: .85rem; }
 .lemma-pagination-ellipsis { color: var(--color-ink-muted); padding: 0 .1rem; }
+.lemma-pagination--right { justify-content: flex-end; margin: 0; }
+
+.lemma-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin: 1.25rem 0 1.5rem;
+}
+.lemma-toolbar .lemma-search-form { margin: 0; }
+
+.lemma-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin: 1.75rem 0 .75rem;
+}
+.lemma-section-header .lemma-detail-heading { margin: 0; }
 
 .lemma-word details > summary {
     cursor: pointer;
