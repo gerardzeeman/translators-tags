@@ -17,6 +17,9 @@
     'ngb': 'NGB',
     'heidelbergse-catechismus': 'HC',
 } %}
+{% set work_titles = {
+    'heidelbergse-catechismus': 'Heidelbergse Catechismus',
+} %}
 
 {% block body %}
 <div class="container container--wide">
@@ -83,12 +86,12 @@
         {% for o in occurrences %}
         {% if o.href %}
         <a href="{{ o.href }}" class="lemma-occurrence">
-            <span class="lemma-occurrence-ref"><span class="lemma-work-tag">{{ work_labels[o.work_slug] ?? o.work_slug }}</span> {{ o.ref }}</span>
+            <span class="lemma-occurrence-ref"><span class="lemma-work-tag"{% if work_titles[o.work_slug] is defined %} title="{{ work_titles[o.work_slug] }}"{% endif %}>{{ work_labels[o.work_slug] ?? o.work_slug }}</span> {{ o.ref }}</span>
             <span class="lemma-occurrence-context">{%- if o.truncated_before -%}…{%- endif -%}{{ o.context_before }}<mark>{{ o.context_word }}</mark>{{ o.context_after }}{%- if o.truncated_after -%}…{%- endif -%}</span>
         </a>
         {% else %}
         <div class="lemma-occurrence lemma-occurrence--no-link">
-            <span class="lemma-occurrence-ref"><span class="lemma-work-tag">{{ work_labels[o.work_slug] ?? o.work_slug }}</span> {{ o.ref }}</span>
+            <span class="lemma-occurrence-ref"><span class="lemma-work-tag"{% if work_titles[o.work_slug] is defined %} title="{{ work_titles[o.work_slug] }}"{% endif %}>{{ work_labels[o.work_slug] ?? o.work_slug }}</span> {{ o.ref }}</span>
             <span class="lemma-occurrence-context">{%- if o.truncated_before -%}…{%- endif -%}{{ o.context_before }}<mark>{{ o.context_word }}</mark>{{ o.context_after }}{%- if o.truncated_after -%}…{%- endif -%}</span>
         </div>
         {% endif %}

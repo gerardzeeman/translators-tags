@@ -13,6 +13,9 @@
     'ngb': 'NGB',
     'heidelbergse-catechismus': 'HC',
 } %}
+{% set work_titles = {
+    'heidelbergse-catechismus': 'Heidelbergse Catechismus',
+} %}
 
 {% block body %}
 <div class="container container--wide">
@@ -57,7 +60,7 @@
                 </td>
                 <td>{{ l.gloss_nl ?? '–' }}</td>
                 <td class="lemma-work-tags">
-                    {% for w in l.works %}<span class="lemma-work-tag">{{ work_labels[w] ?? w }}</span>{% endfor %}
+                    {% for w in l.works %}<span class="lemma-work-tag"{% if work_titles[w] is defined %} title="{{ work_titles[w] }}"{% endif %}>{{ work_labels[w] ?? w }}</span>{% endfor %}
                 </td>
                 <td>{{ l.freq }}</td>
             </tr>
@@ -84,7 +87,7 @@
             </div>
             <div class="lemma-card-foot">
                 <span class="lemma-work-tags">
-                    {% for w in l.works %}<span class="lemma-work-tag">{{ work_labels[w] ?? w }}</span>{% endfor %}
+                    {% for w in l.works %}<span class="lemma-work-tag"{% if work_titles[w] is defined %} title="{{ work_titles[w] }}"{% endif %}>{{ work_labels[w] ?? w }}</span>{% endfor %}
                 </span>
                 <span class="lemma-card-freq">{{ l.freq }}×</span>
             </div>
