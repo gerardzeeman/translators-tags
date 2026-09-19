@@ -37,6 +37,7 @@
         {{ paginator.pager('app_lemma_library', {q: search}, page, last_page) }}
     </div>
 
+    <div class="table-scroll">
     <table class="admin-table lemma-table">
         <thead>
             <tr>
@@ -65,6 +66,7 @@
         {% endfor %}
         </tbody>
     </table>
+    </div>
 
     {{ paginator.pager('app_lemma_library', {q: search}, page, last_page) }}
 

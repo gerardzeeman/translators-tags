@@ -4106,6 +4106,7 @@ a:hover { text-decoration: underline; }
 .lemma-word { font-family: var(--font-serif); font-style: italic; font-size: 1rem; }
 .lemma-pagination {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: center;
     gap: 1rem;
@@ -4279,6 +4280,7 @@ a:hover { text-decoration: underline; }
 }
 .lemma-search-input {
     flex: 1 1 auto;
+    min-width: 0;
     max-width: 24rem;
     font-family: var(--font-ui);
     font-size: .9rem;
@@ -4291,6 +4293,14 @@ a:hover { text-decoration: underline; }
 .lemma-search-clear {
     font-size: .8rem;
     color: var(--color-ink-muted);
+}
+@media (max-width: 600px) {
+    /* Input weigert anders te krimpen naast de knop/link (automatische
+       flex-minimumbreedte); op smalle schermen laten we het hele
+       zoekformulier daarom wrappen zodat het invoerveld zijn eigen regel
+       krijgt in plaats van de pagina horizontaal te laten scrollen. */
+    .lemma-search-form { flex-wrap: wrap; }
+    .lemma-search-input { flex: 1 1 100%; max-width: none; }
 }
 .lemma-number {
     font-family: var(--font-mono);
