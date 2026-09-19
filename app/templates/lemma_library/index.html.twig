@@ -53,7 +53,7 @@
             <tr>
                 <td class="lemma-number">L{{ l.number }}</td>
                 <td class="lemma-word">
-                    <a href="{{ path('app_lemma_library_detail', {lemma: l.lemma}) }}" class="lemma-word-link">{{ l.lemma }}</a>
+                    <a href="{{ path('app_lemma_library_detail', {number: 'l' ~ l.number}) }}" class="lemma-word-link">{{ l.lemma }}</a>
                 </td>
                 <td>{{ l.gloss_nl ?? '–' }}</td>
                 <td class="lemma-work-tags">

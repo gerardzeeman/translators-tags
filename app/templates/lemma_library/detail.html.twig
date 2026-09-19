@@ -77,7 +77,7 @@
 
     <div class="lemma-section-header">
         <h2 class="lemma-detail-heading">Voorkomens in de tekst</h2>
-        {{ paginator.pager('app_lemma_library_detail', {lemma: lemma}, page, last_page) }}
+        {{ paginator.pager('app_lemma_library_detail', {number: number}, page, last_page) }}
     </div>
     <div class="lemma-occurrence-list">
         {% for o in occurrences %}
@@ -97,7 +97,7 @@
         {% endfor %}
     </div>
 
-    {{ paginator.pager('app_lemma_library_detail', {lemma: lemma}, page, last_page) }}
+    {{ paginator.pager('app_lemma_library_detail', {number: number}, page, last_page) }}
 
 </div>
 {% endblock %}

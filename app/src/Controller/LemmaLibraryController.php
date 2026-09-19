@@ -63,7 +63,7 @@ class LemmaLibraryController extends AbstractController
         if ($lemma === null) {
             throw $this->createNotFoundException("Lemma-nummer {$number} bestaat niet.");
         }
-        return $this->redirectToRoute('app_lemma_library_detail', ['lemma' => $lemma]);
+        return $this->redirectToRoute('app_lemma_library_detail', ['number' => 'l' . $number]);
     }
 
     /**
@@ -72,15 +72,21 @@ class LemmaLibraryController extends AbstractController
      * all works with a KWIC-style snippet -- the general-library
      * counterpart of InstitutioController::lemmaDetail(), spanning every
      * work instead of one.
+     *
+     * URL is keyed by library number (e.g. /lemmas/woord/l301), not the
+     * lemma word itself -- stable even if a lemma's spelling is ever
+     * corrected, and citable the way a Strong's number is.
      */
-    #[Route('/lemmas/woord/{lemma}', name: 'app_lemma_library_detail')]
-    public function detail(string $lemma, Request $request): Response
+    #[Route('/lemmas/woord/{number<l\d+>}', name: 'app_lemma_library_detail')]
+    public function detail(string $number, Request $request): Response
     {
+        $lemma = $this->repository->getLemmaByNumber((int) substr($number, 1));
+        if ($lemma === null) {
+            throw $this->createNotFoundException("Lemma-nummer '{$number}' niet gevonden.");
+        }
+
         $gloss = $this->repository->getLemmaGloss($lemma);
         $variants = $this->repository->getLemmaVariants([$lemma])[$lemma] ?? [];
-        if ($gloss === null && !$variants) {
-            throw $this->createNotFoundException("Lemma '{$lemma}' niet gevonden.");
-        }
 
         $variants = array_map(
             fn($v) => [
@@ -105,6 +111,7 @@ class LemmaLibraryController extends AbstractController
 
         return $this->render('lemma_library/detail.html.twig', [
             'lemma'       => $lemma,
+            'number'      => $number,
             'gloss'       => $gloss,
             'variants'    => $variants,
             'total_freq'  => $totalFreq,
