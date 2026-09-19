@@ -4187,6 +4187,11 @@ a:hover { text-decoration: underline; }
     font-family: var(--font-serif);
     font-style: italic;
 }
+/* Lemma-bibliotheek (algemeen): woord vetgedrukt i.p.v. cursief, zelfde als
+   de tabel/kaarten op de indexpagina -- alleen hier, niet de
+   Institutio-only /institutie/lemma-detailpagina die dezelfde
+   .lemma-detail-word-klasse hergebruikt. */
+.lemma-detail-word--library { font-style: normal; font-weight: 700; }
 .lemma-detail-gloss {
     background: var(--card-warm);
     border: 1px solid var(--color-border);
