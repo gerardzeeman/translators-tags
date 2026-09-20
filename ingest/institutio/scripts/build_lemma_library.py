@@ -68,6 +68,16 @@ def main() -> int:
         """)
         print(f"[ok]    inserted {cur.rowcount} placeholder rows (no gloss yet)")
 
+        # Two-phase: `number` is UNIQUE, and a full re-rank can reassign many
+        # rows' numbers in the same pass (e.g. after a lemma string changes
+        # upstream -- see tokenize_greek_quotes.py). Going straight from old
+        # value to new in one UPDATE risks two rows momentarily sharing a
+        # number mid-statement (Postgres checks a plain UNIQUE constraint
+        # per row, not deferred to end-of-statement) and aborting with a
+        # UniqueViolation. Clearing to NULL first (multiple NULLs are always
+        # allowed) means the second UPDATE only ever assigns each row a
+        # fresh, mutually distinct rn -- never colliding with anything.
+        cur.execute("UPDATE lemma_gloss SET number = NULL")
         cur.execute("""
             WITH ranked AS (
                 SELECT lemma, row_number() OVER (ORDER BY count(*) DESC, lemma ASC) AS rn
