@@ -86,6 +86,9 @@ class LemmaLibraryController extends AbstractController
         }
 
         $gloss = $this->repository->getLemmaGloss($lemma);
+        if ($gloss !== null && $gloss['note'] !== null) {
+            $gloss['note_html'] = $this->linkifyStrongsNumbers($gloss['note']);
+        }
         $variants = $this->repository->getLemmaVariants([$lemma])[$lemma] ?? [];
 
         $variants = array_map(
@@ -119,6 +122,23 @@ class LemmaLibraryController extends AbstractController
             'page'        => $page,
             'last_page'   => $lastPage,
         ]);
+    }
+
+    /**
+     * A lemma_gloss.note can reference a Strong's number in passing (e.g. a
+     * Greek word embedded in a Latin confession text, annotated with its
+     * Strong's cross-reference) -- turns any "G1234"/"H1234" mention into a
+     * link to that entry's page, escaping everything else first since this
+     * is rendered with |raw in the template.
+     */
+    private function linkifyStrongsNumbers(string $text): string
+    {
+        $escaped = htmlspecialchars($text, ENT_QUOTES, 'UTF-8');
+        return preg_replace_callback(
+            '/\b([GH]\d+)\b/',
+            fn($m) => '<a href="' . $this->generateUrl('app_strongs', ['number' => $m[1]]) . '">' . $m[1] . '</a>',
+            $escaped
+        );
     }
 
     /**

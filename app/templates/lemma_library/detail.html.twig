@@ -55,7 +55,7 @@
         {% if gloss.note %}
         <div class="lemma-detail-gloss-row lemma-detail-gloss-row--note">
             <span class="lemma-detail-gloss-label">Noot</span>
-            <p class="lemma-detail-gloss-value">{{ gloss.note }}</p>
+            <p class="lemma-detail-gloss-value">{{ (gloss.note_html ?? gloss.note|escape)|raw }}</p>
         </div>
         {% endif %}
     </div>
