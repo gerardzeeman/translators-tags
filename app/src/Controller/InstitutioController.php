@@ -301,6 +301,7 @@ class InstitutioController extends AbstractController
                 'content' => mb_substr($text, $start, $end - $start),
                 'lemma'   => $tok['lemma'],
                 'gloss'   => $tok['gloss'],
+                'number'  => $tok['number'] ?? null,
             ];
             $cursor = $end;
         }
@@ -378,6 +379,7 @@ class InstitutioController extends AbstractController
                         'char_end'   => min($t['char_end'], $end) - $start,
                         'lemma'      => $t['lemma'],
                         'gloss'      => $t['gloss'],
+                        'number'     => $t['number'] ?? null,
                     ];
                 }
             }

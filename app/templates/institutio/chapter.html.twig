@@ -63,7 +63,7 @@
             <div class="institutio-sentence-group">
                 {% for pair in s.sentence_pairs %}
                 <div class="institutio-sentence-row">
-                    <p class="institutio-sentence-la">{% for part in pair.la_parts %}{%- if part.type == 'text' -%}{{ part.content }}{%- elseif part.type == 'word' -%}{{ m.word_hover(part.content, part.lemma, part.gloss) }}{%- else -%}{{ m.note_marker(part.kind, part.glyph, part.note, part.verse_href) }}{%- endif -%}{% endfor %}</p>
+                    <p class="institutio-sentence-la">{% for part in pair.la_parts %}{%- if part.type == 'text' -%}{{ part.content }}{%- elseif part.type == 'word' -%}{{ m.word_hover(part.content, part.lemma, part.gloss, false, part.number ?? null) }}{%- else -%}{{ m.note_marker(part.kind, part.glyph, part.note, part.verse_href) }}{%- endif -%}{% endfor %}</p>
                     {% if pair.nl_text %}
                     <p class="institutio-sentence-nl">{{ pair.nl_text }}{% if pair.annotations %} {% endif %}{% for a in pair.annotations %}{{ m.note_marker(a.kind, a.glyph, a.note, a.verse_href) }}{% endfor %}</p>
                     {% else %}

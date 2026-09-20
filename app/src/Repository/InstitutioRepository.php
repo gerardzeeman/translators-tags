@@ -297,7 +297,7 @@ class InstitutioRepository
         }
 
         $tokenRows = $this->connection->fetchAllAssociative(
-            'SELECT t.segment_id, t.char_start, t.char_end, t.lemma, lg.gloss_nl
+            'SELECT t.segment_id, t.char_start, t.char_end, t.lemma, lg.gloss_nl, lg.number
              FROM token t
              LEFT JOIN lemma_gloss lg ON lg.lemma = t.lemma
              WHERE t.segment_id IN (' . implode(',', array_fill(0, count($segmentIds), '?')) . ')
@@ -313,6 +313,7 @@ class InstitutioRepository
                 'char_end'   => (int) $t['char_end'],
                 'lemma'      => $t['lemma'],
                 'gloss'      => $t['gloss_nl'],
+                'number'     => $t['number'] !== null ? (int) $t['number'] : null,
             ];
         }
 
