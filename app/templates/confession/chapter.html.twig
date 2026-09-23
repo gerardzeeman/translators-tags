@@ -94,21 +94,21 @@
                     </div>
                     {% if nl %}
                     <div class="institutio-hc-layer">
-                        <span class="institutio-layer-label">{{ layer_labels['denheijer'] }}</span>
+                        <span class="institutio-layer-label">{{ layer_labels['denheijer'] }}{% if is_granted('ROLE_EDIT_INSTITUTIO_TRNL') %} <a href="{{ path('app_confession_edit_translation', {segmentId: s.id, layer: 'denheijer'}) }}" class="institutio-edit-btn-inline" title="Vertaling corrigeren">✎</a>{% endif %}</span>
                         <p class="institutio-sentence-nl"><strong>V:</strong> {{ nl.question }}</p>
                         <p class="institutio-sentence-nl"><strong>A:</strong> {{ nl.answer }}</p>
                     </div>
                     {% endif %}
                     {% if zw %}
                     <div class="institutio-hc-layer">
-                        <span class="institutio-layer-label">{{ layer_labels['zwanepol-hsv'] }}</span>
+                        <span class="institutio-layer-label">{{ layer_labels['zwanepol-hsv'] }}{% if is_granted('ROLE_EDIT_INSTITUTIO_TRNL') %} <a href="{{ path('app_confession_edit_translation', {segmentId: s.id, layer: 'zwanepol-hsv'}) }}" class="institutio-edit-btn-inline" title="Vertaling corrigeren">✎</a>{% endif %}</span>
                         <p class="institutio-sentence-nl"><strong>V:</strong> {{ zw.question }}</p>
                         <p class="institutio-sentence-nl"><strong>A:</strong> {{ zw.answer }}</p>
                     </div>
                     {% endif %}
                     {% for layer, qa_nl in other_layers %}
                     <div class="institutio-hc-layer">
-                        <span class="institutio-layer-label">{{ layer_labels[layer] ?? layer }}</span>
+                        <span class="institutio-layer-label">{{ layer_labels[layer] ?? layer }}{% if is_granted('ROLE_EDIT_INSTITUTIO_TRNL') %} <a href="{{ path('app_confession_edit_translation', {segmentId: s.id, layer: layer}) }}" class="institutio-edit-btn-inline" title="Vertaling corrigeren">✎</a>{% endif %}</span>
                         <p class="institutio-sentence-nl" data-layer="{{ layer }}"><strong>V:</strong> {{ qa_nl.question }}</p>
                         <p class="institutio-sentence-nl" data-layer="{{ layer }}"><strong>A:</strong> {{ qa_nl.answer }}</p>
                     </div>
@@ -121,7 +121,7 @@
                 <div class="institutio-sentence-row">
                     <p class="institutio-sentence-la">{{ self.la_parts(s.parts) }}</p>
                     {% for layer, text_nl in s.translations %}
-                    <p class="institutio-sentence-nl" data-layer="{{ layer }}">{{ text_nl }}</p>
+                    <p class="institutio-sentence-nl" data-layer="{{ layer }}">{{ text_nl }}{% if layer != 'editio-princeps-1563' and is_granted('ROLE_EDIT_INSTITUTIO_TRNL') %} <a href="{{ path('app_confession_edit_translation', {segmentId: s.id, layer: layer}) }}" class="institutio-edit-btn-inline" title="Vertaling corrigeren">✎</a>{% endif %}</p>
                     {% endfor %}
                     {% if is_granted('ROLE_EDIT_INSTITUTIO_TRNL') %}
                     <a href="{{ path('app_confession_edit_text', {id: s.id}) }}" class="institutio-edit-btn" title="Brontekst corrigeren">✎</a>
@@ -143,7 +143,7 @@
                 <div class="institutio-sentence-row">
                     <p class="institutio-sentence-la">{% for part in s.parts %}{%- if part.type == 'text' -%}{{ part.content }}{%- else -%}{{ m.word_hover(part.content, part.lemma, part.gloss, false, part.number ?? null) }}{%- endif -%}{% endfor %}</p>
                     {% for layer, text_nl in s.translations %}
-                    <p class="institutio-sentence-nl" data-layer="{{ layer }}">{{ text_nl }}</p>
+                    <p class="institutio-sentence-nl" data-layer="{{ layer }}">{{ text_nl }}{% if layer != 'editio-princeps-1563' and is_granted('ROLE_EDIT_INSTITUTIO_TRNL') %} <a href="{{ path('app_confession_edit_translation', {segmentId: s.id, layer: layer}) }}" class="institutio-edit-btn-inline" title="Vertaling corrigeren">✎</a>{% endif %}</p>
                     {% endfor %}
                     {% if is_granted('ROLE_EDIT_INSTITUTIO_TRNL') %}
                     <a href="{{ path('app_confession_edit_text', {id: s.id}) }}" class="institutio-edit-btn" title="Brontekst corrigeren">✎</a>

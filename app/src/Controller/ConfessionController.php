@@ -7,6 +7,7 @@ use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 /**
  * Public read-only browsing for the confessional documents ingested via the
@@ -239,6 +240,7 @@ class ConfessionController extends AbstractController
     // GET /belijdenisgeschriften/bewerk/5 404s from assertKnownWork('bewerk')
     // instead of reaching this method).
     #[Route('/belijdenisgeschriften/bewerk/{id<\d+>}', name: 'app_confession_edit_text', methods: ['GET'], priority: 10)]
+    #[IsGranted('ROLE_EDIT_INSTITUTIO_TRNL')]
     public function editText(int $id): Response
     {
         $segment = $this->repository->getSegmentText($id);
@@ -252,6 +254,7 @@ class ConfessionController extends AbstractController
     }
 
     #[Route('/belijdenisgeschriften/bewerk/{id<\d+>}', name: 'app_confession_save_text', methods: ['POST'], priority: 10)]
+    #[IsGranted('ROLE_EDIT_INSTITUTIO_TRNL')]
     public function saveText(int $id, Request $request): Response
     {
         $segment = $this->repository->getSegmentText($id);
@@ -275,6 +278,55 @@ class ConfessionController extends AbstractController
 
         $this->addFlash('success', 'Correctie opgeslagen. Dit segment moet opnieuw getokeniseerd worden (tokenize_latin.py) voordat woord-hover weer klopt.');
         return $this->redirectToRoute('app_confession_edit_text', ['id' => $id]);
+    }
+
+    // Dutch-translation counterpart to editText/saveText above -- same
+    // direct-write-with-audit-trail pattern, applied to a translation
+    // row's text_nl instead of the segment's text_la. Keyed by
+    // segment+layer rather than translation.id: ConfessionRepository::
+    // attachTokens() only ever hands templates a layer => text_nl map, so
+    // building edit links doesn't require threading translation.id through
+    // every template that renders a translation (see chapter/flat/section
+    // templates' "translations" loops).
+    #[Route('/belijdenisgeschriften/vertaling/{segmentId<\d+>}/{layer}/bewerk', name: 'app_confession_edit_translation', methods: ['GET'])]
+    #[IsGranted('ROLE_EDIT_INSTITUTIO_TRNL')]
+    public function editTranslation(int $segmentId, string $layer): Response
+    {
+        $translation = $this->repository->getTranslationForEdit($segmentId, $layer);
+        if ($translation === null) {
+            throw $this->createNotFoundException('Vertaling niet gevonden.');
+        }
+        return $this->render('confession/edit_translation.html.twig', [
+            'translation' => $translation,
+            'history'     => $this->repository->getTranslationCorrectionHistory($translation['id']),
+        ]);
+    }
+
+    #[Route('/belijdenisgeschriften/vertaling/{segmentId<\d+>}/{layer}/bewerk', name: 'app_confession_save_translation', methods: ['POST'])]
+    #[IsGranted('ROLE_EDIT_INSTITUTIO_TRNL')]
+    public function saveTranslation(int $segmentId, string $layer, Request $request): Response
+    {
+        $translation = $this->repository->getTranslationForEdit($segmentId, $layer);
+        if ($translation === null) {
+            throw $this->createNotFoundException('Vertaling niet gevonden.');
+        }
+
+        if (!$this->isCsrfTokenValid('confession_edit_translation', (string) $request->request->get('_csrf_token'))) {
+            throw $this->createAccessDeniedException('Ongeldig CSRF-token.');
+        }
+
+        $newText = trim((string) $request->request->get('text_nl'));
+        $note = trim((string) $request->request->get('note')) ?: null;
+        if ($newText === '') {
+            $this->addFlash('error', 'De tekst mag niet leeg zijn.');
+            return $this->redirectToRoute('app_confession_edit_translation', ['segmentId' => $segmentId, 'layer' => $layer]);
+        }
+
+        $user = $this->getUser();
+        $this->repository->saveTranslationCorrection($translation['id'], $newText, $user?->getId(), $note);
+
+        $this->addFlash('success', 'Correctie opgeslagen.');
+        return $this->redirectToRoute('app_confession_edit_translation', ['segmentId' => $segmentId, 'layer' => $layer]);
     }
 
     private function assertKnownWork(string $werk): void
