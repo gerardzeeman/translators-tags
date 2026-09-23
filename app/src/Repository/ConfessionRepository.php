@@ -622,4 +622,86 @@ class ConfessionRepository
             ['id' => $segmentId]
         );
     }
+
+    /**
+     * A segment's Dutch translation row for a given layer, for the
+     * correction editor (see ConfessionController::editTranslation/
+     * saveTranslation). Refuses the HC's 'editio-princeps-1563' layer --
+     * that's a Latin reading, not a Dutch translation (see
+     * LATIN_TRANSLATION_LAYER), and editing it would need to invalidate
+     * translation_token the way saveTextCorrection() invalidates token,
+     * which this simpler direct-write flow doesn't do.
+     * @return array{id: int, segment_id: int, ref: string, layer: string, text_nl: string}|null
+     */
+    public function getTranslationForEdit(int $segmentId, string $layer): ?array
+    {
+        if ($layer === self::LATIN_TRANSLATION_LAYER) {
+            return null;
+        }
+        $row = $this->connection->fetchAssociative(
+            'SELECT t.id, t.segment_id, s.ref, t.layer, t.text_nl
+             FROM translation t
+             JOIN segment s ON s.id = t.segment_id
+             WHERE t.segment_id = :segment_id AND t.layer = :layer',
+            ['segment_id' => $segmentId, 'layer' => $layer]
+        );
+        if ($row === false) {
+            return null;
+        }
+        return [
+            'id'         => (int) $row['id'],
+            'segment_id' => (int) $row['segment_id'],
+            'ref'        => $row['ref'],
+            'layer'      => $row['layer'],
+            'text_nl'    => $row['text_nl'],
+        ];
+    }
+
+    /**
+     * Corrects a Dutch translation's text (e.g. fixing a typo). Unlike
+     * saveTextCorrection() for segment.text_la, this never needs to touch
+     * any tokenization -- none of the Dutch translation layers are
+     * LatinCy-tokenized (only the Latin 'editio-princeps-1563' layer is,
+     * via translation_token, and getTranslationForEdit() already refuses
+     * to hand that layer to this editor). The old/new text is recorded in
+     * translation_text_correction as an audit trail (see
+     * db/migrate_add_translation_text_correction.sql) -- append-only,
+     * never updated or deleted.
+     */
+    public function saveTranslationCorrection(int $translationId, string $newText, ?int $userId, ?string $note): void
+    {
+        $this->connection->transactional(function (Connection $conn) use ($translationId, $newText, $userId, $note) {
+            $old = $conn->fetchOne('SELECT text_nl FROM translation WHERE id = :id', ['id' => $translationId]);
+            if ($old === false) {
+                throw new \InvalidArgumentException("Vertaling {$translationId} bestaat niet.");
+            }
+            if ($old === $newText) {
+                return;
+            }
+
+            $conn->executeStatement(
+                'INSERT INTO translation_text_correction (translation_id, old_text, new_text, note, corrected_by_user_id)
+                 VALUES (:translation_id, :old_text, :new_text, :note, :user_id)',
+                ['translation_id' => $translationId, 'old_text' => $old, 'new_text' => $newText,
+                 'note' => $note, 'user_id' => $userId]
+            );
+
+            $conn->executeStatement(
+                'UPDATE translation SET text_nl = :text_nl WHERE id = :id',
+                ['text_nl' => $newText, 'id' => $translationId]
+            );
+        });
+    }
+
+    /**
+     * @return array<int, array{old_text: string, new_text: string, note: ?string, created_at: \DateTimeInterface}>
+     */
+    public function getTranslationCorrectionHistory(int $translationId): array
+    {
+        return $this->connection->fetchAllAssociative(
+            'SELECT old_text, new_text, note, created_at
+             FROM translation_text_correction WHERE translation_id = :id ORDER BY created_at DESC',
+            ['id' => $translationId]
+        );
+    }
 }

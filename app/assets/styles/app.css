@@ -3610,6 +3610,38 @@ a:hover { text-decoration: underline; }
 @media (max-width: 720px) {
     .institutio-edit-btn { right: 0; top: -1.4rem; }
 }
+/* Per-layer Dutch-translation edit pencil (belijdenisgeschriften) -- same
+   look as .institutio-edit-btn, but inline rather than absolutely
+   positioned: several of these can sit side by side in one
+   .institutio-hc-layers row (one per Dutch layer), unlike the single
+   whole-row .institutio-edit-btn for the Latin source text. */
+.institutio-edit-btn-inline {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.1rem;
+    height: 1.1rem;
+    margin-left: .4rem;
+    font-size: .75rem;
+    line-height: 1;
+    vertical-align: middle;
+    color: var(--col-label);
+    background: var(--card-warm);
+    border: 1px solid var(--divider);
+    border-radius: 3px;
+    text-decoration: none;
+    opacity: 0;
+    transition: opacity .12s, color .12s, border-color .12s;
+}
+.institutio-sentence-nl:hover .institutio-edit-btn-inline,
+.institutio-hc-layer:hover .institutio-edit-btn-inline,
+.institutio-edit-btn-inline:focus {
+    opacity: 1;
+}
+.institutio-edit-btn-inline:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+}
 .institutio-sentence-la,
 .institutio-sentence-nl {
     font-family: var(--font-serif);
