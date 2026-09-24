@@ -482,7 +482,8 @@ class ConfessionRepository
      * Turns the character spans of ScriptureReferenceFinder into clickable
      * {type: 'ref', content, refs} parts inside an existing parts list
      * (word-hover parts from splitTextIntoWordParts(), or a single plain
-     * text part), which must cover its text contiguously. Word parts that
+     * text part, or placeProofTextMarkers() output), which must cover its
+     * text contiguously apart from zero-width proof-text markers. Word parts that
      * fall inside a span are absorbed into the link -- a reference's
      * "Rom"/"iii"/"19" tokens have no useful lemma hover anyway.
      * @param array<int, array{type: string, content: string}> $parts
@@ -499,6 +500,11 @@ class ConfessionRepository
         $spanIndex = 0;
         $current = null;  // the ref part being built
         foreach ($parts as $part) {
+            // Zero-width parts (proof-text letters) take no text: kept as is.
+            if (!isset($part['content'])) {
+                $out[] = $part;
+                continue;
+            }
             $content = $part['content'];
             $len = mb_strlen($content);
             $pos = 0;

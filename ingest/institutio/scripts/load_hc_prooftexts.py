@@ -3,7 +3,8 @@
 segment_proof_text_anchor (one row per letter per layer it's anchored in)
 and segment_proof_text_ref (see db/migrate_add_hc_proof_texts.sql and
 db/migrate_add_proof_text_layer_anchors.sql), matching each row to its
-segment by ref (work slug 'heidelbergse-catechismus').
+segment by ref within --work (default 'heidelbergse-catechismus'; also used
+for the NGB's proof texts from parse_ngb_prooftexts.py, with --work ngb).
 
 Idempotent: all existing rows of the same source for this work are
 replaced in one transaction. Every reference is checked against the HSV
@@ -11,6 +12,7 @@ text in translation_verses, so a mis-parsed chapter/verse shows up here
 as a warning rather than as an empty verse panel in the app.
 
     python scripts/load_hc_prooftexts.py /data/institutio/hc_prooftexts_cgk.jsonl
+    python scripts/load_hc_prooftexts.py --work ngb /data/institutio/ngb_prooftexts.jsonl
 
 Requires: psycopg[binary]
 """
@@ -24,12 +26,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from db import get_connection
 
-WORK_SLUG = "heidelbergse-catechismus"
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("jsonl", type=Path)
+    ap.add_argument("--work", default="heidelbergse-catechismus", help="work slug")
     args = ap.parse_args()
 
     rows = [json.loads(line) for line in args.jsonl.read_text(encoding="utf-8").splitlines()
@@ -39,10 +41,10 @@ def main() -> int:
 
     n_letters = n_anchors = n_refs = n_missing_verse = 0
     with get_connection() as conn, conn.cursor() as cur:
-        cur.execute("SELECT id FROM work WHERE slug = %s", (WORK_SLUG,))
+        cur.execute("SELECT id FROM work WHERE slug = %s", (args.work,))
         row = cur.fetchone()
         if row is None:
-            print(f"[error] work '{WORK_SLUG}' not found -- ingest the Latin text first")
+            print(f"[error] work '{args.work}' not found -- ingest the Latin text first")
             return 1
         work_id = row[0]
 

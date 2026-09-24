@@ -1,0 +1,12 @@
+{# The proof texts ("bewijsteksten") of one segment, under its text: each
+   letter opens the verse side panel. Expects `proofTexts`. #}
+{% if proofTexts %}
+<details class="confession-proof-list">
+    <summary>Bewijsteksten</summary>
+    <ol>
+        {% for p in proofTexts %}
+        <li><a href="{{ path('app_confession_proof_text', {id: p.id}) }}" data-turbo-frame="institutio-verse-panel" class="confession-proof-glyph" title="Bekijk Bijbeltekst">({{ p.glyph }})</a> {{ p.refs_text }}</li>
+        {% endfor %}
+    </ol>
+</details>
+{% endif %}

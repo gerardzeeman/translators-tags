@@ -133,16 +133,7 @@
                     <a href="{{ path('app_confession_edit_text', {id: s.id}) }}" class="institutio-edit-btn" title="Brontekst corrigeren">✎</a>
                     {% endif %}
                 </div>
-                {% if s.proofTexts %}
-                <details class="confession-proof-list">
-                    <summary>Bewijsteksten</summary>
-                    <ol>
-                        {% for p in s.proofTexts %}
-                        <li><a href="{{ path('app_confession_proof_text', {id: p.id}) }}" data-turbo-frame="institutio-verse-panel" class="confession-proof-glyph" title="Bekijk Bijbeltekst">({{ p.glyph }})</a> {{ p.refs_text }}</li>
-                        {% endfor %}
-                    </ol>
-                </details>
-                {% endif %}
+                {% include 'confession/_proof_list.html.twig' with {proofTexts: s.proofTexts} only %}
                 {% else %}
                 <div class="institutio-sentence-row">
                     <p class="institutio-sentence-la">{{ c.la_parts(s.parts) }}</p>
