@@ -1,0 +1,15 @@
+<turbo-frame id="institutio-verse-panel">
+<div class="institutio-verse-context">{{ proofText.ref }} ({{ proofText.glyph }})</div>
+{% for r in proofText.refs %}
+<div class="institutio-verse-entry">
+    <div class="institutio-verse-ref">{{ r.label }} <span class="institutio-verse-trans">{{ translationCode }}</span></div>
+    {% if r.verses %}
+    <p class="institutio-verse-text">{% for v in r.verses %}{% if r.verses|length > 1 %}<sup class="confession-proof-verse-num">{{ v.verse }}</sup>{% endif %}{{ v.text }}{% if not loop.last %} {% endif %}{% endfor %}</p>
+    {% else %}
+    <p class="institutio-verse-text institutio-verse-missing">Vers niet gevonden in de {{ translationCode }}.</p>
+    {% endif %}
+</div>
+{% else %}
+<p class="institutio-verse-placeholder">Geen Bijbelteksten bij deze verwijzing.</p>
+{% endfor %}
+</turbo-frame>

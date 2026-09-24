@@ -3,6 +3,7 @@
 namespace App\Controller;
 
 use App\Repository\ConfessionRepository;
+use App\Service\TranslationAccessService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -106,6 +107,7 @@ class ConfessionController extends AbstractController
 
     public function __construct(
         private readonly ConfessionRepository $repository,
+        private readonly TranslationAccessService $translationAccess,
     ) {}
 
     /**
@@ -231,6 +233,27 @@ class ConfessionController extends AbstractController
             'articles'   => $this->withWordParts($data['articles']),
             'rejections' => $this->withWordParts($data['rejections']),
             'nav'        => $this->repository->getAdjacentChapters($werk, $chapter),
+        ]);
+    }
+
+    /**
+     * Verse side panel for one proof-text letter -- Turbo Frame endpoint,
+     * same frame id and side panel as the Institutio's Scripture-citation
+     * panel (verse_panel_controller.js). Shows the HSV to users allowed to
+     * see it (it's copyrighted, see TranslationAccessService), the
+     * unrestricted Statenvertaling to everyone else.
+     */
+    #[Route('/belijdenisgeschriften/bewijstekst/{id<\d+>}', name: 'app_confession_proof_text', priority: 10)]
+    public function proofText(int $id): Response
+    {
+        $translationCode = $this->translationAccess->isVisible('HSV') ? 'HSV' : 'SV';
+        $proofText = $this->repository->getProofTextVerses($id, $translationCode);
+        if ($proofText === null) {
+            throw $this->createNotFoundException('Bewijstekst niet gevonden.');
+        }
+        return $this->render('confession/proof_text_panel.html.twig', [
+            'proofText'       => $proofText,
+            'translationCode' => $translationCode,
         ]);
     }
 
@@ -368,6 +391,17 @@ class ConfessionController extends AbstractController
                 $editioPrincepsQa = isset($s['latinTranslationParts'])
                     ? $this->repository->splitPartsAtQuestionMark($s['latinTranslationParts'])
                     : null;
+                // Proof-text letters ("bewijsteksten") go into the Den
+                // Heijer text: it's the same traditional Dutch wording the
+                // lettered apparatus was made for (see
+                // parse_hc_prooftexts_cgk.py). Null when this segment has
+                // none (every non-HC work, and the few HC questions without
+                // proof texts), so the template falls back to plain text.
+                $proofTexts = $s['proofTexts'] ?? [];
+                $denheijerProofParts = $proofTexts && isset($translations['denheijer'])
+                    ? $this->repository->splitPartsAtQuestionMark(
+                        $this->repository->placeProofTextMarkers($translations['denheijer'], $proofTexts))
+                    : null;
                 return [
                     'id'      => $s['id'],
                     'section' => $s['section'],
@@ -389,6 +423,8 @@ class ConfessionController extends AbstractController
                         ),
                     ],
                     'translations' => $translations,
+                    'proofTexts'   => $proofTexts,
+                    'denheijerProofParts' => $denheijerProofParts,
                 ];
             },
             $segments

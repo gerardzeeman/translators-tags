@@ -3908,6 +3908,52 @@ a:hover { text-decoration: underline; }
     }
 }
 
+/* ── Belijdenisgeschriften: bewijsteksten (HC) ─────────────────────────────── */
+.confession-proof-list {
+    margin-top: .8rem;
+    font-family: var(--font-ui);
+    font-size: .82rem;
+    color: var(--col-label);
+}
+.confession-proof-list summary {
+    cursor: pointer;
+    font-size: .72rem;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    width: max-content;
+}
+.confession-proof-list ol {
+    list-style: none;
+    margin: .5rem 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: .25rem;
+    line-height: 1.45;
+}
+.confession-proof-glyph {
+    font-family: var(--font-mono);
+    font-weight: 700;
+    color: var(--color-accent-2);
+    text-decoration: none;
+}
+.confession-proof-glyph:hover,
+.confession-proof-glyph:focus { text-decoration: underline; }
+.institutio-verse-context {
+    font-family: var(--font-ui);
+    font-size: .72rem;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--col-label);
+    margin-bottom: .8rem;
+}
+.confession-proof-verse-num {
+    font-family: var(--font-ui);
+    font-size: .65em;
+    color: var(--col-label);
+    margin-right: .15em;
+}
+
 /* ── Institutio: vertaalvoorstel-zijpaneel (zelfde patroon als het
    Bijbeltekst-citaatpaneel hierboven) ───────────────────────────────────────── */
 .institutio-proposal-sidebar {
