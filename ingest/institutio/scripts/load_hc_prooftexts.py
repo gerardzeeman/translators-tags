@@ -69,17 +69,10 @@ def main() -> int:
                     return 1
                 segment_ids[r["ref"]] = seg[0]
 
-            # segment_proof_text.anchor/anchor_occurrence are deprecated
-            # (superseded by segment_proof_text_anchor) but still filled with
-            # the Den Heijer anchor until they're dropped -- see
-            # db/migrate_add_proof_text_layer_anchors.sql.
-            denheijer_anchor = r["anchors"].get("denheijer") or (None, None)
             cur.execute(
-                """INSERT INTO segment_proof_text
-                       (segment_id, source, glyph, ordinal, anchor, anchor_occurrence, refs_text)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id""",
-                (segment_ids[r["ref"]], r["source"], r["glyph"], r["ordinal"],
-                 denheijer_anchor[0], denheijer_anchor[1], r["refs_text"]))
+                """INSERT INTO segment_proof_text (segment_id, source, glyph, ordinal, refs_text)
+                   VALUES (%s, %s, %s, %s, %s) RETURNING id""",
+                (segment_ids[r["ref"]], r["source"], r["glyph"], r["ordinal"], r["refs_text"]))
             proof_text_id = cur.fetchone()[0]
             n_letters += 1
 
