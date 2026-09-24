@@ -108,9 +108,10 @@ class ConfessionController extends AbstractController
 
     /**
      * The Dutch translation layers proof-text letters are placed in (the
-     * layers segment_proof_text_anchor has anchors for).
+     * layers segment_proof_text_anchor has anchors for): the HC's two, and
+     * the NGB's 'traditioneel'.
      */
-    private const PROOF_TEXT_LAYERS = ['denheijer', 'zwanepol-hsv'];
+    private const PROOF_TEXT_LAYERS = ['denheijer', 'zwanepol-hsv', 'traditioneel'];
 
     public function __construct(
         private readonly ConfessionRepository $repository,
@@ -408,6 +409,19 @@ class ConfessionController extends AbstractController
             function ($s) use ($linkScripture) {
                 $parts = $this->repository->splitTextIntoWordParts($s['text_la'], $s['tokens']);
                 $translations = $s['translations'] ?? [];
+                // Proof-text letters ("bewijsteksten") inline in each Dutch
+                // layer they're anchored in (see parse_hc_prooftexts_cgk.py /
+                // parse_ngb_prooftexts.py), as layer => parts. The HC shows
+                // these split into question/answer (proofParts); other works
+                // get them combined with the reference links below.
+                $proofTexts = $s['proofTexts'] ?? [];
+                $markedParts = [];
+                foreach ($proofTexts ? self::PROOF_TEXT_LAYERS : [] as $layer) {
+                    if (isset($translations[$layer])) {
+                        $markedParts[$layer] = $this->repository->placeProofTextMarkers($translations[$layer], $proofTexts, $layer);
+                    }
+                }
+                $proofParts = array_map(fn($p) => $this->repository->splitPartsAtQuestionMark($p), $markedParts);
                 // Bible references written inline in the text (Canones,
                 // NGB -- not the HC, whose Scripture comes through the
                 // proof-text letters) become links to the verse panel:
@@ -421,7 +435,7 @@ class ConfessionController extends AbstractController
                             ? $this->referenceFinder->findLatin($text)
                             : $this->referenceFinder->findDutch($text);
                         $translationParts[$layer] = $this->repository->applyReferenceSpans(
-                            [['type' => 'text', 'content' => $text]], $this->encodedSpans($spans));
+                            $markedParts[$layer] ?? [['type' => 'text', 'content' => $text]], $this->encodedSpans($spans));
                     }
                 }
                 // Toggleable 1563-vs-1697 diff highlighting (see the HC
@@ -446,20 +460,6 @@ class ConfessionController extends AbstractController
                 $editioPrincepsQa = isset($s['latinTranslationParts'])
                     ? $this->repository->splitPartsAtQuestionMark($s['latinTranslationParts'])
                     : null;
-                // Proof-text letters ("bewijsteksten") inline in each Dutch
-                // layer they're anchored in (see parse_hc_prooftexts_cgk.py),
-                // as layer => {question, answer} parts. A layer is absent
-                // when this segment has no proof texts (every non-HC work,
-                // and the few HC questions without any), so the template
-                // falls back to that layer's plain text.
-                $proofTexts = $s['proofTexts'] ?? [];
-                $proofParts = [];
-                foreach ($proofTexts ? self::PROOF_TEXT_LAYERS : [] as $layer) {
-                    if (isset($translations[$layer])) {
-                        $proofParts[$layer] = $this->repository->splitPartsAtQuestionMark(
-                            $this->repository->placeProofTextMarkers($translations[$layer], $proofTexts, $layer));
-                    }
-                }
                 return [
                     'id'      => $s['id'],
                     'section' => $s['section'],

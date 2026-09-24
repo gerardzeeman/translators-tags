@@ -39,6 +39,7 @@
                     <a href="{{ path('app_confession_edit_text', {id: s.id}) }}" class="institutio-edit-btn" title="Brontekst corrigeren">✎</a>
                     {% endif %}
                 </div>
+                {% include 'confession/_proof_list.html.twig' with {proofTexts: s.proofTexts} only %}
             </div>
         </div>
         {% else %}

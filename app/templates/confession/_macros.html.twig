@@ -7,5 +7,6 @@
 {# Latin word-hover parts, plus reference links. #}
 {% macro la_parts(parts) %}{% import 'institutio/_macros.html.twig' as m %}{% import _self as self %}{% for part in parts %}{%- if part.type == 'text' -%}{{ part.content }}{%- elseif part.type == 'ref' -%}{{ self.scripture_ref(part) }}{%- else -%}{{ m.word_hover(part.content, part.lemma, part.gloss, part.differs ?? false, part.number ?? null) }}{%- endif -%}{% endfor %}{% endmacro %}
 
-{# A translation's plain-text parts, plus reference links. #}
-{% macro text_parts(parts) %}{% import _self as self %}{% for part in parts %}{%- if part.type == 'ref' -%}{{ self.scripture_ref(part) }}{%- else -%}{{ part.content }}{%- endif -%}{% endfor %}{% endmacro %}
+{# A translation's plain-text parts, plus reference links and proof-text
+   letters (ConfessionRepository::placeProofTextMarkers). #}
+{% macro text_parts(parts) %}{% import _self as self %}{% import 'institutio/_macros.html.twig' as m %}{% for part in parts %}{%- if part.type == 'ref' -%}{{ self.scripture_ref(part) }}{%- elseif part.type == 'proof' -%}{{ m.note_marker('citation', part.glyph, part.refs_text, path('app_confession_proof_text', {id: part.id})) }}{%- else -%}{{ part.content }}{%- endif -%}{% endfor %}{% endmacro %}
