@@ -1,6 +1,6 @@
 <turbo-frame id="institutio-verse-panel">
-<div class="institutio-verse-context">{{ proofText.ref }} ({{ proofText.glyph }})</div>
-{% for r in proofText.refs %}
+{% if context %}<div class="institutio-verse-context">{{ context }}</div>{% endif %}
+{% for r in refs %}
 <div class="institutio-verse-entry">
     <div class="institutio-verse-ref">{{ r.label }} <span class="institutio-verse-trans">{{ translationCode }}</span></div>
     {% if r.verses %}
@@ -10,6 +10,6 @@
     {% endif %}
 </div>
 {% else %}
-<p class="institutio-verse-placeholder">Geen Bijbelteksten bij deze verwijzing.</p>
+<p class="institutio-verse-placeholder">Geen Bijbeltekst gevonden voor deze verwijzing.</p>
 {% endfor %}
 </turbo-frame>

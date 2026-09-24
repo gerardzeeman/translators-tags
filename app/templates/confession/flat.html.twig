@@ -1,5 +1,6 @@
 {% extends 'base.html.twig' %}
 {% import 'institutio/_macros.html.twig' as m %}
+{% import 'confession/_macros.html.twig' as c %}
 {% block title %}{{ title }} – Bijbel Vergelijking{% endblock %}
 
 {% set layer_labels = {
@@ -11,7 +12,7 @@
 {% block nav_center %}{% endblock %}
 
 {% block body %}
-<div class="page-institutio">
+<div class="page-institutio" data-controller="verse-panel">
 
     <nav class="chapter-nav" aria-label="Belijdenisgeschriften navigatie">
         <a href="{{ path('app_confession_index') }}" class="chapter-nav-book">Belijdenisgeschriften</a>
@@ -30,9 +31,9 @@
             <div class="institutio-sentence-group">
                 {% if s.heading %}<p class="institutio-heading-nl" style="margin-bottom:0.25rem">{{ s.heading }}</p>{% endif %}
                 <div class="institutio-sentence-row">
-                    <p class="institutio-sentence-la">{% for part in s.parts %}{%- if part.type == 'text' -%}{{ part.content }}{%- else -%}{{ m.word_hover(part.content, part.lemma, part.gloss, false, part.number ?? null) }}{%- endif -%}{% endfor %}</p>
+                    <p class="institutio-sentence-la">{{ c.la_parts(s.parts) }}</p>
                     {% for layer, text_nl in s.translations %}
-                    <p class="institutio-sentence-nl" data-layer="{{ layer }}"><span class="institutio-layer-label">{{ layer_labels[layer] ?? layer }}</span>{{ text_nl }}{% if layer != 'editio-princeps-1563' and is_granted('ROLE_EDIT_INSTITUTIO_TRNL') %} <a href="{{ path('app_confession_edit_translation', {segmentId: s.id, layer: layer}) }}" class="institutio-edit-btn-inline" title="Vertaling corrigeren">✎</a>{% endif %}</p>
+                    <p class="institutio-sentence-nl" data-layer="{{ layer }}"><span class="institutio-layer-label">{{ layer_labels[layer] ?? layer }}</span>{% if s.translationParts[layer] is defined %}{{ c.text_parts(s.translationParts[layer]) }}{% else %}{{ text_nl }}{% endif %}{% if layer != 'editio-princeps-1563' and is_granted('ROLE_EDIT_INSTITUTIO_TRNL') %} <a href="{{ path('app_confession_edit_translation', {segmentId: s.id, layer: layer}) }}" class="institutio-edit-btn-inline" title="Vertaling corrigeren">✎</a>{% endif %}</p>
                     {% endfor %}
                     {% if is_granted('ROLE_EDIT_INSTITUTIO_TRNL') %}
                     <a href="{{ path('app_confession_edit_text', {id: s.id}) }}" class="institutio-edit-btn" title="Brontekst corrigeren">✎</a>
@@ -44,6 +45,8 @@
         <p class="no-verse">Geen artikelen gevonden.</p>
         {% endfor %}
     </div>
+
+    {% include 'confession/_verse_sidebar.html.twig' %}
 
 </div>
 {% endblock %}
