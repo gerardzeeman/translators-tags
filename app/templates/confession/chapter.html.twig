@@ -3,7 +3,7 @@
 {% import _self as self %}
 {% block title %}{{ title }} {{ chapter }} – Bijbel Vergelijking{% endblock %}
 
-{# Den Heijer text with its proof-text letters inline (see
+{# A Dutch layer's text with its proof-text letters inline (see
    ConfessionRepository::placeProofTextMarkers) -- each letter links to the
    verse side panel and shows its references on hover. #}
 {% macro proof_parts(parts) %}{% import 'institutio/_macros.html.twig' as m %}{% for part in parts %}{%- if part.type == 'text' -%}{{ part.content }}{%- else -%}{{ m.note_marker('citation', part.glyph, part.refs_text, path('app_confession_proof_text', {id: part.id})) }}{%- endif -%}{% endfor %}{% endmacro %}
@@ -100,9 +100,9 @@
                     {% if nl %}
                     <div class="institutio-hc-layer">
                         <span class="institutio-layer-label">{{ layer_labels['denheijer'] }}{% if is_granted('ROLE_EDIT_INSTITUTIO_TRNL') %} <a href="{{ path('app_confession_edit_translation', {segmentId: s.id, layer: 'denheijer'}) }}" class="institutio-edit-btn-inline" title="Vertaling corrigeren">✎</a>{% endif %}</span>
-                        {% if s.denheijerProofParts %}
-                        <p class="institutio-sentence-nl"><strong>V:</strong> {{ self.proof_parts(s.denheijerProofParts.question) }}</p>
-                        <p class="institutio-sentence-nl"><strong>A:</strong> {{ self.proof_parts(s.denheijerProofParts.answer) }}</p>
+                        {% if s.proofParts.denheijer is defined %}
+                        <p class="institutio-sentence-nl"><strong>V:</strong> {{ self.proof_parts(s.proofParts.denheijer.question) }}</p>
+                        <p class="institutio-sentence-nl"><strong>A:</strong> {{ self.proof_parts(s.proofParts.denheijer.answer) }}</p>
                         {% else %}
                         <p class="institutio-sentence-nl"><strong>V:</strong> {{ nl.question }}</p>
                         <p class="institutio-sentence-nl"><strong>A:</strong> {{ nl.answer }}</p>
@@ -112,8 +112,13 @@
                     {% if zw %}
                     <div class="institutio-hc-layer">
                         <span class="institutio-layer-label">{{ layer_labels['zwanepol-hsv'] }}{% if is_granted('ROLE_EDIT_INSTITUTIO_TRNL') %} <a href="{{ path('app_confession_edit_translation', {segmentId: s.id, layer: 'zwanepol-hsv'}) }}" class="institutio-edit-btn-inline" title="Vertaling corrigeren">✎</a>{% endif %}</span>
+                        {% if s.proofParts['zwanepol-hsv'] is defined %}
+                        <p class="institutio-sentence-nl"><strong>V:</strong> {{ self.proof_parts(s.proofParts['zwanepol-hsv'].question) }}</p>
+                        <p class="institutio-sentence-nl"><strong>A:</strong> {{ self.proof_parts(s.proofParts['zwanepol-hsv'].answer) }}</p>
+                        {% else %}
                         <p class="institutio-sentence-nl"><strong>V:</strong> {{ zw.question }}</p>
                         <p class="institutio-sentence-nl"><strong>A:</strong> {{ zw.answer }}</p>
+                        {% endif %}
                     </div>
                     {% endif %}
                     {% for layer, qa_nl in other_layers %}

@@ -36,6 +36,13 @@ LAYER = "zwanepol-hsv"
 MODEL = "manual-transcription"
 
 _QA_SPLIT_RE = re.compile(r"Vraag (\d+):\s*(.*?)\n\nAntwoord:\s*(.*?)(?=\n\nVraag \d+:|\Z)", re.DOTALL)
+# The section heading(s) between an answer and the next "Vraag N:" -- always
+# ending in "ZONDAG N", sometimes preceded by a part/topic title ("Het
+# tweede deel De verlossing van de mens ZONDAG 5", "[De rechtvaardiging]
+# ZONDAG 23") -- would otherwise end up at the end of that answer.
+_TRAILING_HEADING_RE = re.compile(r"(?<=[.?!\]])\s+[^.?!]*ZONDAG \d+\s*$")
+# The page's own navigation and the capture tool's footer, after Q129.
+_TRAILING_PAGE_JUNK_RE = re.compile(r"\s*vorige volgende\b.*$", re.DOTALL)
 
 
 def parse(text: str) -> list[dict]:
@@ -44,6 +51,7 @@ def parse(text: str) -> list[dict]:
         number = int(m.group(1))
         question = re.sub(r"\s+", " ", m.group(2)).strip()
         answer = re.sub(r"\s+", " ", m.group(3)).strip()
+        answer = _TRAILING_HEADING_RE.sub("", _TRAILING_PAGE_JUNK_RE.sub("", answer)).strip()
         combined = f"{question} {answer}".strip()
         rows.append({"ref": f"HC {number}", "layer": LAYER, "text": combined, "model": MODEL})
 

@@ -105,6 +105,12 @@ class ConfessionController extends AbstractController
         4 => [86, 129],
     ];
 
+    /**
+     * The Dutch translation layers proof-text letters are placed in (the
+     * layers segment_proof_text_anchor has anchors for).
+     */
+    private const PROOF_TEXT_LAYERS = ['denheijer', 'zwanepol-hsv'];
+
     public function __construct(
         private readonly ConfessionRepository $repository,
         private readonly TranslationAccessService $translationAccess,
@@ -391,17 +397,20 @@ class ConfessionController extends AbstractController
                 $editioPrincepsQa = isset($s['latinTranslationParts'])
                     ? $this->repository->splitPartsAtQuestionMark($s['latinTranslationParts'])
                     : null;
-                // Proof-text letters ("bewijsteksten") go into the Den
-                // Heijer text: it's the same traditional Dutch wording the
-                // lettered apparatus was made for (see
-                // parse_hc_prooftexts_cgk.py). Null when this segment has
-                // none (every non-HC work, and the few HC questions without
-                // proof texts), so the template falls back to plain text.
+                // Proof-text letters ("bewijsteksten") inline in each Dutch
+                // layer they're anchored in (see parse_hc_prooftexts_cgk.py),
+                // as layer => {question, answer} parts. A layer is absent
+                // when this segment has no proof texts (every non-HC work,
+                // and the few HC questions without any), so the template
+                // falls back to that layer's plain text.
                 $proofTexts = $s['proofTexts'] ?? [];
-                $denheijerProofParts = $proofTexts && isset($translations['denheijer'])
-                    ? $this->repository->splitPartsAtQuestionMark(
-                        $this->repository->placeProofTextMarkers($translations['denheijer'], $proofTexts))
-                    : null;
+                $proofParts = [];
+                foreach ($proofTexts ? self::PROOF_TEXT_LAYERS : [] as $layer) {
+                    if (isset($translations[$layer])) {
+                        $proofParts[$layer] = $this->repository->splitPartsAtQuestionMark(
+                            $this->repository->placeProofTextMarkers($translations[$layer], $proofTexts, $layer));
+                    }
+                }
                 return [
                     'id'      => $s['id'],
                     'section' => $s['section'],
@@ -424,7 +433,7 @@ class ConfessionController extends AbstractController
                     ],
                     'translations' => $translations,
                     'proofTexts'   => $proofTexts,
-                    'denheijerProofParts' => $denheijerProofParts,
+                    'proofParts'   => $proofParts,
                 ];
             },
             $segments
