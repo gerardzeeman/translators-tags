@@ -437,6 +437,102 @@ class ConfessionRepository
     }
 
     /**
+     * Verse text for a list of references (from ScriptureReferenceFinder --
+     * the clickable Bible references inline in the confession texts), in the
+     * given Bible translation, for the verse side panel. A reference without
+     * verses is the whole chapter.
+     * @param array<int, array{usfm: string, chapter: int, verse_start: ?int, verse_end: ?int}> $refs
+     * @return array<int, array{label: string, verses: array<int, array{verse: int, text: string}>}>
+     */
+    public function getVersesForRefs(array $refs, string $translationCode): array
+    {
+        $result = [];
+        foreach ($refs as $ref) {
+            $rows = $this->connection->fetchAllAssociative(
+                "SELECT b.name_nl, tv.verse, tv.verse_text
+                 FROM books b
+                 LEFT JOIN translations t ON t.code = :code
+                 LEFT JOIN translation_verses tv
+                        ON tv.translation_id = t.id AND tv.book_id = b.id AND tv.chapter = :chapter
+                       AND (CAST(:vs AS INT) IS NULL OR tv.verse BETWEEN :vs AND :ve)
+                 WHERE b.usfm_code = :usfm
+                 ORDER BY tv.verse",
+                ['code' => $translationCode, 'usfm' => $ref['usfm'], 'chapter' => $ref['chapter'],
+                 'vs' => $ref['verse_start'], 've' => $ref['verse_end']]
+            );
+            if (!$rows) {
+                continue;  // unknown book
+            }
+            $label = $rows[0]['name_nl'] . ' ' . $ref['chapter'];
+            if ($ref['verse_start'] !== null) {
+                $label .= ':' . $ref['verse_start'] . ($ref['verse_end'] > $ref['verse_start'] ? '-' . $ref['verse_end'] : '');
+            }
+            $result[] = [
+                'label'  => $label,
+                'verses' => array_values(array_map(
+                    fn($r) => ['verse' => (int) $r['verse'], 'text' => $r['verse_text']],
+                    array_filter($rows, fn($r) => $r['verse'] !== null)
+                )),
+            ];
+        }
+        return $result;
+    }
+
+    /**
+     * Turns the character spans of ScriptureReferenceFinder into clickable
+     * {type: 'ref', content, refs} parts inside an existing parts list
+     * (word-hover parts from splitTextIntoWordParts(), or a single plain
+     * text part), which must cover its text contiguously. Word parts that
+     * fall inside a span are absorbed into the link -- a reference's
+     * "Rom"/"iii"/"19" tokens have no useful lemma hover anyway.
+     * @param array<int, array{type: string, content: string}> $parts
+     * @param array<int, array{start: int, end: int, refs: string}> $spans refs already encoded
+     * @return array<int, array{type: string, content: string}>
+     */
+    public function applyReferenceSpans(array $parts, array $spans): array
+    {
+        if (!$spans) {
+            return $parts;
+        }
+        $out = [];
+        $offset = 0;
+        $spanIndex = 0;
+        $current = null;  // the ref part being built
+        foreach ($parts as $part) {
+            $content = $part['content'];
+            $len = mb_strlen($content);
+            $pos = 0;
+            while ($pos < $len) {
+                $abs = $offset + $pos;
+                $span = $spans[$spanIndex] ?? null;
+                if ($span !== null && $abs >= $span['start'] && $abs < $span['end']) {
+                    $take = min($len - $pos, $span['end'] - $abs);
+                    $current ??= ['type' => 'ref', 'content' => '', 'refs' => $span['refs']];
+                    $current['content'] .= mb_substr($content, $pos, $take);
+                    $pos += $take;
+                    if ($offset + $pos >= $span['end']) {
+                        $out[] = $current;
+                        $current = null;
+                        $spanIndex++;
+                    }
+                    continue;
+                }
+                $until = $span !== null && $span['start'] > $abs ? min($len, $span['start'] - $offset) : $len;
+                $piece = mb_substr($content, $pos, $until - $pos);
+                // A part untouched by any span keeps its own type (and a
+                // word part its lemma hover); a split one becomes plain text.
+                $out[] = $pos === 0 && $until === $len ? $part : ['type' => 'text', 'content' => $piece];
+                $pos = $until;
+            }
+            $offset += $len;
+        }
+        if ($current !== null) {
+            $out[] = $current;
+        }
+        return $out;
+    }
+
+    /**
      * Splits text_la into {type, content, lemma?, gloss?} parts using the
      * segment's tokens -- identical algorithm to InstitutioRepository's
      * private splitTextIntoWordParts(), duplicated rather than shared since

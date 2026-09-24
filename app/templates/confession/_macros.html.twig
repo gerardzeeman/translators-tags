@@ -1,0 +1,11 @@
+{# Shared rendering for the confession pages' text parts. #}
+
+{# A clickable Bible reference written inline in the text (see
+   ScriptureReferenceFinder) -- opens the verse side panel. #}
+{% macro scripture_ref(part) %}<a href="{{ path('app_confession_verse', {r: part.refs}) }}" data-turbo-frame="institutio-verse-panel" class="confession-scripture-ref" title="Bekijk Bijbeltekst">{{ part.content }}</a>{% endmacro %}
+
+{# Latin word-hover parts, plus reference links. #}
+{% macro la_parts(parts) %}{% import 'institutio/_macros.html.twig' as m %}{% import _self as self %}{% for part in parts %}{%- if part.type == 'text' -%}{{ part.content }}{%- elseif part.type == 'ref' -%}{{ self.scripture_ref(part) }}{%- else -%}{{ m.word_hover(part.content, part.lemma, part.gloss, part.differs ?? false, part.number ?? null) }}{%- endif -%}{% endfor %}{% endmacro %}
+
+{# A translation's plain-text parts, plus reference links. #}
+{% macro text_parts(parts) %}{% import _self as self %}{% for part in parts %}{%- if part.type == 'ref' -%}{{ self.scripture_ref(part) }}{%- else -%}{{ part.content }}{%- endif -%}{% endfor %}{% endmacro %}

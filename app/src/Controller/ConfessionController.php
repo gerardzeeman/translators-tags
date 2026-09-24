@@ -3,6 +3,7 @@
 namespace App\Controller;
 
 use App\Repository\ConfessionRepository;
+use App\Service\ScriptureReferenceFinder;
 use App\Service\TranslationAccessService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
@@ -114,6 +115,7 @@ class ConfessionController extends AbstractController
     public function __construct(
         private readonly ConfessionRepository $repository,
         private readonly TranslationAccessService $translationAccess,
+        private readonly ScriptureReferenceFinder $referenceFinder,
     ) {}
 
     /**
@@ -174,7 +176,7 @@ class ConfessionController extends AbstractController
                 'werk'     => $werk,
                 'title'    => $meta['title'],
                 'subtitle' => $meta['subtitle'],
-                'articles' => $this->withWordParts($this->repository->getFlatArticles($werk)),
+                'articles' => $this->withWordParts($this->repository->getFlatArticles($werk), true),
             ]);
         }
 
@@ -203,7 +205,7 @@ class ConfessionController extends AbstractController
         }
         return $this->render('confession/section.html.twig', [
             'werk' => $werk, 'title' => self::WORKS[$werk]['title'], 'heading' => 'Voorwoord',
-            'segments' => $this->withWordParts($segments),
+            'segments' => $this->withWordParts($segments, $werk !== 'heidelbergse-catechismus'),
         ]);
     }
 
@@ -218,7 +220,7 @@ class ConfessionController extends AbstractController
         }
         return $this->render('confession/section.html.twig', [
             'werk' => $werk, 'title' => self::WORKS[$werk]['title'], 'heading' => 'Besluit',
-            'segments' => $this->withWordParts($segments),
+            'segments' => $this->withWordParts($segments, $werk !== 'heidelbergse-catechismus'),
         ]);
     }
 
@@ -236,8 +238,8 @@ class ConfessionController extends AbstractController
             'title'      => self::WORKS[$werk]['title'],
             'chapter'    => $chapter,
             'heading'    => $data['heading'],
-            'articles'   => $this->withWordParts($data['articles']),
-            'rejections' => $this->withWordParts($data['rejections']),
+            'articles'   => $this->withWordParts($data['articles'], $werk !== 'heidelbergse-catechismus'),
+            'rejections' => $this->withWordParts($data['rejections'], $werk !== 'heidelbergse-catechismus'),
             'nav'        => $this->repository->getAdjacentChapters($werk, $chapter),
         ]);
     }
@@ -257,8 +259,27 @@ class ConfessionController extends AbstractController
         if ($proofText === null) {
             throw $this->createNotFoundException('Bewijstekst niet gevonden.');
         }
-        return $this->render('confession/proof_text_panel.html.twig', [
-            'proofText'       => $proofText,
+        return $this->render('confession/verse_panel.html.twig', [
+            'context'         => $proofText['ref'] . ' (' . $proofText['glyph'] . ')',
+            'refs'            => $proofText['refs'],
+            'translationCode' => $translationCode,
+        ]);
+    }
+
+    /**
+     * Verse side panel for a Bible reference written inline in a confession
+     * text (made clickable via ScriptureReferenceFinder): ?r= is its encoded
+     * reference list, e.g. "ROM.3.19-19;ROM.3.23-23". Same frame and panel
+     * as proofText() above.
+     */
+    #[Route('/belijdenisgeschriften/vers', name: 'app_confession_verse', priority: 10)]
+    public function verse(Request $request): Response
+    {
+        $refs = $this->referenceFinder->decode((string) $request->query->get('r', ''));
+        $translationCode = $this->translationAccess->isVisible('HSV') ? 'HSV' : 'SV';
+        return $this->render('confession/verse_panel.html.twig', [
+            'context'         => null,
+            'refs'            => $this->repository->getVersesForRefs($refs, $translationCode),
             'translationCode' => $translationCode,
         ]);
     }
@@ -358,6 +379,18 @@ class ConfessionController extends AbstractController
         return $this->redirectToRoute('app_confession_edit_translation', ['segmentId' => $segmentId, 'layer' => $layer]);
     }
 
+    /**
+     * ScriptureReferenceFinder spans with their refs encoded for the verse
+     * panel link (ConfessionRepository::applyReferenceSpans()).
+     */
+    private function encodedSpans(array $spans): array
+    {
+        return array_map(
+            fn($s) => ['start' => $s['start'], 'end' => $s['end'], 'refs' => $this->referenceFinder->encode($s['refs'])],
+            $spans
+        );
+    }
+
     private function assertKnownWork(string $werk): void
     {
         if (!isset(self::WORKS[$werk]) || $this->repository->getWork($werk) === null) {
@@ -369,12 +402,28 @@ class ConfessionController extends AbstractController
      * @param array<int, array{text_la: string, tokens: array}> $segments
      * @return array<int, array{id: int, section: int, kind: ?string, heading: ?string, parts: array, qa: array}>
      */
-    private function withWordParts(array $segments): array
+    private function withWordParts(array $segments, bool $linkScripture = false): array
     {
         return array_map(
-            function ($s) {
+            function ($s) use ($linkScripture) {
                 $parts = $this->repository->splitTextIntoWordParts($s['text_la'], $s['tokens']);
                 $translations = $s['translations'] ?? [];
+                // Bible references written inline in the text (Canones,
+                // NGB -- not the HC, whose Scripture comes through the
+                // proof-text letters) become links to the verse panel:
+                // in the Latin word parts, and per translation layer as
+                // layer => parts (Latin notation for the 1563 layer).
+                $translationParts = [];
+                if ($linkScripture) {
+                    $parts = $this->repository->applyReferenceSpans($parts, $this->encodedSpans($this->referenceFinder->findLatin($s['text_la'])));
+                    foreach ($translations as $layer => $text) {
+                        $spans = $layer === 'editio-princeps-1563'
+                            ? $this->referenceFinder->findLatin($text)
+                            : $this->referenceFinder->findDutch($text);
+                        $translationParts[$layer] = $this->repository->applyReferenceSpans(
+                            [['type' => 'text', 'content' => $text]], $this->encodedSpans($spans));
+                    }
+                }
                 // Toggleable 1563-vs-1697 diff highlighting (see the HC
                 // chapter template): mark which words in the main Latin
                 // text differ from the editio-princeps-1563 layer, when
@@ -432,6 +481,7 @@ class ConfessionController extends AbstractController
                         ),
                     ],
                     'translations' => $translations,
+                    'translationParts' => $translationParts,
                     'proofTexts'   => $proofTexts,
                     'proofParts'   => $proofParts,
                 ];
