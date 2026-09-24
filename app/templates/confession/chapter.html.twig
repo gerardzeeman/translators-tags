@@ -1,6 +1,7 @@
 {% extends 'base.html.twig' %}
 {% import 'institutio/_macros.html.twig' as m %}
 {% import _self as self %}
+{% import 'confession/_macros.html.twig' as c %}
 {% block title %}{{ title }} {{ chapter }} – Bijbel Vergelijking{% endblock %}
 
 {# A Dutch layer's text with its proof-text letters inline (see
@@ -144,9 +145,9 @@
                 {% endif %}
                 {% else %}
                 <div class="institutio-sentence-row">
-                    <p class="institutio-sentence-la">{{ self.la_parts(s.parts) }}</p>
+                    <p class="institutio-sentence-la">{{ c.la_parts(s.parts) }}</p>
                     {% for layer, text_nl in s.translations %}
-                    <p class="institutio-sentence-nl" data-layer="{{ layer }}">{{ text_nl }}{% if layer != 'editio-princeps-1563' and is_granted('ROLE_EDIT_INSTITUTIO_TRNL') %} <a href="{{ path('app_confession_edit_translation', {segmentId: s.id, layer: layer}) }}" class="institutio-edit-btn-inline" title="Vertaling corrigeren">✎</a>{% endif %}</p>
+                    <p class="institutio-sentence-nl" data-layer="{{ layer }}">{% if s.translationParts[layer] is defined %}{{ c.text_parts(s.translationParts[layer]) }}{% else %}{{ text_nl }}{% endif %}{% if layer != 'editio-princeps-1563' and is_granted('ROLE_EDIT_INSTITUTIO_TRNL') %} <a href="{{ path('app_confession_edit_translation', {segmentId: s.id, layer: layer}) }}" class="institutio-edit-btn-inline" title="Vertaling corrigeren">✎</a>{% endif %}</p>
                     {% endfor %}
                     {% if is_granted('ROLE_EDIT_INSTITUTIO_TRNL') %}
                     <a href="{{ path('app_confession_edit_text', {id: s.id}) }}" class="institutio-edit-btn" title="Brontekst corrigeren">✎</a>
@@ -166,9 +167,9 @@
             <span class="institutio-section-num">{{ s.section }}</span>
             <div class="institutio-sentence-group">
                 <div class="institutio-sentence-row">
-                    <p class="institutio-sentence-la">{% for part in s.parts %}{%- if part.type == 'text' -%}{{ part.content }}{%- else -%}{{ m.word_hover(part.content, part.lemma, part.gloss, false, part.number ?? null) }}{%- endif -%}{% endfor %}</p>
+                    <p class="institutio-sentence-la">{{ c.la_parts(s.parts) }}</p>
                     {% for layer, text_nl in s.translations %}
-                    <p class="institutio-sentence-nl" data-layer="{{ layer }}">{{ text_nl }}{% if layer != 'editio-princeps-1563' and is_granted('ROLE_EDIT_INSTITUTIO_TRNL') %} <a href="{{ path('app_confession_edit_translation', {segmentId: s.id, layer: layer}) }}" class="institutio-edit-btn-inline" title="Vertaling corrigeren">✎</a>{% endif %}</p>
+                    <p class="institutio-sentence-nl" data-layer="{{ layer }}">{% if s.translationParts[layer] is defined %}{{ c.text_parts(s.translationParts[layer]) }}{% else %}{{ text_nl }}{% endif %}{% if layer != 'editio-princeps-1563' and is_granted('ROLE_EDIT_INSTITUTIO_TRNL') %} <a href="{{ path('app_confession_edit_translation', {segmentId: s.id, layer: layer}) }}" class="institutio-edit-btn-inline" title="Vertaling corrigeren">✎</a>{% endif %}</p>
                     {% endfor %}
                     {% if is_granted('ROLE_EDIT_INSTITUTIO_TRNL') %}
                     <a href="{{ path('app_confession_edit_text', {id: s.id}) }}" class="institutio-edit-btn" title="Brontekst corrigeren">✎</a>
@@ -180,17 +181,7 @@
     </div>
     {% endif %}
 
-    {# Bijbeltekst-zijpaneel voor de bewijsteksten -- zelfde paneel als op /institutie #}
-    <aside class="institutio-verse-sidebar" data-verse-panel-target="sidebar">
-        <div class="institutio-verse-sidebar-header">
-            <span class="institutio-verse-sidebar-title">Bijbeltekst</span>
-            <button class="institutio-verse-sidebar-close" type="button"
-                    data-action="click->verse-panel#close" aria-label="Sluiten">×</button>
-        </div>
-        <turbo-frame id="institutio-verse-panel">
-            <p class="institutio-verse-placeholder">Klik op een bewijstekst-letter om de tekst te zien.</p>
-        </turbo-frame>
-    </aside>
+    {% include 'confession/_verse_sidebar.html.twig' %}
 
 </div>
 {% endblock %}

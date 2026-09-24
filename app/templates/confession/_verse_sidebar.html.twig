@@ -1,0 +1,13 @@
+{# Bijbeltekst-zijpaneel (desktop) / bottom sheet (mobiel) voor klikbare
+   Schriftverwijzingen en bewijsteksten -- zelfde paneel als op /institutie.
+   Vereist data-controller="verse-panel" op het omringende .page-institutio. #}
+<aside class="institutio-verse-sidebar" data-verse-panel-target="sidebar">
+    <div class="institutio-verse-sidebar-header">
+        <span class="institutio-verse-sidebar-title">Bijbeltekst</span>
+        <button class="institutio-verse-sidebar-close" type="button"
+                data-action="click->verse-panel#close" aria-label="Sluiten">×</button>
+    </div>
+    <turbo-frame id="institutio-verse-panel">
+        <p class="institutio-verse-placeholder">Klik op een Schriftverwijzing om de tekst te zien.</p>
+    </turbo-frame>
+</aside>

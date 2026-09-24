@@ -3939,6 +3939,17 @@ a:hover { text-decoration: underline; }
 }
 .confession-proof-glyph:hover,
 .confession-proof-glyph:focus { text-decoration: underline; }
+/* Bijbelverwijzing die in de tekst zelf staat (Canones, NGB) -- klikbaar */
+.confession-scripture-ref {
+    color: inherit;
+    text-decoration: underline;
+    text-decoration-color: var(--color-accent-2);
+    text-decoration-thickness: 1px;
+    text-underline-offset: 2px;
+    cursor: pointer;
+}
+.confession-scripture-ref:hover,
+.confession-scripture-ref:focus { color: var(--color-accent-2); }
 .institutio-verse-context {
     font-family: var(--font-ui);
     font-size: .72rem;
