@@ -19,20 +19,24 @@ with proof texts: Q23, 24, 68, 71, 83 and 92 traditionally have none
 
 ANCHORING
 ---------
-The letters belong to the Dutch wording, and the app shows the Den Heijer
-transcription of that same traditional text (layer 'denheijer', see
-parse_hc_nl_denheijer.py) -- near-identical, but with its own spelling
-differences and transcription slips. A character offset into that text
-wouldn't survive later corrections through the translation-correction UI,
-so each letter instead gets an `anchor`: the (normalized) Den Heijer words
-immediately before where the letter goes, found here by a word-level
-difflib alignment of the CGK answer against the Den Heijer answer. The app
-(ConfessionRepository::placeProofTextMarkers) then just looks up the
-`anchor_occurrence`-th occurrence of that phrase in whatever the current
-Den Heijer text is -- so an edit elsewhere in the answer doesn't move a
-letter, and a letter whose anchor no longer matches simply drops out of
-the inline text (it's still listed under the answer). `anchor` is null where the alignment found no reliable
-match (the letter is then only listed, never guessed).
+The letters belong to the Dutch wording. The app shows them in two Dutch
+columns (LAYERS below): the Den Heijer transcription of this same
+traditional text (layer 'denheijer', see parse_hc_nl_denheijer.py) --
+near-identical, with its own spelling differences and transcription
+slips -- and Zwanepol's modern Dutch (layer 'zwanepol-hsv'), which
+rewords and reorders. A character offset into either text wouldn't survive
+later corrections through the translation-correction UI, so each letter
+instead gets, per layer, an anchor: the (normalized) words of that layer's
+text immediately before where the letter goes, plus which occurrence of
+that phrase it is. Found by a word-level difflib alignment of the CGK text
+against the layer's text; for Zwanepol additionally snapped to clause ends
+and, where that still misses, fixed by hand (ZWANEPOL_ANCHOR_OVERRIDES).
+The app (ConfessionRepository::placeProofTextMarkers) then just looks up
+that occurrence of the phrase in whatever the layer's current text is --
+so an edit elsewhere doesn't move a letter, and a letter whose anchor no
+longer matches simply drops out of the inline text (it's still listed
+under the answer). A letter without an anchor is only listed, never
+guessed.
 
 Normalization (must match the PHP side): lowercase, words = runs of
 Unicode letters/digits, joined by single spaces.
@@ -40,12 +44,12 @@ Unicode letters/digits, joined by single spaces.
 Usage:
     python scripts/parse_hc_prooftexts_cgk.py -o /data/institutio/hc_prooftexts_cgk.jsonl
     python scripts/parse_hc_prooftexts_cgk.py --dry-run
-    python scripts/parse_hc_prooftexts_cgk.py --pdf local.pdf --denheijer-jsonl hc_nl_denheijer.jsonl --dry-run
+    python scripts/parse_hc_prooftexts_cgk.py --pdf local.pdf --denheijer-jsonl dh.jsonl --zwanepol-jsonl zw.jsonl --dry-run
 
-Without --denheijer-jsonl the Den Heijer text is read from the database
-(translation layer 'denheijer').
+Without --denheijer-jsonl / --zwanepol-jsonl ({"ref", "text"} per line)
+the layer's text is read from the database.
 
-Requires: pymupdf, requests (download), psycopg (only without --denheijer-jsonl)
+Requires: pymupdf, requests (download), psycopg (unless both layers come from JSONL)
 """
 from __future__ import annotations
 
@@ -63,6 +67,8 @@ RAW_PATH = Path("/data/institutio/raw/hc_cgk_klassiek.pdf")
 SOURCE = "cgk-klassiek"
 WORK_SLUG = "heidelbergse-catechismus"
 ANCHOR_WORDS = 4
+# How far (in words) a Zwanepol letter may be moved to reach a clause end.
+SNAP_WORDS = 6
 
 # Dutch abbreviation (as printed, without the period) => USFM code in the
 # app's `books` table. Numbered books carry their number separately
@@ -111,6 +117,7 @@ _TRAILER_RE = re.compile(r"\n\s*(?:Zondag \d+|HET (?:EERSTE|TWEEDE|DERDE) DEEL)\
 _BOOK_RE = re.compile(r"(?:([123])\s*)?([A-Z][a-zë]+)\.?\s*(?=\d)")
 _CHAPTER_GROUP_RE = re.compile(r"(\d+):([\d,\s\-–]+?)(?=;|\.\s|\.$|$)")
 _WORD_RE = re.compile(r"[^\W_]+")
+_TRAILING_ZONDAG_RE = re.compile(r"(?<=[.?!\]])\s+[^.?!]*ZONDAG \d+\s*$")
 
 
 def normalize_words(text: str) -> list[str]:
@@ -216,32 +223,66 @@ def parse_question(number: int, raw: str) -> tuple[str, list[dict], list[str]]:
     return text, glyphs, warnings
 
 
-def compute_anchors(cgk_text: str, denheijer_text: str) -> dict[str, tuple[str, int] | None]:
+def _words_with_boundaries(text: str) -> tuple[list[str], list[bool]]:
+    """Normalized words, and per word whether it ends a clause: followed
+    (after optional spaces) by , ; : . ? ! or by a bracketed citation --
+    or is the last word. Words inside Zwanepol's own bracketed citations
+    ("[Gal. 3:10]") never count, so a letter can't land in the middle of one."""
+    matches = list(_WORD_RE.finditer(text))
+    words = [m.group().lower() for m in matches]
+    in_brackets = [text.count("[", 0, m.start()) > text.count("]", 0, m.start()) for m in matches]
+    boundaries = [not inside and bool(re.match(r"\s*(?:[,;:.?!\[]|$)", text[m.end():]))
+                  for m, inside in zip(matches, in_brackets)]
+    return words, boundaries
+
+
+def compute_anchors(cgk_text: str, target_text: str, snap_to_clause: bool = False
+                    ) -> dict[str, tuple[str, int] | None]:
     """Map each "(x)" marker in the CGK text to (anchor, occurrence): the
-    normalized Den Heijer words right before where it belongs, and which
-    occurrence of that phrase in the whole Den Heijer text it is (1-based).
-    Question and answer are aligned as one text -- a few markers sit in the
-    question itself (e.g. Q32 "genaamd (a)?"), and an answer's opening words
-    often repeat the question's ("beide in het leven en sterven", Q1), which
-    is what the occurrence number disambiguates."""
+    normalized words of `target_text` right before where it belongs, and
+    which occurrence of that phrase in the whole target text it is
+    (1-based). Question and answer are aligned as one text -- a few markers
+    sit in the question itself (e.g. Q32 "genaamd (a)?"), and an answer's
+    opening words often repeat the question's ("beide in het leven en
+    sterven", Q1), which is what the occurrence number disambiguates.
+
+    snap_to_clause is for a paraphrasing target (Zwanepol-HSV): a letter
+    that closes a clause in the CGK text ("toebehoor (b), maar") is moved
+    to the nearest clause end in the target when word alignment lands it
+    mid-clause -- in a modern rewording the words around a letter often
+    change or move, but the clause it belongs to usually survives. Not used
+    for Den Heijer: same wording, but its commas are unreliable (several
+    were lost where the letters were stripped out)."""
     cgk_words: list[str] = []
-    marker_after: list[tuple[str, int]] = []  # (glyph, index of last cgk word before it)
-    for piece in re.split(r"(\([a-z]\))", cgk_text):
+    marker_after: list[tuple[str, int, bool]] = []  # (glyph, last cgk word before it, closes a clause)
+    pieces = re.split(r"(\([a-z]\))", cgk_text)
+    for idx, piece in enumerate(pieces):
         mm = re.fullmatch(r"\(([a-z])\)", piece)
         if mm:
-            marker_after.append((mm.group(1), len(cgk_words) - 1))
+            following = pieces[idx + 1] if idx + 1 < len(pieces) else ""
+            closes = bool(re.match(r"\s*(?:[,;:.?!]|$)", following))
+            marker_after.append((mm.group(1), len(cgk_words) - 1, closes))
         else:
             cgk_words.extend(normalize_words(piece))
-    dh_words = normalize_words(denheijer_text)
+    # The Zwanepol-HSV layer still carries the section heading that follows
+    # a question in the source ("... zal heersen. ZONDAG 13", "... bewegen.
+    # God de Zoon en onze verlossing ZONDAG 11") -- cut off before aligning,
+    # or the question's last letter gets pulled behind it. The anchor phrase
+    # and occurrence still hold in the full text: only words before the
+    # letter are involved.
+    target_text = _TRAILING_ZONDAG_RE.sub("", target_text)
+    target_words, target_boundaries = _words_with_boundaries(target_text)
+    answer_start = len(normalize_words(target_text[:target_text.find("?") + 1]))
 
-    # cgk word index => Den Heijer word index of the word the letter should
+    # cgk word index => target word index of the word the letter should
     # follow. Equal stretches and same-length substitutions (spelling
     # variants: "eigendom"/"eigen") map word for word. A marker after the
-    # last word of a stretch Den Heijer lacks or words differently (e.g. its
-    # dropped "straffen" in Q10) maps to the end of Den Heijer's own
-    # version of that stretch -- the same spot in the sentence.
+    # last word of a stretch the target lacks or words differently (e.g.
+    # Den Heijer's dropped "straffen" in Q10, before it was corrected) maps
+    # to the end of the target's own version of that stretch -- the same
+    # spot in the sentence.
     mapping: dict[int, int] = {}
-    matcher = difflib.SequenceMatcher(a=cgk_words, b=dh_words, autojunk=False)
+    matcher = difflib.SequenceMatcher(a=cgk_words, b=target_words, autojunk=False)
     for op, a1, a2, b1, b2 in matcher.get_opcodes():
         if op == "equal" or (op == "replace" and a2 - a1 == b2 - b1):
             for k in range(a2 - a1):
@@ -250,20 +291,104 @@ def compute_anchors(cgk_text: str, denheijer_text: str) -> dict[str, tuple[str, 
             mapping[a2 - 1] = b2 - 1
 
     anchors: dict[str, tuple[str, int] | None] = {}
-    for glyph, i in marker_after:
+    for glyph, i, closes in marker_after:
         j = mapping.get(i)
+        if j is not None and snap_to_clause and closes and not target_boundaries[j]:
+            # Never across the question/answer split: the question's "?" is
+            # a clause end too, but a letter in the answer doesn't belong there.
+            lo = answer_start if j >= answer_start else 0
+            hi = len(target_words) if j >= answer_start else answer_start
+            candidates = [k for k in range(max(lo, j - SNAP_WORDS), min(hi, j + SNAP_WORDS + 1))
+                          if target_boundaries[k]]
+            # Nearest clause end; on a tie the earlier one (the letter's
+            # own clause rather than the next).
+            j = min(candidates, key=lambda k: (abs(k - j), k)) if candidates else j
         # At least two words of anchor, so it can't match a lone "en".
         if j is None or j < 1:
             anchors[glyph] = None
             continue
-        phrase = dh_words[max(0, j - ANCHOR_WORDS + 1):j + 1]
+        phrase = target_words[max(0, j - ANCHOR_WORDS + 1):j + 1]
         n = len(phrase)
-        occurrence = sum(1 for e in range(n - 1, j + 1) if dh_words[e - n + 1:e + 1] == phrase)
+        occurrence = sum(1 for e in range(n - 1, j + 1) if target_words[e - n + 1:e + 1] == phrase)
         anchors[glyph] = (" ".join(phrase), occurrence)
     return anchors
 
 
-def load_denheijer(jsonl: Path | None) -> dict[int, str]:
+# Where Zwanepol-HSV rewords or reorders a clause, word alignment (even with
+# clause snapping) can't find the letter's spot, or finds the wrong one.
+# These were settled by reading every question side by side with the CGK
+# text: (question, letter) => the normalized Zwanepol words right before
+# the letter (first occurrence in the text), or None where the letter has
+# no sensible spot in the modern wording (it's then only listed).
+ZWANEPOL_ANCHOR_OVERRIDES: dict[tuple[int, str], str | None] = {
+    (1, "c"): "getrouwe zaligmaker jezus christus",
+    (1, "e"): "van de duivel verlost",
+    (1, "f"): "hij bewaart mij zo",
+    (2, "c"): "en ellende verlost word",
+    (10, "a"): "hij is hevig vertoornd",
+    (17, "a"): "krachtens zijn goddelijke natuur",
+    (17, "b"): "last van gods toorn",
+    (19, "a"): "het paradijs geopenbaard heeft",
+    (26, "a"): "uit niets geschapen heeft",
+    (28, "b"): "voorspoed dankbaar mogen zijn",
+    (32, "d"): "ik zijn naam belijd",
+    (32, "e"): "dankoffer aan hem overgeef",
+    (35, "d"): "maagd maria heeft aangenomen",
+    (46, "a"): "de hemel is opgenomen",
+    (52, "a"): "van mij weggenomen heeft",
+    (54, "a"): "de zoon van god",
+    (54, "b"): "het gehele menselijke geslacht",
+    (54, "c"): "eeuwige leven is uitverkoren",
+    (54, "d"): "zijn geest en woord",
+    (54, "e"): "van het ware geloof",
+    (54, "f"): "tot aan het einde",
+    (60, "h"): "rekent mij die toe",
+    (67, "a"): "grond van onze zaligheid",
+    (74, "c"): "het geloof werkt beloofd",
+    (74, "e"): "door de besnijdenis gebeurde",
+    (77, "a"): "avondmaal die aldus luidt",
+    (78, "a"): None,  # "Neen (a);" -- Zwanepol drops the "Nee"
+    (86, "a"): "bewijzen voor zijn weldaden",
+    (86, "b"): "door ons geprezen wordt",
+    (94, "e"): "alleen op hem vertrouw",
+    (94, "f"): "in alle ootmoed",
+    (94, "i"): "mijn gehele hart liefheb",
+    (94, "l"): "vrees en eer",
+    (99, "c"): "ook door onnodig zweren",
+    (99, "d"): "verschrikkelijke zonden deel krijgen",
+    (99, "g"): "wordt beleden aangeroepen",
+    (103, "b"): "naar gods gemeente kom",
+    (105, "c"): "moedwillig in gevaar begeef",
+    (107, "a"): "hebben als onszelf",
+    (107, "b"): "vriendelijkheid te bejegenen",
+    (108, "a"): "door god vervloekt is",
+    (108, "b"): "afkeer van te hebben",
+    (109, "b"): "gedachten begeerten",
+    (110, "d"): "lengte maat waar",
+    (110, "e"): "munt met woeker",
+    (112, "a"): "een vals getuigenis afleg",
+    (112, "e"): "van de duivel zelf",
+    (112, "f"): "god op mij wil laden",
+    (117, "b"): "hem te vragen",
+    (117, "c"): "van harte aanroepen",
+    (118, "a"): "en lichaam nodig hebben",
+    (122, "a"): "juiste wijze kennen",
+    (122, "b"): "waarheid helder stralen",
+    (123, "b"): "breid haar uit",
+    (123, "d"): "van uw rijk aanbreekt",
+    (124, "a"): "eigen wil prijsgeven",
+    (128, "a"): "ons alle goeds te geven",
+    (129, "a"): "dit van hem verlang",
+}
+
+# Target layer => (whether letters snap to clause ends, manual overrides).
+LAYERS: dict[str, tuple[bool, dict[tuple[int, str], str | None]]] = {
+    "denheijer": (False, {}),
+    "zwanepol-hsv": (True, ZWANEPOL_ANCHOR_OVERRIDES),
+}
+
+
+def load_layer(layer: str, jsonl: Path | None) -> dict[int, str]:
     if jsonl is not None:
         rows = [json.loads(line) for line in jsonl.read_text(encoding="utf-8").splitlines() if line.strip()]
         return {int(r["ref"].split()[1]): r["text"] for r in rows}
@@ -274,7 +399,7 @@ def load_denheijer(jsonl: Path | None) -> dict[int, str]:
             """SELECT s.ref, t.text_nl FROM translation t
                JOIN segment s ON s.id = t.segment_id
                JOIN work w ON w.id = s.work_id
-               WHERE w.slug = %s AND t.layer = 'denheijer'""", (WORK_SLUG,))
+               WHERE w.slug = %s AND t.layer = %s""", (WORK_SLUG, layer))
         return {int(ref.split()[1]): text for ref, text in cur.fetchall() if re.fullmatch(r"HC \d+", ref)}
 
 
@@ -282,6 +407,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--pdf", type=Path, default=RAW_PATH)
     ap.add_argument("--denheijer-jsonl", type=Path, default=None)
+    ap.add_argument("--zwanepol-jsonl", type=Path, default=None)
     ap.add_argument("-o", "--output", type=Path)
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
@@ -295,11 +421,12 @@ def main() -> int:
         print(f"[error] questions not found: {missing}")
         return 1
 
-    denheijer = load_denheijer(args.denheijer_jsonl)
+    layer_jsonl = {"denheijer": args.denheijer_jsonl, "zwanepol-hsv": args.zwanepol_jsonl}
+    texts = {layer: load_layer(layer, layer_jsonl[layer]) for layer in LAYERS}
 
     rows: list[dict] = []
     warnings: list[str] = []
-    n_refs = n_anchored = n_glyphs = 0
+    n_refs = n_glyphs = 0
     no_proofs: list[int] = []
     for number in range(1, 130):
         cgk_text, glyphs, qwarn = parse_question(number, questions[number])
@@ -307,26 +434,43 @@ def main() -> int:
         if not glyphs:
             no_proofs.append(number)
             continue
-        anchors = compute_anchors(cgk_text, denheijer[number]) if number in denheijer else {}
-        if number not in denheijer:
-            warnings.append(f"Q{number}: no denheijer text -- letters not anchored")
+        layer_anchors: dict[str, dict[str, tuple[str, int] | None]] = {}
+        for layer, (snap, overrides) in LAYERS.items():
+            target = texts[layer].get(number)
+            if target is None:
+                warnings.append(f"Q{number}: no {layer} text -- letters not anchored there")
+                layer_anchors[layer] = {}
+                continue
+            anchors = compute_anchors(cgk_text, target, snap_to_clause=snap)
+            target_words = normalize_words(target)
+            for (q, glyph), phrase in overrides.items():
+                if q != number:
+                    continue
+                if phrase is None:
+                    anchors[glyph] = None
+                    continue
+                words = phrase.split()
+                if not any(target_words[k:k + len(words)] == words for k in range(len(target_words))):
+                    warnings.append(f"Q{number} ({glyph}): {layer} override {phrase!r} not found in the text")
+                    anchors[glyph] = None
+                    continue
+                anchors[glyph] = (phrase, 1)
+            layer_anchors[layer] = anchors
         for ordinal, g in enumerate(glyphs, start=1):
-            anchor, occurrence = anchors.get(g["glyph"]) or (None, None)
             rows.append({"ref": f"HC {number}", "source": SOURCE, "glyph": g["glyph"], "ordinal": ordinal,
-                         "anchor": anchor, "anchor_occurrence": occurrence,
+                         "anchors": {layer: layer_anchors[layer].get(g["glyph"]) for layer in LAYERS},
                          "refs_text": g["refs_text"], "refs": g["refs"]})
             n_glyphs += 1
             n_refs += len(g["refs"])
-            n_anchored += anchor is not None
 
     for w in warnings:
         print(f"[warn]  {w}")
-    print(f"[ok]    {n_glyphs} letters over {129 - len(no_proofs)} questions, {n_refs} verse references; "
-          f"{n_anchored}/{n_glyphs} letters anchored in the Den Heijer text")
+    print(f"[ok]    {n_glyphs} letters over {129 - len(no_proofs)} questions, {n_refs} verse references")
     print(f"[info]  questions without proof texts: {no_proofs}")
-    unanchored = [f"{r['ref']}{r['glyph']}" for r in rows if r["anchor"] is None]
-    if unanchored:
-        print(f"[info]  not anchored (listed only): {', '.join(unanchored)}")
+    for layer in LAYERS:
+        unanchored = [f"{r['ref'].split()[1]}{r['glyph']}" for r in rows if r["anchors"][layer] is None]
+        print(f"[ok]    {layer}: {n_glyphs - len(unanchored)}/{n_glyphs} letters anchored"
+              + (f"; listed only: {', '.join(unanchored)}" if unanchored else ""))
 
     if args.dry_run:
         return 0

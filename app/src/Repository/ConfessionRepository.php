@@ -305,46 +305,59 @@ class ConfessionRepository
     /**
      * Lettered Scripture proof texts (bewijsteksten) per segment, in order --
      * currently only the HC's classic Dutch apparatus (see
-     * db/migrate_add_hc_proof_texts.sql).
+     * db/migrate_add_hc_proof_texts.sql) -- each with where it goes in every
+     * translation layer it's anchored in (segment_proof_text_anchor).
      * @param int[] $segmentIds
-     * @return array<int, array<int, array{id: int, glyph: string, anchor: ?string, anchor_occurrence: ?int, refs_text: string}>>
+     * @return array<int, array<int, array{id: int, glyph: string, refs_text: string, anchors: array<string, array{anchor: string, occurrence: int}>}>>
      */
     private function getProofTexts(array $segmentIds): array
     {
         $rows = $this->connection->fetchAllAssociative(
-            'SELECT id, segment_id, glyph, anchor, anchor_occurrence, refs_text
-             FROM segment_proof_text
-             WHERE segment_id IN (' . implode(',', array_fill(0, count($segmentIds), '?')) . ')
-             ORDER BY segment_id, ordinal',
+            'SELECT p.id, p.segment_id, p.glyph, p.refs_text, a.layer, a.anchor, a.anchor_occurrence
+             FROM segment_proof_text p
+             LEFT JOIN segment_proof_text_anchor a ON a.proof_text_id = p.id
+             WHERE p.segment_id IN (' . implode(',', array_fill(0, count($segmentIds), '?')) . ')
+             ORDER BY p.segment_id, p.ordinal',
             $segmentIds
         );
-        $bySegment = [];
+        $byId = [];
         foreach ($rows as $r) {
-            $bySegment[(int) $r['segment_id']][] = [
-                'id'                => (int) $r['id'],
-                'glyph'             => $r['glyph'],
-                'anchor'            => $r['anchor'],
-                'anchor_occurrence' => $r['anchor_occurrence'] !== null ? (int) $r['anchor_occurrence'] : null,
-                'refs_text'         => $r['refs_text'],
+            $id = (int) $r['id'];
+            $byId[$id] ??= [
+                'segment_id' => (int) $r['segment_id'],
+                'id'         => $id,
+                'glyph'      => $r['glyph'],
+                'refs_text'  => $r['refs_text'],
+                'anchors'    => [],
             ];
+            if ($r['layer'] !== null) {
+                $byId[$id]['anchors'][$r['layer']] = ['anchor' => $r['anchor'], 'occurrence' => (int) $r['anchor_occurrence']];
+            }
+        }
+        $bySegment = [];
+        foreach ($byId as $p) {
+            $segmentId = $p['segment_id'];
+            unset($p['segment_id']);
+            $bySegment[$segmentId][] = $p;
         }
         return $bySegment;
     }
 
     /**
-     * Splits a Dutch text into plain-text parts and proof-text marker parts
-     * ({type: 'proof', glyph, id, refs_text}), each marker placed right after
-     * the anchor_occurrence-th occurrence of its anchor phrase. Word matching
+     * Splits one translation layer's Dutch text into plain-text parts and
+     * proof-text marker parts ({type: 'proof', glyph, id, refs_text}), each
+     * marker placed right after the given occurrence of its anchor phrase
+     * for that layer. Word matching
      * uses the same normalization as parse_hc_prooftexts_cgk.py (lowercase,
      * runs of Unicode letters/digits), so punctuation/spacing differences
      * don't matter. A letter whose anchor isn't found (none stored, or the
      * text has since been corrected at exactly that spot) is left out of the
      * inline text -- it's still in the list under the answer -- rather than
      * guessed.
-     * @param array<int, array{id: int, glyph: string, anchor: ?string, anchor_occurrence: ?int, refs_text: string}> $proofTexts
+     * @param array<int, array{id: int, glyph: string, refs_text: string, anchors: array<string, array{anchor: string, occurrence: int}>}> $proofTexts
      * @return array<int, array{type: string, content?: string, glyph?: string, id?: int, refs_text?: string}>
      */
-    public function placeProofTextMarkers(string $text, array $proofTexts): array
+    public function placeProofTextMarkers(string $text, array $proofTexts, string $layer): array
     {
         preg_match_all('/[\p{L}\p{N}]+/u', $text, $m, PREG_OFFSET_CAPTURE);
         $words = array_map(fn($w) => mb_strtolower($w[0]), $m[0]);
@@ -352,14 +365,14 @@ class ConfessionRepository
 
         $markersAt = [];  // byte offset => proof texts inserted there
         foreach ($proofTexts as $p) {
-            if ($p['anchor'] === null || $p['anchor_occurrence'] === null) {
+            if (!isset($p['anchors'][$layer])) {
                 continue;
             }
-            $anchor = explode(' ', $p['anchor']);
+            $anchor = explode(' ', $p['anchors'][$layer]['anchor']);
             $n = count($anchor);
             $seen = 0;
             for ($i = 0; $i + $n <= count($words); $i++) {
-                if (array_slice($words, $i, $n) === $anchor && ++$seen === $p['anchor_occurrence']) {
+                if (array_slice($words, $i, $n) === $anchor && ++$seen === $p['anchors'][$layer]['occurrence']) {
                     $markersAt[$wordEnds[$i + $n - 1]][] = $p;
                     break;
                 }

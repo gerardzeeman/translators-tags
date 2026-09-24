@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
-"""Load parse_hc_prooftexts_cgk.py's JSONL into segment_proof_text /
-segment_proof_text_ref (see db/migrate_add_hc_proof_texts.sql), matching
-each row to its segment by ref (work slug 'heidelbergse-catechismus').
+"""Load parse_hc_prooftexts_cgk.py's JSONL into segment_proof_text,
+segment_proof_text_anchor (one row per letter per layer it's anchored in)
+and segment_proof_text_ref (see db/migrate_add_hc_proof_texts.sql and
+db/migrate_add_proof_text_layer_anchors.sql), matching each row to its
+segment by ref (work slug 'heidelbergse-catechismus').
 
 Idempotent: all existing rows of the same source for this work are
 replaced in one transaction. Every reference is checked against the HSV
@@ -35,7 +37,7 @@ def main() -> int:
     sources = {r["source"] for r in rows}
     print(f"[load] {len(rows)} letters from {args.jsonl} (source {', '.join(sorted(sources))})")
 
-    n_letters = n_refs = n_missing_verse = 0
+    n_letters = n_anchors = n_refs = n_missing_verse = 0
     with get_connection() as conn, conn.cursor() as cur:
         cur.execute("SELECT id FROM work WHERE slug = %s", (WORK_SLUG,))
         row = cur.fetchone()
@@ -65,14 +67,28 @@ def main() -> int:
                     return 1
                 segment_ids[r["ref"]] = seg[0]
 
+            # segment_proof_text.anchor/anchor_occurrence are deprecated
+            # (superseded by segment_proof_text_anchor) but still filled with
+            # the Den Heijer anchor until they're dropped -- see
+            # db/migrate_add_proof_text_layer_anchors.sql.
+            denheijer_anchor = r["anchors"].get("denheijer") or (None, None)
             cur.execute(
                 """INSERT INTO segment_proof_text
                        (segment_id, source, glyph, ordinal, anchor, anchor_occurrence, refs_text)
                    VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id""",
                 (segment_ids[r["ref"]], r["source"], r["glyph"], r["ordinal"],
-                 r["anchor"], r["anchor_occurrence"], r["refs_text"]))
+                 denheijer_anchor[0], denheijer_anchor[1], r["refs_text"]))
             proof_text_id = cur.fetchone()[0]
             n_letters += 1
+
+            for layer, anchor in r["anchors"].items():
+                if anchor is None:
+                    continue
+                cur.execute(
+                    """INSERT INTO segment_proof_text_anchor (proof_text_id, layer, anchor, anchor_occurrence)
+                       VALUES (%s, %s, %s, %s)""",
+                    (proof_text_id, layer, anchor[0], anchor[1]))
+                n_anchors += 1
 
             for ordinal, ref in enumerate(r["refs"], start=1):
                 book_id = book_ids.get(ref["usfm"])
@@ -103,7 +119,7 @@ def main() -> int:
 
         conn.commit()
 
-    print(f"[ok]    {n_letters} letters, {n_refs} references loaded; "
+    print(f"[ok]    {n_letters} letters, {n_anchors} layer anchors, {n_refs} references loaded; "
           f"{n_missing_verse} references with verses missing from the HSV")
     return 0
 
