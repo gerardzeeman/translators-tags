@@ -283,6 +283,8 @@ class ConfessionRepository
             }
         }
 
+        $proofTextsBySegment = $this->getProofTexts($segmentIds);
+
         return array_map(
             fn($r) => [
                 'id'                    => (int) $r['id'],
@@ -294,9 +296,131 @@ class ConfessionRepository
                 'tokens'                => $tokensBySegment[(int) $r['id']] ?? [],
                 'translations'          => $translationsBySegment[(int) $r['id']] ?? [],
                 'latinTranslationParts' => $latinTranslationPartsBySegment[(int) $r['id']] ?? null,
+                'proofTexts'            => $proofTextsBySegment[(int) $r['id']] ?? [],
             ],
             $rows
         );
+    }
+
+    /**
+     * Lettered Scripture proof texts (bewijsteksten) per segment, in order --
+     * currently only the HC's classic Dutch apparatus (see
+     * db/migrate_add_hc_proof_texts.sql).
+     * @param int[] $segmentIds
+     * @return array<int, array<int, array{id: int, glyph: string, anchor: ?string, anchor_occurrence: ?int, refs_text: string}>>
+     */
+    private function getProofTexts(array $segmentIds): array
+    {
+        $rows = $this->connection->fetchAllAssociative(
+            'SELECT id, segment_id, glyph, anchor, anchor_occurrence, refs_text
+             FROM segment_proof_text
+             WHERE segment_id IN (' . implode(',', array_fill(0, count($segmentIds), '?')) . ')
+             ORDER BY segment_id, ordinal',
+            $segmentIds
+        );
+        $bySegment = [];
+        foreach ($rows as $r) {
+            $bySegment[(int) $r['segment_id']][] = [
+                'id'                => (int) $r['id'],
+                'glyph'             => $r['glyph'],
+                'anchor'            => $r['anchor'],
+                'anchor_occurrence' => $r['anchor_occurrence'] !== null ? (int) $r['anchor_occurrence'] : null,
+                'refs_text'         => $r['refs_text'],
+            ];
+        }
+        return $bySegment;
+    }
+
+    /**
+     * Splits a Dutch text into plain-text parts and proof-text marker parts
+     * ({type: 'proof', glyph, id, refs_text}), each marker placed right after
+     * the anchor_occurrence-th occurrence of its anchor phrase. Word matching
+     * uses the same normalization as parse_hc_prooftexts_cgk.py (lowercase,
+     * runs of Unicode letters/digits), so punctuation/spacing differences
+     * don't matter. A letter whose anchor isn't found (none stored, or the
+     * text has since been corrected at exactly that spot) is left out of the
+     * inline text -- it's still in the list under the answer -- rather than
+     * guessed.
+     * @param array<int, array{id: int, glyph: string, anchor: ?string, anchor_occurrence: ?int, refs_text: string}> $proofTexts
+     * @return array<int, array{type: string, content?: string, glyph?: string, id?: int, refs_text?: string}>
+     */
+    public function placeProofTextMarkers(string $text, array $proofTexts): array
+    {
+        preg_match_all('/[\p{L}\p{N}]+/u', $text, $m, PREG_OFFSET_CAPTURE);
+        $words = array_map(fn($w) => mb_strtolower($w[0]), $m[0]);
+        $wordEnds = array_map(fn($w) => $w[1] + strlen($w[0]), $m[0]);  // byte offsets
+
+        $markersAt = [];  // byte offset => proof texts inserted there
+        foreach ($proofTexts as $p) {
+            if ($p['anchor'] === null || $p['anchor_occurrence'] === null) {
+                continue;
+            }
+            $anchor = explode(' ', $p['anchor']);
+            $n = count($anchor);
+            $seen = 0;
+            for ($i = 0; $i + $n <= count($words); $i++) {
+                if (array_slice($words, $i, $n) === $anchor && ++$seen === $p['anchor_occurrence']) {
+                    $markersAt[$wordEnds[$i + $n - 1]][] = $p;
+                    break;
+                }
+            }
+        }
+        ksort($markersAt);
+
+        $parts = [];
+        $cursor = 0;
+        foreach ($markersAt as $offset => $markers) {
+            if ($offset > $cursor) {
+                $parts[] = ['type' => 'text', 'content' => substr($text, $cursor, $offset - $cursor)];
+            }
+            foreach ($markers as $p) {
+                $parts[] = ['type' => 'proof', 'glyph' => $p['glyph'], 'id' => $p['id'], 'refs_text' => $p['refs_text']];
+            }
+            $cursor = $offset;
+        }
+        if ($cursor < strlen($text)) {
+            $parts[] = ['type' => 'text', 'content' => substr($text, $cursor)];
+        }
+        return $parts;
+    }
+
+    /**
+     * One proof-text letter's references with their verse text in the given
+     * Bible translation (translations.code), for the verse side panel
+     * (ConfessionController::proofText). A range comes back as one entry
+     * with every verse numbered.
+     * @return array{glyph: string, ref: string, refs: array<int, array{label: string, verses: array<int, array{verse: int, text: string}>}>}|null
+     */
+    public function getProofTextVerses(int $proofTextId, string $translationCode): ?array
+    {
+        $head = $this->connection->fetchAssociative(
+            'SELECT p.glyph, s.ref FROM segment_proof_text p JOIN segment s ON s.id = p.segment_id WHERE p.id = :id',
+            ['id' => $proofTextId]
+        );
+        if ($head === false) {
+            return null;
+        }
+
+        $rows = $this->connection->fetchAllAssociative(
+            "SELECT r.ordinal, r.label, tv.verse, tv.verse_text
+             FROM segment_proof_text_ref r
+             LEFT JOIN translations t ON t.code = :code
+             LEFT JOIN translation_verses tv
+                    ON tv.translation_id = t.id AND tv.book_id = r.book_id AND tv.chapter = r.chapter
+                   AND tv.verse BETWEEN r.verse_start AND r.verse_end
+             WHERE r.proof_text_id = :id
+             ORDER BY r.ordinal, tv.verse",
+            ['id' => $proofTextId, 'code' => $translationCode]
+        );
+        $refs = [];
+        foreach ($rows as $r) {
+            $refs[(int) $r['ordinal']]['label'] = $r['label'];
+            $refs[(int) $r['ordinal']]['verses'] ??= [];
+            if ($r['verse'] !== null) {
+                $refs[(int) $r['ordinal']]['verses'][] = ['verse' => (int) $r['verse'], 'text' => $r['verse_text']];
+            }
+        }
+        return ['glyph' => $head['glyph'], 'ref' => $head['ref'], 'refs' => array_values($refs)];
     }
 
     /**
