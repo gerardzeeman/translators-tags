@@ -39,6 +39,12 @@ RUN wheel_file=$(python -c "import json, urllib.request; data = json.load(urllib
     pip install --no-cache-dir "/tmp/grc_odycy_joint_sm-${version}-py3-none-any.whl" && \
     rm "/tmp/grc_odycy_joint_sm-${version}-py3-none-any.whl"
 
+# Tesseract with Latin, for re-OCRing scanned sources whose own text layer
+# is poor (scripts/ocr_pdf_pages.py -- e.g. the Corpus Reformatorum volumes
+# of Calvin's commentaries). Placed after the model layers so adding it
+# doesn't invalidate their (slow) cached downloads.
+RUN apt-get update && apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-lat     && rm -rf /var/lib/apt/lists/*
+
 COPY . .
 
 CMD ["python", "main.py"]
