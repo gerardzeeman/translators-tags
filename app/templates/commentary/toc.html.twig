@@ -1,0 +1,36 @@
+{% extends 'base.html.twig' %}
+{% block title %}{{ meta.title }} – Bijbel Vergelijking{% endblock %}
+
+{% block nav_center %}{% endblock %}
+
+{% block body %}
+<div class="page-institutio-home">
+
+    <div class="institutio-home-header">
+        <h1>{{ meta.title }}</h1>
+        <p class="institutio-home-subtitle">{{ meta.subtitle }}</p>
+    </div>
+
+    <nav class="institutio-toc" aria-label="Inhoudsopgave">
+        <a href="{{ path('app_commentary_argument', {boek: boek}) }}" class="institutio-toc-entry institutio-toc-front">
+            <span class="institutio-toc-num">—</span>
+            <span class="institutio-toc-titles"><span class="institutio-toc-title">Argumentum</span></span>
+        </a>
+        <div class="institutio-toc-book">
+            <h2 class="institutio-toc-book-title">{{ meta.book_nl }}</h2>
+            {% for ch in chapters %}
+            <a href="{{ path('app_commentary_chapter', {boek: boek, chapter: ch.chapter}) }}" class="institutio-toc-entry">
+                <span class="institutio-toc-num">{{ ch.chapter }}</span>
+                <span class="institutio-toc-titles"><span class="institutio-toc-title">Hoofdstuk {{ ch.chapter }}</span></span>
+            </a>
+            {% endfor %}
+        </div>
+    </nav>
+
+    <p class="commentary-source-note">
+        De Latijnse tekst is met OCR uit de scan van de Calvini Opera gehaald en bevat nog leesfouten,
+        vooral in namen en in Griekse en Hebreeuwse woorden.
+    </p>
+
+</div>
+{% endblock %}

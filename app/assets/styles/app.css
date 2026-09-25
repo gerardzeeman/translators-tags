@@ -5336,3 +5336,68 @@ a:hover { text-decoration: underline; }
     .hist-align-chapter-card-actions { display: flex; gap: .5rem; }
     .hist-align-chapter-card-actions .btn { flex: 1; text-align: center; }
 }
+
+/* ── Commentaren van Calvijn (/commentaren) ─────────────────────────────────── */
+.commentary-part-heading {
+    font-family: var(--font-ui);
+    font-size: .78rem;
+    font-weight: 600;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--col-label);
+    margin: 2rem 0 .3rem;
+}
+.commentary-part-hint {
+    font-family: var(--font-ui);
+    font-size: .82rem;
+    color: var(--col-label);
+    margin: 0 0 1rem;
+}
+.commentary-verses {
+    display: flex;
+    flex-direction: column;
+    gap: .55rem;
+}
+.commentary-verse-row {
+    display: grid;
+    grid-template-columns: 2rem 1fr 1fr;
+    gap: 1.2rem;
+    align-items: baseline;
+}
+.commentary-verse-row p { margin: 0; }
+.commentary-verse-num,
+.commentary-verse-link {
+    font-family: var(--font-ui);
+    font-size: .8rem;
+    color: var(--color-accent-2);
+    text-decoration: none;
+}
+.commentary-verse-num:hover,
+.commentary-verse-link:hover { text-decoration: underline; }
+.commentary-print-ref {
+    display: block;
+    margin-top: .4rem;
+    font-family: var(--font-ui);
+    font-size: .72rem;
+    color: var(--col-label);
+}
+.commentary-nl-para { margin: 0 0 .6rem; }
+.commentary-nl-para:last-child { margin-bottom: 0; }
+.commentary-nl-missing {
+    font-family: var(--font-ui);
+    font-size: .82rem;
+    font-style: italic;
+    color: var(--col-label);
+}
+.commentary-source-note {
+    max-width: 40rem;
+    margin: 2rem auto 0;
+    font-family: var(--font-ui);
+    font-size: .82rem;
+    color: var(--col-label);
+    text-align: center;
+}
+@media (max-width: 720px) {
+    .commentary-verse-row { grid-template-columns: 1.6rem 1fr; }
+    .commentary-verse-row .institutio-sentence-nl { grid-column: 2; }
+}

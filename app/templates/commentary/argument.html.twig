@@ -1,0 +1,41 @@
+{% extends 'base.html.twig' %}
+{% import 'confession/_macros.html.twig' as c %}
+{% block title %}{{ meta.title }} · Argumentum – Bijbel Vergelijking{% endblock %}
+
+{% block nav_center %}{% endblock %}
+
+{% block body %}
+<div class="page-institutio" data-controller="verse-panel">
+
+    <nav class="chapter-nav" aria-label="Commentaar navigatie">
+        <a href="{{ path('app_commentary_toc', {boek: boek}) }}" class="chapter-nav-book">{{ meta.title }}</a>
+        <span class="chapter-nav-sep">›</span>
+        <span class="chapter-nav-current">Argumentum</span>
+        <div class="chapter-nav-arrows">
+            <a href="{{ path('app_commentary_chapter', {boek: boek, chapter: 1}) }}" class="nav-btn" title="Hoofdstuk 1">›</a>
+        </div>
+    </nav>
+
+    <div class="institutio-heading institutio-heading-solo">Argumentum</div>
+    <p class="commentary-part-hint">Calvijns inleiding op het boek. De Nederlandse alinea's zijn bij benadering verdeeld: Latijn en Nederlands zijn anders in alinea's opgedeeld.</p>
+
+    <div class="institutio-sections">
+        {% for s in segments %}
+        <div class="institutio-section" id="arg-{{ s.section }}">
+            <span class="institutio-section-num">{{ s.section }}</span>
+            <div class="institutio-sentence-group">
+                <div class="institutio-sentence-row">
+                    <div class="institutio-sentence-la">{{ c.la_parts(s.parts) }}</div>
+                    <div class="institutio-sentence-nl">
+                        {% for p in (s.text_nl ?? '')|split("\n\n") %}<p class="commentary-nl-para">{{ p }}</p>{% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    {% include 'confession/_verse_sidebar.html.twig' %}
+
+</div>
+{% endblock %}

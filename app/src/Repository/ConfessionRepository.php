@@ -128,7 +128,7 @@ class ConfessionRepository
         }
 
         $rows = $this->connection->fetchAllAssociative(
-            'SELECT id, ref, section, kind, heading, text_la
+            'SELECT id, ref, section, kind, heading, print_ref, text_la
              FROM segment
              WHERE work_id = :work_id AND chapter = :chapter
              ORDER BY seq',
@@ -292,6 +292,7 @@ class ConfessionRepository
                 'section'               => (int) $r['section'],
                 'kind'                  => $r['kind'],
                 'heading'               => $r['heading'],
+                'print_ref'             => $r['print_ref'] ?? null,
                 'text_la'               => $r['text_la'],
                 'tokens'                => $tokensBySegment[(int) $r['id']] ?? [],
                 'translations'          => $translationsBySegment[(int) $r['id']] ?? [],
@@ -434,6 +435,26 @@ class ConfessionRepository
             }
         }
         return ['glyph' => $head['glyph'], 'ref' => $head['ref'], 'refs' => array_values($refs)];
+    }
+
+    /**
+     * All verses of one Bible chapter in the given translation, verse =>
+     * text -- for the commentary pages, which show the Dutch Bible verse next
+     * to Calvin's own Latin rendering of it.
+     * @return array<int, string>
+     */
+    public function getChapterVerses(string $usfm, int $chapter, string $translationCode): array
+    {
+        $rows = $this->connection->fetchAllKeyValue(
+            'SELECT tv.verse, tv.verse_text
+             FROM translation_verses tv
+             JOIN translations t ON t.id = tv.translation_id
+             JOIN books b ON b.id = tv.book_id
+             WHERE t.code = :code AND b.usfm_code = :usfm AND tv.chapter = :chapter
+             ORDER BY tv.verse',
+            ['code' => $translationCode, 'usfm' => $usfm, 'chapter' => $chapter]
+        );
+        return array_combine(array_map('intval', array_keys($rows)), array_values($rows));
     }
 
     /**

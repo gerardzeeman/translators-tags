@@ -1,0 +1,26 @@
+{% extends 'base.html.twig' %}
+{% block title %}Commentaren van Calvijn – Bijbel Vergelijking{% endblock %}
+
+{% block nav_center %}{% endblock %}
+
+{% block body %}
+<div class="page-institutio-home">
+
+    <div class="institutio-home-header">
+        <h1>Commentaren van Calvijn</h1>
+        <p class="institutio-home-subtitle">Calvijns uitleg van de Bijbel, naast de Institutie</p>
+    </div>
+
+    <nav class="institutio-toc" aria-label="Commentaren">
+        {% for boek, meta in commentaries %}
+        <a href="{{ path('app_commentary_toc', {boek: boek}) }}" class="institutio-toc-entry">
+            <span class="institutio-toc-num">{{ loop.index }}</span>
+            <span class="institutio-toc-titles">
+                <span class="institutio-toc-title">{{ meta.title }}</span>
+            </span>
+        </a>
+        {% endfor %}
+    </nav>
+
+</div>
+{% endblock %}
