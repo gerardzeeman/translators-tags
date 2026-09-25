@@ -29,7 +29,7 @@ import pymupdf
 DPI = 300
 
 
-def ocr_page(pdf: str, page: int, out_dir: str) -> tuple[int, str]:
+def ocr_page(pdf: str, page: int, out_dir: str, lang: str = "lat") -> tuple[int, str]:
     out = Path(out_dir) / f"p{page:04d}.txt"
     if out.exists():
         return page, "cached"
@@ -43,7 +43,7 @@ def ocr_page(pdf: str, page: int, out_dir: str) -> tuple[int, str]:
         # processes. Without this every Tesseract spins up a thread per core
         # and a full pool grinds to a halt (seen: 12 workers x 12 threads,
         # no page finished in 10 minutes).
-        subprocess.run(["tesseract", str(png), str(base), "-l", "lat", "--psm", "1"],
+        subprocess.run(["tesseract", str(png), str(base), "-l", lang, "--psm", "1"],
                        check=True, capture_output=True, env={**os.environ, "OMP_THREAD_LIMIT": "1"})
         out.write_text((base.with_suffix(".txt")).read_text(encoding="utf-8"), encoding="utf-8")
     return page, "ok"
@@ -55,6 +55,9 @@ def main() -> int:
     ap.add_argument("--pages", required=True, help="0-based range, e.g. 30-338")
     ap.add_argument("--out-dir", type=Path, required=True)
     ap.add_argument("--workers", type=int, default=os.cpu_count() or 4)
+    ap.add_argument("--lang", default="lat",
+                    help="Tesseract languages, e.g. lat+grc+heb for the pass that reads the "
+                         "Hebrew/Greek quotations (see parse_calvin_genesis_la.py)")
     args = ap.parse_args()
 
     first, last = (int(x) for x in args.pages.split("-"))
@@ -63,7 +66,7 @@ def main() -> int:
     done = 0
     with ProcessPoolExecutor(max_workers=args.workers) as pool:
         for page, status in pool.map(ocr_page, [str(args.pdf)] * len(pages), pages,
-                                     [str(args.out_dir)] * len(pages)):
+                                     [str(args.out_dir)] * len(pages), [args.lang] * len(pages)):
             done += 1
             if done % 25 == 0 or done == len(pages):
                 print(f"[ocr]   {done}/{len(pages)} (last: page {page}, {status})", flush=True)

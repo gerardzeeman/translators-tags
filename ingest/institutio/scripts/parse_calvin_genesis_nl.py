@@ -37,6 +37,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import difflib
 import json
 import re
 import sys
@@ -133,6 +134,179 @@ def normalise_lemma(text: str, verse: int) -> str:
     return f"{verse}. {head}{sep}{tail}"
 
 
+# ── Hebrew quotations ─────────────────────────────────────────────────────────
+# Los prints Hebrew pointed (בָּרָא, יָצַר); the archive.org OCR turns it into
+# junk ("NN", "’9%°") and Tesseract can't read the points either. So the
+# Hebrew is rebuilt from three sources:
+#   where:   a nld+heb OCR pass over Los's scans (ocr_pdf_pages.py) finds
+#            the Hebrew words; their Dutch neighbours locate the same spot in
+#            the archive.org text, whose junk there becomes a ⟦H:guess⟧ marker;
+#   letters: the matched Latin comment -- Los translated from the Latin, so
+#            the n-th Hebrew word of a Dutch comment is the n-th of the Latin
+#            one, which the lat+grc+heb pass reads well (unpointed, as printed
+#            in the Calvini Opera);
+#   points:  the same consonants in that verse / chapter of the Hebrew Bible
+#            text (cantillation removed: בָּרָ֣א -> בָּרָא), else Strong's
+#            lexical form (H3335 יָצַר), else left unpointed.
+
+_HEB = "\u0590-\u05FF\uFB1D-\uFB4F"
+_HEB_WORD_RE = re.compile(f"[{_HEB}]+")
+_POINTS_RE = re.compile("[\u0591-\u05C7]")
+_CANTILLATION_RE = re.compile("[\u0591-\u05AF\u05BD\u05C0\u05C3]")
+_MARKER_RE = re.compile(r"⟦H:([^⟧]*)⟧")
+_DUTCH_WORD_RE = re.compile(r"[A-Za-zÀ-ÿ]+")
+
+
+def consonants(word: str) -> str:
+    return _POINTS_RE.sub("", word)
+
+
+def clean_heb_ocr(text: str) -> str:
+    text = re.sub("[\u200e\u200f\u202a-\u202e]", "", text)
+    text = re.sub(r"(\w)-\s*\n\s*(\w)", r"\1\2", text)
+    return re.sub(f"([.,;:!?])([{_HEB}]+)", r"\2\1", text)
+
+
+def mark_hebrew(text: str, page_texts: list[str]) -> tuple[str, int, int]:
+    """Replace the junk the archive.org OCR made of each Hebrew quotation by
+    a ⟦H:guess⟧ marker, located via the Dutch words around the quotation in
+    the nld+heb pass. Pages are processed in order, searching forward only.
+    Returns (text, found, not located)."""
+    cursor, found, missed = 0, 0, 0
+    for page in page_texts:
+        tokens = re.findall(f"[{_HEB}]+|[A-Za-zÀ-ÿ]+", clean_heb_ocr(page))
+        i = 0
+        while i < len(tokens):
+            if not _HEB_WORD_RE.fullmatch(tokens[i]):
+                i += 1
+                continue
+            j = i
+            while j < len(tokens) and _HEB_WORD_RE.fullmatch(tokens[j]):
+                j += 1
+            before = [t for t in tokens[max(0, i - 3):i] if not _HEB_WORD_RE.fullmatch(t)]
+            after = [t for t in tokens[j:j + 3] if not _HEB_WORD_RE.fullmatch(t)]
+            guess = " ".join(tokens[i:j])
+            i = j
+            if len(before) < 2 or len(after) < 2:
+                missed += 1
+                continue
+            sep = r"[\W\d_]*"
+            pattern = (sep.join(re.escape(w) for w in before) + r"(?P<junk>[^\n]{0,30}?)"
+                       + sep.join(re.escape(w) for w in after[:2]))
+            m = re.compile(pattern, re.IGNORECASE).search(text, cursor, cursor + 60000)
+            if not m or _DUTCH_WORD_RE.search(m.group("junk").strip(" .,;:„”’\"'()")) and \
+                    len(m.group("junk").strip()) > 12:
+                missed += 1
+                continue
+            junk_start, junk_end = m.span("junk")
+            # keep the punctuation after the junk (the quotation's own ".")
+            core = m.group("junk").rstrip(" .,;:”’\"'")
+            text = (text[:junk_start] + f" ⟦H:{guess}⟧" + text[junk_start + len(core):])
+            cursor = junk_start + len(guess) + 6
+            found += 1
+    return text, found, missed
+
+
+def load_hebrew_lexicon(path: Path | None) -> tuple[dict, dict]:
+    """(Genesis Bible words: consonants -> [(chapter, verse, pointed)],
+        Strong's: consonants -> [(pointed lemma, is a verb)])."""
+    if path is not None:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        bible_rows, strongs_rows = data["bible"], data["strongs"]
+    else:
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+        from db import get_connection
+        with get_connection() as conn, conn.cursor() as cur:
+            cur.execute("SELECT chapter, verse, word_text FROM hebrew_words WHERE book_id = 1")
+            bible_rows = cur.fetchall()
+            cur.execute("SELECT lemma, pos FROM strongs_entries WHERE lang = 'HE' AND lemma IS NOT NULL")
+            strongs_rows = [list(r) for r in cur.fetchall()]
+    bible: dict[str, list] = {}
+    for chapter, verse, word in bible_rows:
+        for part in word.split("\u05BE"):  # maqaf-joined words separately
+            pointed = _CANTILLATION_RE.sub("", part)
+            bible.setdefault(consonants(pointed), []).append((chapter, verse, pointed))
+    strongs: dict[str, list] = {}  # consonants -> [(pointed, is_verb)]
+    for row in strongs_rows:
+        lemma, pos = (row, None) if isinstance(row, str) else (row[0], row[1])
+        pointed = _CANTILLATION_RE.sub("", lemma)
+        strongs.setdefault(consonants(pointed), []).append((pointed, (pos or "").strip() == "v"))
+    return bible, strongs
+
+
+def vocalise(word: str, chapter: int | None, verse: int | None, bible: dict, strongs: dict,
+             guess: str = "") -> str:
+    """Pointed form of an unpointed word: the one in this verse, else in
+    this chapter; otherwise, among all Genesis forms and Strong's lexical
+    forms with these consonants, the one whose vowel points look most like
+    what the Dutch OCR saw (`guess` -- its letters are poor, but it often
+    catches some points: "'צךָ" has the qamats of יָצַר, not the tsere of
+    the noun יֵצֶר), then a unique Strong's form, then the most frequent."""
+    bare = consonants(word)
+    candidates = bible.get(bare, [])
+    for scope in ((lambda c, v: c == chapter and v == verse), (lambda c, v: c == chapter)):
+        forms = {p for c, v, p in candidates if scope(c, v)}
+        if len(forms) == 1:
+            return forms.pop()
+    lexical = {p for p, _ in strongs.get(bare, [])}
+    verbs = {p for p, is_verb in strongs.get(bare, []) if is_verb}
+    counts: dict[str, int] = {}
+    for _, _, p in candidates:
+        counts[p] = counts.get(p, 0) + 1
+    options = set(counts) | lexical
+    if not options:
+        return bare
+    guess_points = "".join(_POINTS_RE.findall(guess))
+    if guess_points and len(options) > 1:
+        # Ties (the OCR caught only a point or two) go to a verb: Calvin
+        # quotes a lexical form mostly to discuss a verb ("verbum יצר").
+        scored = sorted(((difflib.SequenceMatcher(a=guess_points, b="".join(_POINTS_RE.findall(o))).ratio(),
+                          o in verbs, o in lexical, counts.get(o, 0), o) for o in options), reverse=True)
+        if scored[0][0] > 0:
+            return scored[0][-1]
+    if len(lexical) == 1:
+        return next(iter(lexical))
+    return max(options, key=lambda o: (counts.get(o, 0), o in lexical))
+
+
+def fill_hebrew(dutch: str, latin_texts: list[str], chapter: int | None, verse: int | None,
+                bible: dict, strongs: dict, stats: dict) -> str:
+    """Replace the ⟦H:guess⟧ markers of one Dutch comment by pointed Hebrew
+    (see the block comment above)."""
+    markers = list(_MARKER_RE.finditer(dutch))
+    if not markers:
+        return dutch
+    latin_words = [w for t in latin_texts for w in _HEB_WORD_RE.findall(t)]
+    chosen: list[str] = []
+    if len(latin_words) == len(markers):
+        chosen = latin_words
+    else:
+        # Different counts: match each marker to the Latin word most like
+        # its own (poor) reading, keeping the order.
+        pos = 0
+        for m in markers:
+            guess = consonants(m.group(1).replace(" ", ""))
+            best, best_k = None, None
+            for k in range(pos, len(latin_words)):
+                ratio = difflib.SequenceMatcher(a=guess, b=latin_words[k]).ratio()
+                if ratio >= 0.5 and (best is None or ratio > best):
+                    best, best_k = ratio, k
+            if best_k is not None:
+                chosen.append(latin_words[best_k])
+                pos = best_k + 1
+            else:
+                chosen.append(consonants(m.group(1)).replace(" ", ""))
+                stats["from_dutch_ocr"] += 1
+    out, last = [], 0
+    for m, word in zip(markers, chosen):
+        out.append(dutch[last:m.start()])
+        out.append(vocalise(word, chapter, verse, bible, strongs, guess=m.group(1)))
+        last = m.end()
+        stats["filled"] += 1
+    out.append(dutch[last:])
+    return "".join(out)
+
+
 def match_score(dutch: int | None, latin: int) -> float:
     if dutch is None:
         return 0.5
@@ -180,6 +354,11 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--raw-dir", type=Path, default=RAW)
     ap.add_argument("--latin", type=Path, required=True, help="parse_calvin_genesis_la.py output")
+    ap.add_argument("--hebrew-ocr-dirs", type=Path, nargs=2, default=[RAW / "los_ocr1", RAW / "los_ocr2"],
+                    help="nld+heb OCR of Los's two volumes (ocr_pdf_pages.py); skipped if missing")
+    ap.add_argument("--hebrew-lexicon", type=Path, default=None,
+                    help='JSON {"bible": [[chapter, verse, word], ...], "strongs": [[lemma, pos], ...]} '
+                         "instead of reading hebrew_words / strongs_entries from the database")
     ap.add_argument("-o", "--output", type=Path)
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
@@ -194,6 +373,16 @@ def main() -> int:
 
     warnings: list[str] = []
     rows: list[dict] = []
+
+    heb_stats = {"filled": 0, "from_dutch_ocr": 0}
+    have_heb = all(d.exists() for d in args.hebrew_ocr_dirs)
+    if have_heb:
+        pages = [p.read_text(encoding="utf-8") for d in args.hebrew_ocr_dirs for p in sorted(d.glob("p*.txt"))]
+        text, found, missed = mark_hebrew(text, pages)
+        print(f"[heb]   {found} Hebrew quotations located in the text, {missed} not")
+        bible, strongs = load_hebrew_lexicon(args.hebrew_lexicon)
+    else:
+        warnings.append("no Hebrew OCR pass found -- Hebrew left as the OCR read it")
 
     # Argumentum.
     start, end = _ARGUMENT_START_RE.search(text), _ARGUMENT_END_RE.search(text)
@@ -215,7 +404,10 @@ def main() -> int:
             pos += len(p)
         for k, r in enumerate(latin_args):
             if k in assigned:
-                rows.append({"ref": r["ref"], "layer": LAYER, "text": "\n\n".join(assigned[k]), "model": MODEL})
+                dutch = "\n\n".join(assigned[k])
+                if have_heb:
+                    dutch = fill_hebrew(dutch, [r["text"]], None, None, bible, strongs, heb_stats)
+                rows.append({"ref": r["ref"], "layer": LAYER, "text": dutch, "model": MODEL})
     else:
         warnings.append("Argumentum not found")
 
@@ -257,13 +449,27 @@ def main() -> int:
         for idx, r in enumerate(la_comments):
             if idx in texts:
                 n_matched += 1
-                rows.append({"ref": r["ref"], "layer": LAYER, "text": "\n\n".join(texts[idx]), "model": MODEL})
+                dutch = "\n\n".join(texts[idx])
+                if have_heb:
+                    # This Dutch text may also hold the following Latin
+                    # comments that got no Dutch of their own.
+                    latin_texts = [r["text"]]
+                    for nxt in range(idx + 1, len(la_comments)):
+                        if nxt in texts:
+                            break
+                        latin_texts.append(la_comments[nxt]["text"])
+                    dutch = fill_hebrew(dutch, latin_texts, ch, r["section"], bible, strongs, heb_stats)
+                rows.append({"ref": r["ref"], "layer": LAYER, "text": dutch, "model": MODEL})
             else:
                 warnings.append(f"{r['ref']}: no Dutch comment matched")
 
     for w in warnings:
         print(f"[warn]  {w}")
     print(f"[ok]    {len(rows)} Dutch rows; comments matched {n_matched}/{n_latin}")
+    if have_heb:
+        left = sum(len(_MARKER_RE.findall(r["text"])) for r in rows)
+        print(f"[heb]   {heb_stats['filled']} Hebrew words filled in "
+              f"({heb_stats['from_dutch_ocr']} from the Dutch OCR's own reading); {left} markers left")
     if args.dry_run:
         return 0
     if args.output is None:

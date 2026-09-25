@@ -66,7 +66,18 @@ CHAPTERS = 50
 GARBLED_TEXT_LAYER = 0.35
 
 _WORD_RE = re.compile(r"[A-Za-zÀ-ɏæœ]+")
-_TOKEN_RE = re.compile(r"\n|[A-Za-zÀ-ɏæœ]+|\d+|[^\sA-Za-zÀ-ɏæœ\d]")
+# Hebrew (letters + points) and Greek words are single tokens too, so a
+# quotation from the script-OCR pass can be aligned and put in as a whole.
+_SCRIPT = "\u0590-\u05FF\uFB1D-\uFB4F\u0370-\u03FF\u1F00-\u1FFF"
+_SCRIPT_RE = re.compile(f"[{_SCRIPT}]")
+_HEBREW_RE = re.compile("[א-ת]")
+
+
+def greek_letters(token: str) -> int:
+    """Number of Greek letters, not counting accents and breathings
+    (decomposed first: "ἀρχῇ" -> α ρ χ η + marks)."""
+    return sum(1 for c in unicodedata.normalize("NFD", token) if "Α" <= c <= "ω")
+_TOKEN_RE = re.compile(f"\\n|[{_SCRIPT}]+|[A-Za-zÀ-ɏæœ]+|\\d+|[^\\sA-Za-zÀ-ɏæœ\\d{_SCRIPT}]")
 _HEADER_RE = re.compile(r"^\W*(\d+)?\W*[A-Z0-9 .,]*(?:GENESIN|GENES1N|GENE8IN)\W*(\d+)?\W*$")
 _FOOTER_RE = re.compile(r"^\W*Ca\S{0,3}ini\s+o\S{1,3}era\b.*$", re.IGNORECASE)
 _CHAPTER_RE = re.compile(r"^\s*C\s*[AÀ]\s*[PF]\s*(?:[UVÜ]\s*T\s*)?\.?\s+([IVXLCYl1]+|\w{1,6})\s*[.,]?\s*[.,]?\s*$", re.MULTILINE)
@@ -189,12 +200,117 @@ def clean_word_accents(text: str) -> str:
     return _WORD_RE.sub(lambda m: strip_accents(m.group()), text)
 
 
-def page_text(pdf: pymupdf.Document, ocr_dir: Path, page: int, vocab: set[str]) -> tuple[str, int | None]:
+def clean_script_ocr(text: str) -> str:
+    """Tesseract's lat+grc+heb output: drop the bidi marks it adds around
+    Hebrew, and put punctuation it attached to the wrong (logical) side of a
+    Hebrew word back after it (",יצר" -> "יצר,")."""
+    text = re.sub("[\u200e\u200f\u202a-\u202e]", "", text)
+    return re.sub(r"([.,;:!?])([\u0590-\u05FF\uFB1D-\uFB4F]+)", r"\2\1", text)
+
+
+def load_hebrew_forms(path: Path | None) -> set[str]:
+    """Every consonantal word form of the Hebrew Bible (hebrew_words, points
+    and accents stripped, maqaf compounds split) plus Strong's lexical
+    forms: a Hebrew token from the script pass is only believed if it is
+    one of these (it also reads stray junk as "מ", "יי", "הפב")."""
+    if path is not None:
+        return {line.strip() for line in path.read_text(encoding="utf-8").splitlines() if line.strip()}
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    from db import get_connection
+    with get_connection() as conn, conn.cursor() as cur:
+        cur.execute(
+            r"""SELECT DISTINCT regexp_replace(w, '[֑-ׇ]', '', 'g')
+                FROM (SELECT unnest(string_to_array(word_text, E'־')) AS w FROM hebrew_words
+                      UNION SELECT lemma FROM strongs_entries WHERE lang = 'HE' AND lemma IS NOT NULL) x""")
+        return {r[0] for r in cur.fetchall()}
+
+
+def merge_script_words(text: str, script_ocr: str, vocab: set[str], hebrew_forms: set[str]) -> str:
+    """Put the Hebrew and Greek quotations from the lat+grc+heb pass into the
+    combined text. The two Latin OCRs read Hebrew as Latin-looking junk
+    ("IS1" for יצר, "N13" for ברא); the script pass reads it right, but
+    also misreads some Latin as Hebrew, Greek or digits ("vocat" -> "70086")
+    -- so only stretches where the combined text has no known Latin word
+    are replaced, and only by the script pass's Hebrew/Greek tokens (plus
+    their punctuation)."""
+    a = _TOKEN_RE.findall(text)
+    b = _TOKEN_RE.findall(clean_script_ocr(script_ocr))
+    a_words = [t for t in a if t != "\n"]
+    b_words = [t for t in b if t != "\n"]
+    line_starts, k, after_newline = set(), 0, True
+    for tok in a:
+        if tok == "\n":
+            after_newline = True
+            continue
+        if after_newline:
+            line_starts.add(k)
+        after_newline = False
+        k += 1
+
+    def known(tok: str) -> bool:
+        return strip_accents(tok.lower()) in vocab
+
+    replacement: dict[int, list[str]] = {}
+    matcher = difflib.SequenceMatcher(a=a_words, b=b_words, autojunk=False)
+    for op, a1, a2, b1, b2 in matcher.get_opcodes():
+        if op not in ("replace", "insert"):
+            continue
+        script = [t for t in b_words[b1:b2] if _SCRIPT_RE.search(t)
+                  and (not _HEBREW_RE.search(t) or re.sub("[֑-ׇ]", "", t) in hebrew_forms)]
+        if not script:
+            continue
+        # Greek only when it's real words: the script pass turns stray Latin
+        # junk into short Greek forms ("ἃ", "οἱ", "δὲ") far more often than
+        # Calvin quotes Greek in this commentary.
+        if not any(_HEBREW_RE.search(t) for t in script) and \
+                not any(greek_letters(t) >= 3 for t in script):
+            continue
+        span = a_words[a1:a2]
+        # Real Latin here (even "a", "et", "In") means the script pass misread
+        # it. But the junk the Latin OCRs make of Hebrew ("IS 1" for יצר,
+        # "D ^ N" for אלהים) has known-looking bits too -- capitals that
+        # aren't a word's normal casing don't count.
+        if any(_WORD_RE.fullmatch(t) and known(t) and (t.islower() or (t[0].isupper() and t[1:].islower()))
+               for t in span):
+            continue
+        # A verse number ("9." at a line start or after a sentence) -- the
+        # comment/verse structure hangs on these. Not the digits in junk
+        # like "N 13." (for ברא), which follow a letter.
+        def is_verse_number(k: int) -> bool:
+            nxt = a_words[k + 1] if k + 1 < len(a_words) else ""
+            prev = a_words[k - 1] if k > 0 else "."
+            return a_words[k].isdigit() and nxt == "." and (k in line_starts or not _WORD_RE.fullmatch(prev))
+        if any(is_verse_number(k) for k in range(a1, a2)):
+            continue
+        tail = [t for t in b_words[b1:b2] if not _SCRIPT_RE.search(t) and not _WORD_RE.fullmatch(t)
+                and not t.isdigit()][-1:]  # keep trailing punctuation ("ברא.")
+        new = script + tail
+        if a2 > a1:
+            replacement[a1] = new
+            for k in range(a1 + 1, a2):
+                replacement[k] = []
+        elif a1 < len(a_words):
+            replacement[a1] = new + [a_words[a1]]
+    out, i = [], 0
+    for tok in a:
+        if tok == "\n":
+            out.append("\n")
+            continue
+        out.extend(replacement.get(i, [tok]))
+        i += 1
+    return detokenize(out)
+
+
+def page_text(pdf: pymupdf.Document, ocr_dir: Path, page: int, vocab: set[str],
+              script_dir: Path | None = None, hebrew_forms: set[str] | None = None) -> tuple[str, int | None]:
     """Combined text of one page (header/footer removed) and its left CO column number."""
     text_layer = pdf[page].get_text()
     tesseract = (ocr_dir / f"p{page:04d}.txt").read_text(encoding="utf-8")
     text = combine(text_layer, tesseract, vocab)
     text = restore_headings(text, tesseract)
+    script_file = script_dir / f"p{page:04d}.txt" if script_dir else None
+    if script_file and script_file.exists():
+        text = merge_script_words(text, script_file.read_text(encoding="utf-8"), vocab, hebrew_forms or set())
     column = None
     lines = []
     for line in text.splitlines():
@@ -390,6 +506,12 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--pdf", type=Path, default=RAW / "co23_cr51.pdf")
     ap.add_argument("--ocr-dir", type=Path, default=RAW / "ocr")
+    ap.add_argument("--script-ocr-dir", type=Path, default=RAW / "ocr_script",
+                    help="the lat+grc+heb pass (ocr_pdf_pages.py --lang lat+grc+heb); "
+                         "skipped if the directory doesn't exist")
+    ap.add_argument("--hebrew-forms", type=Path, default=None,
+                    help="consonantal Hebrew word forms, one per line, instead of reading them "
+                         "from hebrew_words / strongs_entries")
     ap.add_argument("--vocab", type=Path, default=None)
     ap.add_argument("-o", "--output", type=Path)
     ap.add_argument("--dry-run", action="store_true")
@@ -397,9 +519,11 @@ def main() -> int:
 
     vocab = {strip_accents(w) for w in load_vocab(args.vocab)}
     pdf = pymupdf.open(args.pdf)
+    script_dir = args.script_ocr_dir if args.script_ocr_dir.exists() else None
+    hebrew_forms = load_hebrew_forms(args.hebrew_forms) if script_dir else set()
     pieces, columns = [], []
     for page in range(FIRST_PAGE, LAST_PAGE + 1):
-        text, column = page_text(pdf, args.ocr_dir, page, vocab)
+        text, column = page_text(pdf, args.ocr_dir, page, vocab, script_dir, hebrew_forms)
         columns.append((page, column))
         pieces.append(f"\x00{column if column is not None else ''}\x00\n{text}")
     full = clean_word_accents(dehyphenate("\n".join(pieces)))

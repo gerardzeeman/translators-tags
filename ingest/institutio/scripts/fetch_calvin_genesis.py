@@ -13,7 +13,8 @@ Calvin work next to the Institutio):
     Latin by S.O. Los (1871-1944), introduction by H. Bavinck (1854-1921),
     Middelburg: K. le Cointre, 1900 -- public domain. Two volumes on
     archive.org (Princeton Theological Seminary Library scans) with their
-    OCR text (_djvu.txt), which is of good quality.
+    OCR text (_djvu.txt), which is of good quality, and their scan PDFs
+    (for a second OCR pass that finds the Hebrew quotations).
 
 Everything is cached under --out-dir; existing files are not re-fetched.
 
@@ -26,6 +27,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import time
 from pathlib import Path
 
 import requests
@@ -38,6 +40,12 @@ SOURCES = {
         "https://archive.org/download/genesisuitleggin01calv/genesisuitleggin01calv_djvu.txt",
     "los1900_deel2.txt":
         "https://archive.org/download/genesisuitleggin02calv/genesisuitleggin02calv_djvu.txt",
+    # The scans themselves (~120 MB each), for the Hebrew pass: the OCR text
+    # above can't read the (pointed) Hebrew quotations.
+    "los1900_deel1.pdf":
+        "https://archive.org/download/genesisuitleggin01calv/genesisuitleggin01calv.pdf",
+    "los1900_deel2.pdf":
+        "https://archive.org/download/genesisuitleggin02calv/genesisuitleggin02calv.pdf",
 }
 
 
@@ -52,12 +60,25 @@ def main() -> int:
         if path.exists() and path.stat().st_size > 0:
             print(f"[skip]  {path} ({path.stat().st_size} bytes)")
             continue
-        print(f"[fetch] {url}")
-        with requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=120, stream=True) as resp:
-            resp.raise_for_status()
-            with path.open("wb") as fh:
-                for chunk in resp.iter_content(1 << 20):
-                    fh.write(chunk)
+        # archive.org answers large downloads with the odd transient 500:
+        # retry, and write to a .part file so an interrupted download is
+        # never mistaken for a complete one on the next run.
+        part = path.with_suffix(path.suffix + ".part")
+        for attempt in range(1, 5):
+            print(f"[fetch] {url} (attempt {attempt})")
+            try:
+                with requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=120, stream=True) as resp:
+                    resp.raise_for_status()
+                    with part.open("wb") as fh:
+                        for chunk in resp.iter_content(1 << 20):
+                            fh.write(chunk)
+                part.replace(path)
+                break
+            except requests.RequestException as exc:
+                print(f"[warn]  {exc}")
+                if attempt == 4:
+                    raise
+                time.sleep(20 * attempt)
         print(f"[ok]    {path} ({path.stat().st_size} bytes)")
     return 0
 

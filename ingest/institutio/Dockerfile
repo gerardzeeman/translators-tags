@@ -41,9 +41,12 @@ RUN wheel_file=$(python -c "import json, urllib.request; data = json.load(urllib
 
 # Tesseract with Latin, for re-OCRing scanned sources whose own text layer
 # is poor (scripts/ocr_pdf_pages.py -- e.g. the Corpus Reformatorum volumes
-# of Calvin's commentaries). Placed after the model layers so adding it
-# doesn't invalidate their (slow) cached downloads.
-RUN apt-get update && apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-lat     && rm -rf /var/lib/apt/lists/*
+# of Calvin's commentaries), plus Hebrew and Greek for the quotations in
+# them and Dutch for their Dutch translations. Placed after the model
+# layers so adding it doesn't invalidate their (slow) cached downloads.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        tesseract-ocr tesseract-ocr-lat tesseract-ocr-heb tesseract-ocr-grc tesseract-ocr-nld \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY . .
 
