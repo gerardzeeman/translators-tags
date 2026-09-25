@@ -13,6 +13,8 @@ theological terms manually before running this against the full corpus.
     export ANTHROPIC_API_KEY=...
     python scripts/batch_gloss.py --limit 100          # test on the top 100 lemmas
     python scripts/batch_gloss.py                        # full run
+    python scripts/batch_gloss.py --input genesis_missing.csv --output genesis_glosses.jsonl \
+        --context "Calvijns commentaar op Genesis"         # another work's new lemmas
 
 Requires: anthropic (in requirements.txt)
 """
@@ -26,8 +28,7 @@ import time
 from pathlib import Path
 
 PROMPT_TEMPLATE = """\
-Geef voor het Latijnse lemma "{lemma}" (frequentie: {freq}x in Calvijns \
-Institutio 1559):
+Geef voor het Latijnse lemma "{lemma}" (frequentie: {freq}x in {context}):
 1. De hoofdbetekenis in het Nederlands (1-3 woorden).
 2. 1-2 alternatieve betekenissen indien van toepassing.
 3. Een korte noot als het een technisch theologisch of filosofisch begrip is.
@@ -49,7 +50,7 @@ def load_lemmas(csv_path: Path, limit: int | None) -> list[dict]:
     return rows
 
 
-def submit_batch(client, lemmas: list[dict]):
+def submit_batch(client, lemmas: list[dict], context: str):
     requests = [
         {
             "custom_id": f"lemma-{i:06d}",
@@ -63,7 +64,8 @@ def submit_batch(client, lemmas: list[dict]):
                 "thinking": {"type": "disabled"},
                 "messages": [{
                     "role": "user",
-                    "content": PROMPT_TEMPLATE.format(lemma=row["lemma"], freq=row["freq"]),
+                    "content": PROMPT_TEMPLATE.format(lemma=row["lemma"], freq=row["freq"],
+                                                      context=context),
                 }],
             },
         }
@@ -108,6 +110,8 @@ def main() -> int:
     ap.add_argument("--output", type=Path, default=Path("/data/institutio/lemma_glosses.jsonl"))
     ap.add_argument("--limit", type=int, default=None,
                     help="only process the top N lemmas (by frequency)")
+    ap.add_argument("--context", default="Calvijns Institutio 1559",
+                    help="the work the frequencies come from, as named in the prompt")
     ap.add_argument("--batch-id", default=None,
                     help="skip submission, re-fetch results from an already-completed "
                          "batch (use this to recover from a parsing bug without paying twice)")
@@ -126,7 +130,7 @@ def main() -> int:
         batch = wait_for_batch(client, args.batch_id)
     else:
         print(f"[submit] {len(lemmas)} lemmas -> Anthropic Batch API")
-        batch = submit_batch(client, lemmas)
+        batch = submit_batch(client, lemmas, args.context)
         print(f"[submit] batch id: {batch.id}")
         batch = wait_for_batch(client, batch.id)
 
