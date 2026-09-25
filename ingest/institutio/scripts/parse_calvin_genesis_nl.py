@@ -354,6 +354,9 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--raw-dir", type=Path, default=RAW)
     ap.add_argument("--latin", type=Path, required=True, help="parse_calvin_genesis_la.py output")
+    ap.add_argument("--hebrew-hires-dirs", type=Path, nargs=2,
+                    default=[RAW / "los_ocr_hires1", RAW / "los_ocr_hires2"],
+                    help="nld+heb OCR of full-resolution page images, where fetched")
     ap.add_argument("--hebrew-ocr-dirs", type=Path, nargs=2, default=[RAW / "los_ocr1", RAW / "los_ocr2"],
                     help="nld+heb OCR of Los's two volumes (ocr_pdf_pages.py); skipped if missing")
     ap.add_argument("--hebrew-lexicon", type=Path, default=None,
@@ -377,7 +380,14 @@ def main() -> int:
     heb_stats = {"filled": 0, "from_dutch_ocr": 0}
     have_heb = all(d.exists() for d in args.hebrew_ocr_dirs)
     if have_heb:
-        pages = [p.read_text(encoding="utf-8") for d in args.hebrew_ocr_dirs for p in sorted(d.glob("p*.txt"))]
+        # Per page the full-resolution OCR (fetch_los_hires_pages.py) where it
+        # exists -- the scan PDFs are too coarse for Tesseract to find most
+        # Hebrew -- else the PDF pass.
+        pages = []
+        for d, hires in zip(args.hebrew_ocr_dirs, args.hebrew_hires_dirs):
+            for p in sorted(d.glob("p*.txt")):
+                better = hires / p.name
+                pages.append((better if better.exists() else p).read_text(encoding="utf-8"))
         text, found, missed = mark_hebrew(text, pages)
         print(f"[heb]   {found} Hebrew quotations located in the text, {missed} not")
         bible, strongs = load_hebrew_lexicon(args.hebrew_lexicon)
