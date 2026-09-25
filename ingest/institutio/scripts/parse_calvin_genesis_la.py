@@ -100,26 +100,50 @@ def combine(text_layer: str, tesseract: str, vocab: set[str]) -> str:
     def known(tok: str) -> bool:
         return strip_accents(tok.lower()) in vocab
 
+    def known_ratio(tokens: list[str]) -> tuple[int, float]:
+        words = [t for t in tokens if _WORD_RE.fullmatch(t) and len(t) > 1]
+        return len(words), (sum(1 for w in words if known(w)) / len(words) if words else 0.0)
+
+    # The base is the PDF's text layer -- its line breaks match the print
+    # closely, and the verse numbers that start comments sit at line starts
+    # (Tesseract's lines don't keep those as reliably: using it as the base
+    # lost ~40 comment starts) -- unless the text layer is unusable on this
+    # page (the Argumentum's second and third page).
+    if unknown_rate(text_layer, vocab) > GARBLED_TEXT_LAYER:
+        text_layer, tesseract = tesseract, text_layer
     a = _TOKEN_RE.findall(text_layer)
     b = _TOKEN_RE.findall(tesseract)
     # Compare without newlines (the two OCRs break lines differently), but
-    # keep text-layer newlines in the output: they carry the line starts.
+    # keep the base's newlines in the output: they carry the line starts.
     a_words = [t for t in a if t != "\n"]
     b_words = [t for t in b if t != "\n"]
-    replacement: dict[int, str] = {}
+    replacement: dict[int, list[str]] = {}   # base word index => tokens instead of it
     matcher = difflib.SequenceMatcher(a=a_words, b=b_words, autojunk=False)
     for op, a1, a2, b1, b2 in matcher.get_opcodes():
         if op == "replace" and a2 - a1 == b2 - b1:
             for k in range(a2 - a1):
                 x, y = a_words[a1 + k], b_words[b1 + k]
                 if _WORD_RE.fullmatch(x) and not known(x) and _WORD_RE.fullmatch(y) and known(y):
-                    replacement[a1 + k] = y
+                    replacement[a1 + k] = [y]
+        elif op in ("replace", "delete", "insert"):
+            # Stretches the two OCRs cut up differently: take the other
+            # OCR's reading when it is clearly the better Latin (e.g. a
+            # garbled line in the base, or a line the base lost).
+            n_a, ratio_a = known_ratio(a_words[a1:a2])
+            n_b, ratio_b = known_ratio(b_words[b1:b2])
+            if n_b >= 2 and ratio_b >= 0.7 and ratio_b - ratio_a >= 0.3:
+                if a2 > a1:
+                    replacement[a1] = b_words[b1:b2]
+                    for k in range(a1 + 1, a2):
+                        replacement[k] = []
+                elif a1 < len(a_words):
+                    replacement[a1] = b_words[b1:b2] + [a_words[a1]]
     out, i = [], 0
     for tok in a:
         if tok == "\n":
             out.append("\n")
             continue
-        out.append(replacement.get(i, tok))
+        out.extend(replacement.get(i, [tok]))
         i += 1
     return detokenize(out)
 
@@ -169,11 +193,8 @@ def page_text(pdf: pymupdf.Document, ocr_dir: Path, page: int, vocab: set[str]) 
     """Combined text of one page (header/footer removed) and its left CO column number."""
     text_layer = pdf[page].get_text()
     tesseract = (ocr_dir / f"p{page:04d}.txt").read_text(encoding="utf-8")
-    if unknown_rate(text_layer, vocab) > GARBLED_TEXT_LAYER:
-        text = tesseract
-    else:
-        text = combine(text_layer, tesseract, vocab)
-        text = restore_headings(text, tesseract)
+    text = combine(text_layer, tesseract, vocab)
+    text = restore_headings(text, tesseract)
     column = None
     lines = []
     for line in text.splitlines():
