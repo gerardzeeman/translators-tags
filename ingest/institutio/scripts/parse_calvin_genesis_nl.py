@@ -252,6 +252,183 @@ def combine_dutch(volume: str, djvu_xml: str, page_texts: dict[int, tuple[str, s
     return "\n".join(lines)
 
 
+# Characters the archive.org OCR makes of specks, rules, page edges and the
+# binding -- checked against the scans: none of them is in Los's text,
+# except "(*)" (a note mark) and the brackets ("[ja ook").
+_JUNK = "_«»<>=*&°/\\}{|%#@$©®+"
+_TREMA = "äëïöüÄËÏÖÜ"
+_VOWELS = "aeiouAEIOUäëïöüéèêóòô"
+# Accents Los prints for emphasis or a contraction: "één", "ééne", "vóór",
+# "zóó(zeer)", "òf ... òf"; "weêr", "daarmêe", "éên" ("weder", "mede").
+# Others ("dát", "nú", "èn", "éene", "óntelbare") the scans have only here
+# and there -- the OCR makes as many accents of the specks above letters
+# ("hét", "mênschen", "lêvens") -- so those are decided per word, from the
+# scan (los1900_scan_readings.json).
+_ACCENTED_OK = re.compile(r"(?i)^(?:[eé]é[eé]?n(?:e|en|s|ig\w*)?|vóór(?:dat)?|zóó(?:zeer)?|òf|weêr\w*|\w*mêe|éên)$")
+_PLAIN = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.,;:!?'\"()[]-’„”…—")
+
+
+def _odd(token: str) -> bool:
+    return any(c not in _PLAIN and not "֐" <= c <= "׿" for c in token)
+
+
+def _plain_letters(word: str) -> str:
+    import unicodedata
+    return "".join(c for c in unicodedata.normalize("NFD", word) if not unicodedata.combining(c))
+
+
+def _known(word: str, counts: dict[str, int], vocab: set[str]) -> bool:
+    w = word.lower()
+    return counts.get(w, 0) >= 3 or w in vocab
+
+
+def clean_token(token: str, tess: str, counts: dict[str, int], vocab: set[str],
+                line_end: bool) -> tuple[str, bool]:
+    """A word of the archive.org OCR with unexpected characters cleaned up
+    (see _JUNK), and whether the result still needs a look at the scan
+    (an accent that may or may not be Los's emphasis, Greek or Hebrew the
+    OCR garbled, ...). `tess` is our own pass's reading of the word."""
+    w = token
+    if w == "(*)" or re.fullmatch(r"[…—]+", w):
+        return w, False
+    # "be=" / "tenauwer=-" at a line end: the hyphen of a broken word
+    if line_end:
+        w = re.sub(r"=-?$", "-", w)
+    w = w.replace("iĳ", "ij").replace("ĳ", "ij")
+    w = w.replace("í", "i").replace("Í", "I").replace("â", "a").replace("Â", "A")
+    w = re.sub(r"^[‘']t", "’t", w)
+    w = re.sub(r"^([HGZhgz])ú(?=\W*$)", r"\1ij", w)  # the italic "ij" of "Hij", "Gij", "zij"
+    # opening marks: specks, unless our pass has Los's „ there
+    if re.match(r"^[“‚‘]", w):
+        w = ("„" if tess.startswith("„") else "") + w[1:]
+    w = re.sub(r"“$", "”", re.sub(r"‚$", ",", w))
+    w = re.sub(r"“([.,;:!?]*)$", r"”\1", w)
+    # between two words the OCR ran together: a speck ("en“ook", "onze‘schuld")
+    w = re.sub(r"(?<=[A-Za-zÀ-ÿ.,:;’])[“‘‚]+(?=[A-Za-zÀ-ÿ„:])", " ", w)
+    w = re.sub(r"(?<=[A-Za-zÀ-ÿ.,:;])‘$", "", w)
+    w = re.sub(r"^\[ij\b", "Hij", w)  # the H of "Hij" read as "["
+    stripped_junk = w.strip(_JUNK) != w
+    w = w.strip(_JUNK)
+    if not w or not re.search(r"[A-Za-zÀ-ÿ0-9֐-׿]", w):
+        return "", False  # a speck by itself
+    # "Jsraël", "Jzaäk": a capital I read as J
+    m = re.match(r"^J([szr]\w+)", w)
+    if m and _known("I" + m.group(1), counts, vocab):
+        w = "I" + w[1:]
+    # a trema is Los's only between vowels ("Izaäk", "Israël", "Saraï"), and
+    # not on a common word the book has without it ("maär", "dië", "geën")
+    chars = list(w)
+    for i, c in enumerate(chars):
+        if c in _TREMA:
+            plain = _plain_letters(c)
+            if i == 0 or chars[i - 1] not in _VOWELS:
+                chars[i] = plain
+    w = "".join(chars)
+
+    def untrema(m: re.Match) -> str:
+        part = m.group()
+        plain = _plain_letters(part)
+        return plain if counts.get(plain.lower(), 0) >= 20 and counts.get(part.lower(), 0) <= 2 else part
+
+    # per word of a compound ("niet-doör")
+    w = re.sub(r"[A-Za-zÀ-ÿ]*[äëïöüÄËÏÖÜ][A-Za-zÀ-ÿ]*", untrema, w)
+    core = re.sub(r"^[^\wÀ-ÿ]+|[^\wÀ-ÿ]+$", "", w)
+    if not _odd(w):
+        # junk stripped off Greek / Hebrew garble ("EP}") leaves garble
+        return w, stripped_junk and bool(re.search(r"[A-Za-z]", core)) and (
+            len(core) < 2 or not _known(core, counts, vocab))
+    # what is left: accents, junk inside a word, Greek / Hebrew garble
+    if any(c in _JUNK for c in w):
+        t_core = re.sub(r"^[^\wÀ-ÿ]+|[^\wÀ-ÿ]+$", "", tess)
+        without = "".join(c for c in w if c not in _JUNK)
+        if re.search(r"\d", core):
+            # a number our pass read whole ("1/." -> "17."): its digits, the
+            # base's punctuation after it
+            if re.fullmatch(r"[\d:.,]+", t_core) and len(re.findall(r"\d", t_core)) >= len(re.findall(r"\d", w)):
+                return t_core.rstrip(".,;:") + re.search(r"[.,;:!?]*$", w).group(), False
+        elif not _odd(without) and _known(re.sub(r"^[^\wÀ-ÿ]+|[^\wÀ-ÿ]+$", "", without), counts, vocab):
+            return without, False  # "t&e" -> "te", "’*t" -> "’t"
+        elif t_core and not _odd(t_core) and _known(t_core, counts, vocab):
+            return w.replace(core, t_core), False
+        return w, True
+    letters = re.sub(r"[^A-Za-zÀ-ÿ]", "", core)
+    if all(c in _TREMA or not _odd(c) for c in letters):
+        return w, False
+    if _ACCENTED_OK.match(core):
+        return w, False
+    return w, True
+
+
+def djvu_words(djvu_xml: str) -> list[tuple[int, list[str]]]:
+    """Per LINE of _djvu.xml: its page and the coords of its words."""
+    out = []
+    for page, obj in enumerate(re.split(r"<OBJECT\b", djvu_xml)[1:]):
+        for line in re.split(r"<LINE\b", obj)[1:]:
+            out.append((page, re.findall(r'<WORD coords="([^"]+)"', line)))
+    return out
+
+
+def clean_characters(volume: str, vol: int, djvu_xml: str, page_texts: dict[int, tuple[str, str | None]],
+                     counts: dict[str, int], vocab: set[str], readings: dict[str, dict],
+                     changes: list[tuple[str, str, str]]) -> tuple[str, list[str]]:
+    """Unexpected characters in the archive.org OCR (see _JUNK, clean_token):
+    each word that has any gets the reading checked on the scan
+    (`readings`, by volume:page:word coords) or else clean_token()'s.
+    Returns the text and the words neither could settle."""
+    lines = volume.split("\n")
+    xml_lines = djvu_words(djvu_xml)
+    text_lines = [i for i, line in enumerate(lines) if line.strip()]
+    if len(text_lines) != len(xml_lines):
+        print(f"[warn]  volume {vol}: {len(text_lines)} text lines vs {len(xml_lines)} djvu lines -- "
+              "characters not cleaned")
+        return volume, []
+    by_page: dict[int, list[tuple[int, list[str]]]] = {}
+    for i, (page, coords) in zip(text_lines, xml_lines):
+        by_page.setdefault(page, []).append((i, coords))
+    open_words: list[str] = []
+    for page, page_lines in by_page.items():
+        tokens = [(i, k, tok, coords[k] if len(coords) == len(lines[i].split()) else None)
+                  for i, coords in page_lines for k, tok in enumerate(lines[i].split())]
+        if not any(_odd(t[2]) for t in tokens):
+            continue
+        tess = page_texts.get(page, ("", None))[0].split()
+        norm = lambda w: re.sub(r"[^a-z]", "", _plain_letters(w).lower())
+        matcher = difflib.SequenceMatcher(a=[norm(t[2]) for t in tokens], b=[norm(w) for w in tess], autojunk=False)
+        aligned: dict[int, str] = {}
+        for op, a1, a2, b1, b2 in matcher.get_opcodes():
+            if op in ("equal", "replace") and b2 > b1:
+                for n in range(a1, a2):
+                    aligned[n] = tess[min(b2 - 1, b1 + (n - a1) * (b2 - b1) // (a2 - a1))]
+        new_tokens: dict[int, dict[int, str]] = {}
+        for n, (i, k, tok, coords) in enumerate(tokens):
+            if not _odd(tok):
+                continue
+            key = f"{vol}:{page}:{coords}"
+            if key in readings:
+                scan = readings[key]["scan"]
+                new, look = (tok if scan is None else scan), False
+            else:
+                new, look = clean_token(tok, aligned.get(n, ""), counts, vocab, k == len(lines[i].split()) - 1)
+                words = re.findall(r"[A-Za-zÀ-ÿ]+", new)
+                if re.search("[א-ת]", aligned.get(n, "")) and (
+                        look or not words or not all(_known(x, counts, vocab) for x in words)):
+                    continue  # garbled Hebrew: mark_hebrew() / fill_hebrew() put it back
+            if look:
+                # left as the OCR read it: garble half cleaned ("}°P)" ->
+                # "P)") would no longer be found as the Hebrew quotation
+                open_words.append(f"{key}\t{tok}")
+                continue
+            if new != tok:
+                new_tokens.setdefault(i, {})[k] = new
+                changes.append((key, tok, new))
+        for i, repl in new_tokens.items():
+            parts = [repl.get(k, p) for k, p in enumerate(lines[i].split())]
+            # a line of nothing but specks goes (a blank line would be a
+            # paragraph break)
+            lines[i] = " ".join(p for p in parts if p) or None
+    return "\n".join(line for line in lines if line is not None), open_words
+
+
 def paragraphs(text: str) -> list[str]:
     # " |" is the scan's column rule / margin, read as a character
     out = [re.sub(r"\s+", " ", re.sub(r"(?<!\S)\|(?!\S)", " ", p)).strip() for p in re.split(r"\n\s*\n", text)]
@@ -504,7 +681,9 @@ def vocalise(word: str, chapter: int | None, verse: int | None, bible: dict, str
             return scored[0][-1]
     if len(lexical) == 1:
         return next(iter(lexical))
-    return max(options, key=lambda o: (counts.get(o, 0), o in lexical))
+    # sorted: a tie (שׁוֹק / שׁוּק, no points to go by) goes the same way on
+    # every run -- to the first in code point order, not to set order
+    return max(sorted(options), key=lambda o: (counts.get(o, 0), o in lexical))
 
 
 def fill_hebrew(dutch: str, latin_texts: list[str], chapter: int | None, verse: int | None,
@@ -624,6 +803,8 @@ def main() -> int:
                          "instead of reading hebrew_words / strongs_entries from the database")
     ap.add_argument("--dutch-vocab", type=Path, default=None,
                     help="JSON list of Dutch words instead of reading the Statenvertaling's from the database")
+    ap.add_argument("--scan-readings", type=Path, default=Path(__file__).with_name("los1900_scan_readings.json"),
+                    help="words with unexpected characters as read on the scan, by volume:page:word coords")
     ap.add_argument("--ocr-changes", type=Path, default=None,
                     help="write the words corrected from our own OCR pass (page, old, new) here")
     ap.add_argument("-o", "--output", type=Path)
@@ -657,6 +838,26 @@ def main() -> int:
         if args.ocr_changes:
             args.ocr_changes.write_text("".join(f"{p}\t{a}\t{b}\t{line}\n" for p, a, b, line in changes),
                                         encoding="utf-8")
+        # Characters that don't belong in the text ("«", "_", "ís", "maär",
+        # accents made of specks): the scan's reading where it was checked
+        # word for word, rules otherwise.
+        readings = json.loads(args.scan_readings.read_text(encoding="utf-8")) if args.scan_readings.exists() else {}
+        char_changes: list[tuple[str, str, str]] = []
+        open_words: list[str] = []
+        cleaned_volumes = []
+        for n, v in enumerate((volume_1, volume_2)):
+            v, left = clean_characters(v, n + 1, (args.raw_dir / f"los1900_deel{n + 1}_djvu.xml").read_text(
+                encoding="utf-8"), page_texts[n], counts, vocab, readings, char_changes)
+            cleaned_volumes.append(v)
+            open_words += left
+        volume_1, volume_2 = cleaned_volumes
+        print(f"[chars] {len(char_changes)} words with unexpected characters corrected "
+              f"({sum(k in readings for k, *_ in char_changes)} as read on the scan); "
+              f"{len(open_words)} left unsettled")
+        if args.ocr_changes:
+            with args.ocr_changes.open("a", encoding="utf-8") as fh:
+                fh.writelines(f"chars\t{a}\t{b}\t{k}\n" for k, a, b in char_changes)
+                fh.writelines(f"open\t{w}\n" for w in open_words)
     counts = word_counts([volume_1, volume_2])
     (volume_1, j1), (volume_2, j2) = fix_initial_j(volume_1, counts), fix_initial_j(volume_2, counts)
     print(f"[ocr]   {j1 + j2} capital J's read as F restored")
