@@ -78,9 +78,49 @@ def is_noise(line: str) -> bool:
     return False
 
 
+def trim_trailing_junk(volume: str) -> str:
+    """Cut a volume's text after its last line of real Dutch prose: at least
+    five words, most of them words this volume uses often."""
+    words = re.findall(r"[a-zà-ÿ]+", volume.lower())
+    counts: dict[str, int] = {}
+    for w in words:
+        counts[w] = counts.get(w, 0) + 1
+    lines = volume.split("\n")
+    for i in range(len(lines) - 1, -1, -1):
+        line_words = re.findall(r"[A-Za-zÀ-ÿ]{2,}", lines[i])
+        if len(line_words) >= 5 and sum(counts.get(w.lower(), 0) >= 20 for w in line_words) >= 0.7 * len(line_words):
+            return "\n".join(lines[:i + 1])
+    return volume
+
+
 def paragraphs(text: str) -> list[str]:
-    out = [re.sub(r"\s+", " ", p).strip() for p in re.split(r"\n\s*\n", text)]
-    return [p for p in out if len(p) > 3]
+    # " |" is the scan's column rule / margin, read as a character
+    out = [re.sub(r"\s+", " ", re.sub(r"(?<!\S)\|(?!\S)", " ", p)).strip() for p in re.split(r"\n\s*\n", text)]
+    out = [p for p in out if len(p) > 3]
+    # A page break leaves a blank line where the running head and page
+    # number were taken out -- mid-sentence ("met een nieuw gewaad" / "is
+    # toegerust, ..."). A paragraph that doesn't end a sentence and is
+    # followed by one starting in lower case is one paragraph.
+    return join_broken_sentences(out, capitals=False)
+
+
+def join_broken_sentences(paras: list[str], capitals: bool) -> list[str]:
+    """Join paragraphs that a page break split mid-sentence: the first
+    doesn't end a sentence, and the next starts in lower case -- or, with
+    `capitals`, the first ends on a word or comma ("wijst" / "Hij niet
+    alleen"), unless the next opens a comment with its verse number.
+    `capitals` only in the commentary: in the Bible text before it a verse
+    often ends on a comma and the next starts with "En", and joining those
+    turned verses into a long numbered paragraph taken for the first comment."""
+    merged: list[str] = []
+    for p in paras:
+        if merged and not re.search(r"[.!?:;”’\"')—-]$", merged[-1]) and (
+                re.match(r"[a-zà-ÿ(„‘]", p)
+                or (capitals and re.search(r"[\w,]$", merged[-1]) and not lemma_number(p)[0])):
+            merged[-1] += " " + p
+        else:
+            merged.append(p)
+    return merged
 
 
 # A comment can also start mid-paragraph, when the print's paragraph break
@@ -412,8 +452,16 @@ def main() -> int:
     args = ap.parse_args()
 
     latin = [json.loads(line) for line in args.latin.read_text(encoding="utf-8").splitlines() if line.strip()]
-    raw = "\n".join((args.raw_dir / f"los1900_deel{n}.txt").read_text(encoding="utf-8", errors="replace")
-                    for n in (1, 2))
+    volume_1, volume_2 = ((args.raw_dir / f"los1900_deel{n}.txt").read_text(encoding="utf-8", errors="replace")
+                          for n in (1, 2))
+    # Each volume ends with pages of scan junk (the back cover and binding,
+    # hundreds of lines like "SNN", "we 4 GAD Al if)"), and volume 2 opens
+    # with its title pages before its first chapter; without trimming, all
+    # of it ends up in the last comment of a volume (Gen. 21:33, 50:26).
+    v2_lines = volume_2.split("\n")
+    first = next((i for i, line in enumerate(v2_lines) if is_heading(line)), 0)
+    raw = trim_trailing_junk(volume_1) + "\n" + trim_trailing_junk("\n".join(v2_lines[first:]))
+    raw = re.sub(r"(?:\s+\S{1,3})?\s+EINDE VAN HET [A-Z ]+DEEL\.?", "", raw)  # "EINDE VAN HET EERSTE DEEL."
 
     lines = raw.split("\n")
     cleaned = ["\x01" if is_heading(l) else ("" if is_noise(l) else l.rstrip()) for l in lines]
@@ -443,7 +491,7 @@ def main() -> int:
     start, end = _ARGUMENT_START_RE.search(text), _ARGUMENT_END_RE.search(text)
     latin_args = [r for r in latin if r["kind"] == "argument"]
     if start and end and latin_args:
-        dutch_paras = paragraphs(text[start.start():end.start()])
+        dutch_paras = join_broken_sentences(paragraphs(text[start.start():end.start()]), capitals=True)
         la_len = [len(r["text"]) for r in latin_args]
         la_total, nl_total = sum(la_len), sum(len(p) for p in dutch_paras)
         bounds, acc = [], 0
@@ -485,7 +533,7 @@ def main() -> int:
             warnings.append(f"chapter {ch}: no comments found")
             continue
         blocks: list[list] = []  # [verse as read, text]
-        for p in split_inline_lemmas(paras[comment_start:]):
+        for p in split_inline_lemmas(join_broken_sentences(paras[comment_start:], capitals=True)):
             is_lemma, number = lemma_number(p)
             if is_lemma or not blocks:
                 blocks.append([number, p])
