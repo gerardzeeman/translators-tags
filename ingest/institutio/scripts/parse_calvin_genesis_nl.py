@@ -603,11 +603,23 @@ def split_inline_lemmas(paras: list[str]) -> list[str]:
     return out
 
 
+# A verse number read as something else altogether -- "D." for "5.", "9;"
+# for "9." -- still opens a comment: a token of one or two letters or
+# digits and a stop, at a paragraph start, before the (capitalised) lemma.
+# A wrong hit ("N. B. Men...") is harmless: its number doesn't fit the
+# verse sequence in align(), and it is joined to the comment before it.
+_LEMMA_LOOSE_RE = re.compile(r"^\s*[„\"“]?\s*([0-9A-Z][0-9A-Za-z]?|[0-9][0-9A-Za-z]?)\s?[.,:;]\s+(?=[A-Z„\"“‘'(])")
+
+
 def lemma_number(paragraph: str) -> tuple[bool, int | None]:
     """(starts a comment?, verse number as read -- None if unreadable)."""
     m = _LEMMA_RE.match(paragraph)
     if not m:
-        return False, None
+        loose = _LEMMA_LOOSE_RE.match(paragraph)
+        if not loose:
+            return False, None
+        digits = re.sub(r"\D", "", "".join(_DIGITS.get(c, c) for c in loose.group(1)))
+        return True, int(digits) if digits else None
     token = m.group(1)
     if token in ("le", "Le", "LE", "Ll"):  # "1." read as "le" or "Ll."
         return True, 1
@@ -932,6 +944,149 @@ def align(dutch: list[int | None], latin: list[int]) -> list[int | None]:
     return result
 
 
+_SENTENCE_START_RE = re.compile(r"(?<=[.!?”’:;])\s+(?=\S)|\n\n")
+# A verse number as the OCR may have read it at a sentence start ("5.",
+# "D.", "o.", "9;", "„8."), before the capitalised lemma.
+_NUMBER_TOKEN_RE = re.compile(r"^[„\"“|]?\s*([0-9A-Za-z]{1,3})\s?[.,:;]\s+(?=[A-Z„\"“‘'(])")
+
+
+def _norm_word(w: str) -> str:
+    """A word in a form the 1900 and the modernised SV spelling share:
+    diacritics off, double letters single, "sch" as "s" ("zoo"/"zo",
+    "oogen"/"ogen", "menschen"/"mensen")."""
+    w = _plain_letters(w.lower()).replace("sch", "s").replace("y", "ij")
+    return re.sub(r"(.)\1", r"\1", w)
+
+
+def load_verses(path: Path | None) -> dict[tuple[int, int], set[str]]:
+    """Genesis in the Statenvertaling, per (chapter, verse) as a set of
+    normalised words: to recognise the lemma (the Bible words a comment
+    opens with) in Los's text."""
+    if path is not None:
+        rows = json.loads(path.read_text(encoding="utf-8"))
+    else:
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+        from db import get_connection
+        with get_connection() as conn, conn.cursor() as cur:
+            cur.execute("""SELECT tv.chapter, tv.verse, tv.verse_text FROM translation_verses tv
+                           JOIN translations t ON t.id = tv.translation_id JOIN books b ON b.id = tv.book_id
+                           WHERE t.code = 'SV' AND b.usfm_code = 'GEN'""")
+            rows = cur.fetchall()
+    return {(c, v): {_norm_word(w) for w in re.findall(r"[A-Za-zÀ-ÿ]+", t)} for c, v, t in rows}
+
+
+_STOP = {"en", "de", "het", "een", "van", "dat", "die", "in", "hij", "zij", "tot", "te", "is", "den", "zijn"}
+
+
+def lemma_likeness(piece: str, words: set[str]) -> float:
+    """How much the opening words of a piece of Dutch (up to the lemma's
+    closing full stop, at most ten words, a verse number skipped) look
+    like the verse: the share of them found in it -- content words counting
+    double, so "En hij zeide" alone does not make a lemma."""
+    head = _NUMBER_TOKEN_RE.sub("", piece, count=1)
+    lemma = re.split(r"[.!?]", head, maxsplit=1)[0]
+    ws = [_norm_word(w) for w in re.findall(r"[A-Za-zÀ-ÿ]+", lemma)][:10]
+    if len(ws) < 2 or not words:
+        return 0.0
+    weight = lambda w: 1.0 if w in _STOP else 2.0
+    return sum(weight(w) for w in ws if w in words) / sum(weight(w) for w in ws)
+
+
+def assign_comments(text: str, la_comments: list[dict], chapter: int,
+                    verses: dict[tuple[int, int], set[str]], skip: float = 4.0,
+                    length_weight: float = 25.0) -> list[tuple[int, int] | None]:
+    """Where each Latin comment of a chapter starts and ends in the Dutch
+    comment text of the chapter: (start, end) character offsets, or None
+    when it gets no Dutch of its own (then its Dutch sits in the comment
+    before). A comment starts at a sentence start; which one is decided
+    for the whole chapter at once (dynamic programming, starts in order)
+    from three signals:
+
+      - the verse number the sentence opens with, as read (match_score: 3
+        for the verse itself, 1.5 for a digit the OCR confuses, 0.5 when
+        unreadable, -3 for another number);
+      - the lemma: the words after it against the verse in the SV (up to 4)
+        -- this is what finds comments whose number the OCR lost ("D."
+        for "5.", "o." for "3.", or none at all);
+      - the length: Los translates evenly, so a comment that starts at 18%
+        of Calvin's Latin of the chapter starts at about 18% of the Dutch.
+
+    A sentence with no number costs 2 more to start at. Relying on the
+    numbers alone put whole comments in the wrong place wherever one was
+    misread."""
+    raw = sorted({0} | {m.end() for m in _SENTENCE_START_RE.finditer(text) if m.end() < len(text)})
+    # Never between a comment's lemma and what follows it: the sentence
+    # after a verse number with its lemma ("15. En nu Jozefs broeders
+    # zagen.") or after a bare number ("10.") is no start of its own.
+    starts_at = []
+    for k, p in enumerate(raw):
+        if starts_at:
+            previous = text[starts_at[-1]:p]
+            if _NUMBER_TOKEN_RE.match(previous + " A") and len(previous) < 160 \
+                    or re.fullmatch(r"\s*[„\"“]?\s*\S{1,3}\s?[.,:;]\s*", previous):
+                continue
+        starts_at.append(p)
+    n, m = len(starts_at), len(la_comments)
+    if not m:
+        return []
+    total_nl = len(text) or 1
+    la_pos, acc = [], 0
+    for r in la_comments:
+        la_pos.append(acc)
+        acc += len(r["text"])
+    total_la = acc or 1
+    pieces = [text[p:p + 300] for p in starts_at]
+    tokens = [_NUMBER_TOKEN_RE.match(p) for p in pieces]
+
+    def cost(j: int, i: int) -> float:
+        verse = la_comments[j]["section"]
+        tok = tokens[i]
+        if tok:
+            digits = re.sub(r"\D", "", "".join(_DIGITS.get(c, c) for c in tok.group(1)))
+            numbers = match_score(int(digits) if digits else None, verse)
+        else:
+            numbers = -2.0
+        lemma = 4.0 * lemma_likeness(pieces[i], verses.get((chapter, verse), set()))
+        return length_weight * abs(starts_at[i] / total_nl - la_pos[j] / total_la) - numbers - lemma
+
+    INF = float("inf")
+    F = [INF] * n
+    F[0] = 0.0
+    choices: list[list[tuple[str, int]]] = []
+    for j in range(1, m):
+        G = [INF] * n
+        back: list[tuple[str, int]] = [("", -1)] * n
+        best, arg = INF, -1
+        for i in range(n):
+            if best < INF:
+                c = best + cost(j, i)
+                if c < G[i]:
+                    G[i], back[i] = c, ("start", arg)
+            if F[i] + skip < G[i]:
+                G[i], back[i] = F[i] + skip, ("skip", i)
+            if F[i] < best:
+                best, arg = F[i], i
+        F = G
+        choices.append(back)
+    chosen: list[int | None] = [None] * m
+    i = min(range(n), key=lambda k: F[k])
+    for j in range(m - 1, 0, -1):
+        kind, prev = choices[j - 1][i]
+        if kind == "start":
+            chosen[j] = i
+        i = prev
+    chosen[0] = 0
+    offsets = [starts_at[c] if c is not None else None for c in chosen]
+    result: list[tuple[int, int] | None] = []
+    for j, start in enumerate(offsets):
+        if start is None:
+            result.append(None)
+            continue
+        end = next((o for o in offsets[j + 1:] if o is not None), len(text))
+        result.append((start, end))
+    return result
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--raw-dir", type=Path, default=RAW)
@@ -950,6 +1105,8 @@ def main() -> int:
                     help="words with unexpected characters as read on the scan, by volume:page:word coords")
     ap.add_argument("--scan-pages", type=Path, default=Path(__file__).with_name("los1900_scan_pages.json"),
                     help="whole pages read from the scan (too damaged for OCR), by volume:page")
+    ap.add_argument("--verses", type=Path, default=None,
+                    help="JSON [[chapter, verse, text], ...] of Genesis (SV) instead of reading it from the database")
     ap.add_argument("--ocr-changes", type=Path, default=None,
                     help="write the words corrected from our own OCR pass (page, old, new) here")
     ap.add_argument("-o", "--output", type=Path)
@@ -957,6 +1114,7 @@ def main() -> int:
     args = ap.parse_args()
 
     latin = [json.loads(line) for line in args.latin.read_text(encoding="utf-8").splitlines() if line.strip()]
+    verses = load_verses(args.verses)
     volume_1, volume_2 = ((args.raw_dir / f"los1900_deel{n}.txt").read_text(encoding="utf-8", errors="replace")
                           for n in (1, 2))
     have_heb = all(d.exists() for d in args.hebrew_ocr_dirs)
@@ -1075,31 +1233,39 @@ def main() -> int:
         n_latin += len(la_comments)
         paras = paragraphs(body)
         first_verse = la_comments[0]["section"] if la_comments else 1
-        # The comments start at the first long paragraph opening with the
-        # first commented verse (or, failing that, any long numbered one).
-        starts = [k for k, p in enumerate(paras) if lemma_number(p)[0] and len(p) > 250]
-        comment_start = next((k for k in starts if match_score(lemma_number(paras[k])[1], first_verse) > 1),
-                             starts[0] if starts else None)
+        # Where the comments start, after Los's Bible text of the chapter:
+        # that text is about as long, relative to the comments, as Calvin's
+        # own Latin of the chapter is to his -- so near that point, at the
+        # paragraph that best opens the first comment (its verse number,
+        # its lemma). The first long numbered paragraph was often wrong: a
+        # misread number, or a reference ("1. Sam. 15 vs. 22") taken for it.
+        la_text = sum(len(r["text"]) for r in latin if r["kind"] == "scripture" and r["chapter"] == ch)
+        la_comm = sum(len(r["text"]) for r in la_comments) or 1
+        expected = la_text / (la_text + la_comm)
+        body_len = sum(len(p) for p in paras) or 1
+        pos, best = 0, None
+        for k, p in enumerate(paras):
+            is_lemma, number = lemma_number(p)
+            if len(p) > 150:
+                score = (match_score(number, first_verse) if is_lemma else -2.0) \
+                    + 4.0 * lemma_likeness(p, verses.get((ch, first_verse), set())) \
+                    - 25.0 * abs(pos / body_len - expected)
+                if best is None or score > best[0]:
+                    best = (score, k)
+            pos += len(p)
+        comment_start = best[1] if best else None
         if comment_start is None:
             warnings.append(f"chapter {ch}: no comments found")
             continue
-        blocks: list[list] = []  # [verse as read, text]
-        for p in split_inline_lemmas(join_broken_sentences(paras[comment_start:], capitals=True)):
-            is_lemma, number = lemma_number(p)
-            if is_lemma or not blocks:
-                blocks.append([number, p])
-            else:
-                blocks[-1][1] += "\n\n" + p
-        mapping = align([b[0] for b in blocks], [r["section"] for r in la_comments])
+        comment_text = "\n\n".join(join_broken_sentences(paras[comment_start:], capitals=True))
+        spans = assign_comments(comment_text, la_comments, ch, verses)
         texts: dict[int, list[str]] = {}
-        current = None
-        for block, target in zip(blocks, mapping):
-            if target is not None:
-                block[1] = normalise_lemma(block[1], la_comments[target]["section"])
-            current = target if target is not None else current
-            if current is None:
-                current = 0
-            texts.setdefault(current, []).append(block[1])
+        for j, span in enumerate(spans):
+            if span is None:
+                continue
+            block = comment_text[span[0]:span[1]].strip()
+            # (a comment that started mid-paragraph starts a paragraph now)
+            texts[j] = [normalise_lemma(block, la_comments[j]["section"]) if lemma_number(block)[0] else block]
         for idx, r in enumerate(la_comments):
             if idx in texts:
                 n_matched += 1

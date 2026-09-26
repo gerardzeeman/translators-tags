@@ -541,6 +541,38 @@ def one_line(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
+def comment_starts(starts: list[re.Match], comments: str, last_verse: int) -> list[re.Match]:
+    """The line-start verse numbers that really open a comment: the best
+    non-decreasing sequence of them (a comment's lemma follows the number:
+    "7. Et vocavit" weighs more than a reference that happens to start a
+    line, "capite 22. v. 18."). A greedy pass kept that "22." and then
+    dropped every comment of verses 7..21 as smaller numbers."""
+    def weight(m: re.Match) -> float:
+        after = comments[m.end():m.end() + 12]
+        if re.match(r"v\.|vers|cap", after):
+            return 0.2   # "22. v. 18.": a reference
+        if re.match(r"[A-Z„\"“‘'(]", after):
+            return 1.0   # a lemma
+        return 0.4
+    cands = [(int(m.group(1)), m, weight(m)) for m in starts if int(m.group(1)) <= max(last_verse, 1) + 5]
+    best: list[float] = []
+    prev: list[int | None] = []
+    for i, (n, _, w) in enumerate(cands):
+        best.append(w)
+        prev.append(None)
+        for j in range(i):
+            if cands[j][0] <= n and best[j] + w > best[i]:
+                best[i], prev[i] = best[j] + w, j
+    if not cands:
+        return []
+    i = max(range(len(cands)), key=lambda k: best[k])
+    chain = []
+    while i is not None:
+        chain.append(cands[i][1])
+        i = prev[i]
+    return chain[::-1]
+
+
 def parse(full: str, columns: list[tuple[int, int | None]]) -> tuple[list[dict], list[str]]:
     """full: the combined text with "\\x00<column>\\x00" markers at page starts."""
     warnings: list[str] = []
@@ -600,16 +632,17 @@ def parse(full: str, columns: list[tuple[int, int | None]]) -> tuple[list[dict],
                              "chapter": chapter, "section": verse, "text": vtext,
                              "co_col": column_at(h.end() + m.start())})
         comments = body[comment_start:]
+        # A comment starts at the beginning of a line -- or, where the OCR
+        # ran two lines together, after a sentence end: a word of six or
+        # more letters and a full stop ("recuperare liceat. 17. Et
+        # surrexit"; "liGeat" as the OCR read it), not an abbreviation
+        # ("Psal. 2.", "Matth. 5.").
         starts = [m for m in _MARKER_RE.finditer(comments)
-                  if m.start() == 0 or comments[m.start() - 1] == "\n"]
-        # Keep lemma starts in non-decreasing verse order (a line starting
-        # with a lower number is a stray number inside a comment).
-        kept, current = [], 0
-        for m in starts:
-            n = int(m.group(1))
-            if n >= current and n <= max(last, current) + 5:
-                kept.append(m)
-                current = n
+                  if m.start() == 0 or comments[m.start() - 1] == "\n"
+                  or (re.search(r"(?:[a-z][A-Za-z]{5}[.!?](?:\s*\.)?|[a-z]{3}\.\s*\.)\s+$",
+                                comments[max(0, m.start() - 14):m.start()])
+                      and re.match(r"[A-Z][a-z]+ [a-z]", comments[m.end():m.end() + 20]))]
+        kept = comment_starts(starts, comments, last)
         seen: dict[int, int] = {}
         for i, m in enumerate(kept):
             verse = int(m.group(1))
