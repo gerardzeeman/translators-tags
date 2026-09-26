@@ -75,6 +75,20 @@ def main() -> int:
                                           THEN segment.status ELSE 'ingested' END""",
                 {**r, "work_id": work_id,
                  "print_ref": f"CO 23, {r['co_col']}" if r.get("co_col") else None})
+        # The edition's footnotes (parse_calvin_genesis_la.py) as annotations
+        # at their call's position in text_la -- replaced wholesale.
+        cur.execute("""DELETE FROM segment_annotation
+                       WHERE segment_id IN (SELECT id FROM segment WHERE work_id = %s)""", (work_id,))
+        n_notes = 0
+        for r in latin:
+            for note in r.get("notes", []):
+                cur.execute(
+                    """INSERT INTO segment_annotation (segment_id, char_position, glyph, kind, note)
+                       SELECT id, %s, %s, 'variant', %s FROM segment WHERE work_id = %s AND ref = %s""",
+                    (note["pos"], note["glyph"], note["note"], work_id, r["ref"]))
+                n_notes += 1
+        print(f"[load] {n_notes} editorial footnotes")
+
         refs = [r["ref"] for r in latin]
         cur.execute("DELETE FROM segment WHERE work_id = %s AND NOT (ref = ANY(%s))", (work_id, refs))
         if cur.rowcount:

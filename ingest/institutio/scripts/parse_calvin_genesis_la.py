@@ -301,16 +301,86 @@ def merge_script_words(text: str, script_ocr: str, vocab: set[str], hebrew_forms
     return detokenize(out)
 
 
+# ── Editorial footnotes ──────────────────────────────────────────────────────
+# The Calvini Opera prints its apparatus at the foot of each column, under a
+# short rule, in small type: "1) Hic et in seqq. v. 11. 20. 24 Ed. princeps
+# habebat: Et." -- with a superscript call in the text ("Postea ¹) dixit").
+# Both OCRs run these into the text. They are taken out: the footnote blocks
+# from all three OCR layers before combining (else one layer would put them
+# back), and each call is replaced by a private-use placeholder character
+# (_NOTE_BASE + n) that survives the later steps, so parse() can record where
+# in the segment text note n belongs and drop the placeholder. The notes are
+# kept (segment_annotation, kind 'variant'), not thrown away: they are the
+# edition's textual notes.
+_FOOTNOTE_START_RE = re.compile(r"^\s*[1-9lI]\s?\)\s")
+# The call as the OCR reads it: "1)", "])", "!)", "*)", "')" (a superscript 1
+# seen as an apostrophe) -- after a word, punctuation or a closing bracket
+# ("(Psal. 115, 17.) 1)").
+_NOTE_CALL_RE = re.compile(r"(?<=[A-Za-z\u00C0-\u024F.,;:!?'\")])\s?(?:[1-9lI!*\]'\u2019]|\d)\s?\)")
+_NOTE_BASE = 0xE000
+_NOTE_PLACEHOLDER_RE = re.compile("\\s?[\\uE000-\\uF8FF]")
+
+
+def split_footnote_blocks(page: pymupdf.Page) -> tuple[str, list[str]]:
+    """The page's text layer without its footnote blocks, and the notes."""
+    height = page.rect.height
+    blocks = page.get_text("blocks")
+    footnotes = [b for b in blocks if b[1] > 0.55 * height and _FOOTNOTE_START_RE.match(b[4])]
+    kept, notes = [], []
+    for block in blocks:
+        x0, y0, x1, y1, text = block[:5]
+        if block in footnotes:
+            for note in re.split(r"(?:^|\n)\s*[1-9lI]\s?\)\s", text):
+                note = re.sub(r"(\w)-\s*\n\s*(\w)", r"\1\2", note)
+                note = re.sub(r"\s+", " ", note).strip()
+                if note:
+                    notes.append(note)
+            continue
+        # A block under a footnote *in the same column* is its continuation;
+        # the other column can go on lower down (Gen. 47:8 starts at the
+        # foot of the right column, below the left column's footnote).
+        if any(y0 >= f[1] and x0 < f[2] and x1 > f[0] for f in footnotes):
+            continue
+        kept.append(text)
+    return "".join(kept), notes
+
+
+def drop_footnote_paragraphs(text: str) -> str:
+    """Tesseract puts a column's footnotes in a paragraph of its own."""
+    parts = re.split(r"(\n\s*\n)", text)
+    return "".join(p for p in parts if not _FOOTNOTE_START_RE.match(p))
+
+
+def mark_note_calls(text: str, first_index: int) -> tuple[str, int]:
+    """Replace every footnote call ("Postea])", "cuiusque. 2)") by a
+    placeholder numbered from first_index; not the closing of a real
+    parenthesis ("(cap. 2, 5)"). Returns (text, number of calls)."""
+    out, last, n = [], 0, 0
+    for m in _NOTE_CALL_RE.finditer(text):
+        before = text[max(0, m.start() - 60):m.start()]
+        if before.rfind("(") > before.rfind(")"):
+            continue  # inside a parenthesis: its own closing bracket
+        out.append(text[last:m.start()])
+        out.append(chr(_NOTE_BASE + first_index + n))
+        last = m.end()
+        n += 1
+    out.append(text[last:])
+    return "".join(out), n
+
+
 def page_text(pdf: pymupdf.Document, ocr_dir: Path, page: int, vocab: set[str],
-              script_dir: Path | None = None, hebrew_forms: set[str] | None = None) -> tuple[str, int | None]:
-    """Combined text of one page (header/footer removed) and its left CO column number."""
-    text_layer = pdf[page].get_text()
-    tesseract = (ocr_dir / f"p{page:04d}.txt").read_text(encoding="utf-8")
+              script_dir: Path | None = None, hebrew_forms: set[str] | None = None
+              ) -> tuple[str, int | None, list[str]]:
+    """Combined text of one page (header/footer and footnotes removed), its
+    left CO column number, and the page's footnotes (see mark_note_calls)."""
+    text_layer, notes = split_footnote_blocks(pdf[page])
+    tesseract = drop_footnote_paragraphs((ocr_dir / f"p{page:04d}.txt").read_text(encoding="utf-8"))
     text = combine(text_layer, tesseract, vocab)
     text = restore_headings(text, tesseract)
     script_file = script_dir / f"p{page:04d}.txt" if script_dir else None
     if script_file and script_file.exists():
-        text = merge_script_words(text, script_file.read_text(encoding="utf-8"), vocab, hebrew_forms or set())
+        script = drop_footnote_paragraphs(script_file.read_text(encoding="utf-8"))
+        text = merge_script_words(text, script, vocab, hebrew_forms or set())
     column = None
     lines = []
     for line in text.splitlines():
@@ -335,7 +405,7 @@ def page_text(pdf: pymupdf.Document, ocr_dir: Path, page: int, vocab: set[str],
         if _FOOTER_RE.match(line):
             continue
         lines.append(line)
-    return "\n".join(lines), column
+    return "\n".join(lines), column, notes
 
 
 # Single substitutions that undo the OCR confusions seen in this volume:
@@ -522,8 +592,17 @@ def main() -> int:
     script_dir = args.script_ocr_dir if args.script_ocr_dir.exists() else None
     hebrew_forms = load_hebrew_forms(args.hebrew_forms) if script_dir else set()
     pieces, columns = [], []
+    all_notes: list[str | None] = []
+    note_mismatch: list[str] = []
     for page in range(FIRST_PAGE, LAST_PAGE + 1):
-        text, column = page_text(pdf, args.ocr_dir, page, vocab, script_dir, hebrew_forms)
+        text, column, page_notes = page_text(pdf, args.ocr_dir, page, vocab, script_dir, hebrew_forms)
+        text, n_calls = mark_note_calls(text, len(all_notes))
+        # Calls and notes are paired in page order; the OCR sometimes misses
+        # one of either -- surplus calls get no note (dropped from the text
+        # anyway), surplus notes are reported.
+        all_notes.extend(page_notes[:n_calls] + [None] * max(0, n_calls - len(page_notes)))
+        if len(page_notes) != n_calls:
+            note_mismatch.append(f"p{page}: {n_calls} calls / {len(page_notes)} notes")
         columns.append((page, column))
         pieces.append(f"\x00{column if column is not None else ''}\x00\n{text}")
     full = clean_word_accents(dehyphenate("\n".join(pieces)))
@@ -531,6 +610,24 @@ def main() -> int:
     print(f"[fix]   {corrections} words corrected by known OCR confusions")
 
     rows, warnings = parse(full, columns)
+    # Footnote placeholders -> annotations at their position in the text.
+    n_notes = 0
+    for r in rows:
+        notes, pieces_out, pos = [], [], 0
+        for part in re.split(r"(\s?[\uE000-\uF8FF])", r["text"]):
+            m = re.fullmatch(r"\s?([\uE000-\uF8FF])", part)
+            if m:
+                note = all_notes[ord(m.group(1)) - _NOTE_BASE] if ord(m.group(1)) - _NOTE_BASE < len(all_notes) else None
+                if note:
+                    notes.append({"pos": pos, "glyph": chr(ord("a") + len(notes) % 26), "note": note})
+                continue
+            pieces_out.append(part)
+            pos += len(part)
+        r["text"] = "".join(pieces_out)
+        r["notes"] = notes
+        n_notes += len(notes)
+    print(f"[notes] {n_notes} editorial footnotes attached; {len(note_mismatch)} pages where calls and "
+          f"notes didn't pair up ({', '.join(note_mismatch[:8])}{' ...' if len(note_mismatch) > 8 else ''})")
     for seq, r in enumerate(rows, start=1):
         r["seq"] = seq
     for w in warnings:

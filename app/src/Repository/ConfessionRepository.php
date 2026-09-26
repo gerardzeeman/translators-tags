@@ -438,6 +438,76 @@ class ConfessionRepository
     }
 
     /**
+     * Annotations (segment_annotation) per segment -- for the commentaries,
+     * the edition's own footnotes, anchored at their call's position.
+     * @param int[] $segmentIds
+     * @return array<int, array<int, array{char_position: int, glyph: string, kind: string, note: string}>>
+     */
+    public function getSegmentAnnotations(array $segmentIds): array
+    {
+        if (!$segmentIds) {
+            return [];
+        }
+        $rows = $this->connection->fetchAllAssociative(
+            'SELECT segment_id, char_position, glyph, kind, note FROM segment_annotation
+             WHERE segment_id IN (' . implode(',', array_fill(0, count($segmentIds), '?')) . ')
+             ORDER BY segment_id, char_position',
+            $segmentIds
+        );
+        $bySegment = [];
+        foreach ($rows as $r) {
+            $bySegment[(int) $r['segment_id']][] = [
+                'char_position' => (int) $r['char_position'], 'glyph' => $r['glyph'],
+                'kind' => $r['kind'], 'note' => $r['note'],
+            ];
+        }
+        return $bySegment;
+    }
+
+    /**
+     * Zero-width {type: 'note', kind, glyph, note} parts inserted into a
+     * text's parts (splitTextIntoWordParts() output, covering the text
+     * contiguously) at each annotation's character position. A plain-text
+     * part is split at the position; a word part never is (a footnote call
+     * follows a word, never the middle of one).
+     * @param array<int, array{type: string, content: string}> $parts
+     * @param array<int, array{char_position: int, glyph: string, kind: string, note: string}> $annotations
+     */
+    public function insertNoteParts(array $parts, array $annotations): array
+    {
+        if (!$annotations) {
+            return $parts;
+        }
+        $out = [];
+        $offset = 0;
+        $k = 0;
+        $n = count($annotations);
+        foreach ($parts as $part) {
+            $len = mb_strlen($part['content']);
+            while ($k < $n && $annotations[$k]['char_position'] <= $offset) {
+                $out[] = ['type' => 'note'] + $annotations[$k];
+                $k++;
+            }
+            while ($k < $n && $part['type'] === 'text'
+                   && $annotations[$k]['char_position'] < $offset + $len) {
+                $cut = $annotations[$k]['char_position'] - $offset;
+                $out[] = ['type' => 'text', 'content' => mb_substr($part['content'], 0, $cut)];
+                $out[] = ['type' => 'note'] + $annotations[$k];
+                $part['content'] = mb_substr($part['content'], $cut);
+                $offset += $cut;
+                $len -= $cut;
+                $k++;
+            }
+            $out[] = $part;
+            $offset += $len;
+        }
+        for (; $k < $n; $k++) {
+            $out[] = ['type' => 'note'] + $annotations[$k];
+        }
+        return $out;
+    }
+
+    /**
      * All verses of one Bible chapter in the given translation, verse =>
      * text -- for the commentary pages, which show the Dutch Bible verse next
      * to Calvin's own Latin rendering of it.

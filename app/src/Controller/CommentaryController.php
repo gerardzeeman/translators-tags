@@ -67,10 +67,11 @@ class CommentaryController extends AbstractController
     {
         $meta = $this->meta($boek);
         $segments = $this->repository->getUnnumberedSection($meta['work'], $meta['argument_prefix']);
+        $notes = $this->repository->getSegmentAnnotations(array_map(fn($s) => $s['id'], $segments));
         return $this->render('commentary/argument.html.twig', [
             'boek'     => $boek,
             'meta'     => $meta,
-            'segments' => array_map(fn($s) => $this->withParts($s), $segments),
+            'segments' => array_map(fn($s) => $this->withParts($s, $notes[$s['id']] ?? []), $segments),
             'layer'    => self::DUTCH_LAYER,
         ]);
     }
@@ -83,7 +84,8 @@ class CommentaryController extends AbstractController
         if (!$data['articles']) {
             throw $this->createNotFoundException('Hoofdstuk niet gevonden.');
         }
-        $segments = array_map(fn($s) => $this->withParts($s), $data['articles']);
+        $notes = $this->repository->getSegmentAnnotations(array_map(fn($s) => $s['id'], $data['articles']));
+        $segments = array_map(fn($s) => $this->withParts($s, $notes[$s['id']] ?? []), $data['articles']);
 
         // The Dutch Bible verse next to Calvin's own Latin rendering: HSV
         // for users allowed to see it (copyrighted), the Statenvertaling
@@ -115,9 +117,10 @@ class CommentaryController extends AbstractController
 
     /**
      * A segment with its Latin word-hover parts (plain text until the
-     * segment is tokenized) and its Dutch translation, if any.
+     * segment is tokenized) -- the edition's footnotes placed in them as
+     * hover markers -- and its Dutch translation, if any.
      */
-    private function withParts(array $s): array
+    private function withParts(array $s, array $notes = []): array
     {
         return [
             'id'        => $s['id'],
@@ -125,7 +128,8 @@ class CommentaryController extends AbstractController
             'kind'      => $s['kind'] ?? null,
             'section'   => $s['section'],
             'print_ref' => $s['print_ref'] ?? null,
-            'parts'     => $this->repository->splitTextIntoWordParts($s['text_la'], $s['tokens']),
+            'parts'     => $this->repository->insertNoteParts(
+                $this->repository->splitTextIntoWordParts($s['text_la'], $s['tokens']), $notes),
             'text_nl'   => $s['translations'][self::DUTCH_LAYER] ?? null,
         ];
     }
