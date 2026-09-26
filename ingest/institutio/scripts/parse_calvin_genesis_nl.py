@@ -93,6 +93,165 @@ def trim_trailing_junk(volume: str) -> str:
     return volume
 
 
+_WORD_TOKEN_RE = re.compile(r"[A-Za-zÀ-ÿ]+")
+
+
+def line_pages(djvu_xml: str) -> list[int]:
+    """The page (djvu OBJECT index = PDF page index) of each line of the
+    archive.org text: its non-empty lines are the LINE elements of
+    _djvu.xml, in order."""
+    pages = []
+    for index, obj in enumerate(re.split(r"<OBJECT\b", djvu_xml)[1:]):
+        pages += [index] * obj.count("<LINE")
+    return pages
+
+
+def word_counts(texts: list[str]) -> dict[str, int]:
+    """How often the book uses each word (lower case), words broken at a
+    line end joined -- else "ko-/nen" makes "nen" look common."""
+    counts: dict[str, int] = {}
+    for t in texts:
+        for w in _WORD_TOKEN_RE.findall(re.sub(r"(\w)-\s*\n\s*(\w)", r"\1\2", t)):
+            counts[w.lower()] = counts.get(w.lower(), 0) + 1
+    return counts
+
+
+def _match_case(model: str, word: str) -> str:
+    if model.isupper() and len(model) > 1:
+        return word.upper()
+    if model[:1].isupper():
+        return word[:1].upper() + word[1:]
+    return word.lower() if model.islower() else word
+
+
+def _edit_distance(a: str, b: str) -> int:
+    row = list(range(len(b) + 1))
+    for i, ca in enumerate(a, 1):
+        prev, row[0] = row[0], i
+        for j, cb in enumerate(b, 1):
+            prev, row[j] = row[j], min(row[j] + 1, row[j - 1] + 1, prev + (ca != cb))
+    return row[-1]
+
+
+def _better_reading(old: str, new: str, counts: dict[str, int], vocab: set[str], rare: int, known: int,
+                    confirmed: bool, in_phrase: bool) -> bool:
+    """Whether our pass's `new` should replace the archive.org `old` (one
+    word of a differing stretch of `in_phrase` or not):
+
+      - `new` is a real word: in the Statenvertaling (`vocab`), or used
+        often in the book (not for words of one or two letters, where the
+        OCR's own junk -- "Zn", "Zu", "gi" -- is common too);
+      - `old` is no word of the Statenvertaling ("schoof", "van ouds"), or
+        both our passes (full resolution and PDF) read otherwise
+        (`confirmed`: "zien Nen" / "zich zullen");
+      - a letter or two off ("Katn" / "Kaïn", "wijshcid" / "wijsheid");
+        further only in a confirmed stretch of words ("Nen" / "zullen");
+      - not just `old` with its ending cut or extended ("achts" / "acht",
+        genuine inflections as often as not);
+      - when `old` is not rare in the book, a much commoner one ("En" is
+        never turned into "Zn")."""
+    a, b = old.lower(), new.lower()
+    if a == b:
+        return True
+    n_old, n_new = counts.get(a, 0), counts.get(b, 0)
+    if b not in vocab and (n_new < known or len(b) <= 2):
+        return False
+    if a in vocab and not confirmed:
+        return False
+    if min(len(a), len(b)) < 0.5 * max(len(a), len(b)) or a.startswith(b) or b.startswith(a):
+        return False
+    d, longest = _edit_distance(a, b), max(len(a), len(b))
+    if not (d == 1 or (d <= 2 and longest >= 5) or (d <= 3 and longest >= 8)
+            or (confirmed and in_phrase and d <= longest // 2 + 1)):
+        return False
+    return n_old <= rare or n_new >= 3 * n_old
+
+
+def fix_initial_j(text: str, counts: dict[str, int]) -> tuple[str, int]:
+    """Both OCRs read the capital J of this type as F ("Facob", "Fozef",
+    "Fuda"): a capitalised word that is far commoner with J ("Jacob" 638x
+    to "Facob" 37x) gets the J."""
+    fixed = 0
+
+    def repl(m: re.Match) -> str:
+        nonlocal fixed
+        word = m.group()
+        n_f, n_j = counts.get(word.lower(), 0), counts.get("j" + word[1:].lower(), 0)
+        if n_j >= max(10, 5 * n_f):
+            fixed += 1
+            return "J" + word[1:]
+        return word
+
+    return re.sub(r"\bF[a-zà-ÿ]{2,}", repl, text), fixed
+
+
+def combine_dutch(volume: str, djvu_xml: str, page_texts: dict[int, tuple[str, str | None]],
+                  counts: dict[str, int], vocab: set[str], changes: list[tuple[int, str, str, str]],
+                  rare: int = 2, known: int = 20) -> str:
+    """Correct the archive.org OCR with our own Tesseract pass of the same
+    pages (ocr_pdf_pages.py / fetch_los_hires_pages.py, nld+heb): per page
+    the two word sequences are aligned, and where they differ word for word
+    and the base has a word the book doesn't use often (< `known` times),
+    our reading replaces it when _better_reading() finds it the better one
+    -- "zien Nen" -> "zich zullen", "wijshcid" -> "wijsheid", "Katn" ->
+    "Kaïn". Line and paragraph structure stay the base's."""
+    lines = volume.split("\n")
+    pages = line_pages(djvu_xml)
+    by_page: dict[int, list[int]] = {}
+    k = 0
+    for i, line in enumerate(lines):
+        if line.strip():
+            if k < len(pages):
+                by_page.setdefault(pages[k], []).append(i)
+            k += 1
+    if k != len(pages):
+        print(f"[warn]  {k} text lines vs {len(pages)} djvu lines -- Dutch OCR not combined")
+        return volume
+    edits: dict[int, list[tuple[int, int, str]]] = {}
+    for page, line_ids in by_page.items():
+        if page not in page_texts:
+            continue
+        # our pass of the page, and a second one (the PDF pass next to a
+        # full-resolution one) to confirm a reading with
+        other, second = page_texts[page]
+        base = [(i, m) for i in line_ids for m in _WORD_TOKEN_RE.finditer(lines[i])]
+        tess = _WORD_TOKEN_RE.findall(re.sub(r"(\w)-\s*\n\s*(\w)", r"\1\2", other))
+        second_words = " " + " ".join(_WORD_TOKEN_RE.findall(
+            re.sub(r"(\w)-\s*\n\s*(\w)", r"\1\2", second or ""))).lower() + " "
+        matcher = difflib.SequenceMatcher(a=[m.group().lower() for _, m in base],
+                                          b=[w.lower() for w in tess], autojunk=False)
+        for op, a1, a2, b1, b2 in matcher.get_opcodes():
+            if op != "replace" or a2 - a1 != b2 - b1 or a2 - a1 > 3:
+                continue
+            span = base[a1:a2]
+            if len({i for i, _ in span}) != 1:
+                continue  # across a line end (hyphenation)
+            old = [m.group() for _, m in span]
+            new = tess[b1:b2]
+            if all(counts.get(w.lower(), 0) >= known for w in old):
+                continue
+            confirmed = f" {' '.join(new).lower()} " in second_words
+            if all(_better_reading(o, n, counts, vocab, rare, known, confirmed, len(old) > 1)
+                   for o, n in zip(old, new)):
+                for (i, m), o, n in zip(span, old, new):
+                    if o.lower() != n.lower():
+                        # the case of the base where only letters inside the
+                        # word changed; our pass's where the first letter did
+                        # ("Nen" -> "zullen", "rods" -> "Gods")
+                        n = _match_case(o, n) if o[0].lower() == n[0].lower() else n
+                        if o[0].isupper() and n[0].islower() and re.search(
+                                r"(?:^|[.!?„\"“])\s*$", lines[i][:m.start()]):
+                            n = n[0].upper() + n[1:]  # a sentence start
+                        edits.setdefault(i, []).append((m.start(), m.end(), n))
+                        changes.append((page, o, n, lines[i].strip()))
+    for i, line_edits in edits.items():
+        line = lines[i]
+        for start, end, replacement in sorted(line_edits, reverse=True):
+            line = line[:start] + replacement + line[end:]
+        lines[i] = line
+    return "\n".join(lines)
+
+
 def paragraphs(text: str) -> list[str]:
     # " |" is the scan's column rule / margin, read as a character
     out = [re.sub(r"\s+", " ", re.sub(r"(?<!\S)\|(?!\S)", " ", p)).strip() for p in re.split(r"\n\s*\n", text)]
@@ -268,6 +427,22 @@ def mark_hebrew(text: str, page_texts: list[str]) -> tuple[str, int, int]:
             cursor = junk_start + len(guess) + 6
             found += 1
     return text, found, missed
+
+
+def load_dutch_vocab(path: Path | None) -> set[str]:
+    """The words (lower case) of the Statenvertaling -- the spelling closest
+    to Los's 1900 Dutch in the database -- as the list of real words the OCR
+    correction checks against."""
+    if path is not None:
+        return {w.lower() for w in json.loads(path.read_text(encoding="utf-8"))}
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    from db import get_connection
+    with get_connection() as conn, conn.cursor() as cur:
+        cur.execute("""SELECT DISTINCT lower(w) FROM translation_verses tv
+                       JOIN translations t ON t.id = tv.translation_id,
+                       regexp_split_to_table(tv.verse_text, '[^[:alpha:]]+') AS w
+                       WHERE t.code = 'SV' AND w <> ''""")
+        return {r[0] for r in cur.fetchall()}
 
 
 def load_hebrew_lexicon(path: Path | None) -> tuple[dict, dict]:
@@ -447,6 +622,10 @@ def main() -> int:
     ap.add_argument("--hebrew-lexicon", type=Path, default=None,
                     help='JSON {"bible": [[chapter, verse, word], ...], "strongs": [[lemma, pos], ...]} '
                          "instead of reading hebrew_words / strongs_entries from the database")
+    ap.add_argument("--dutch-vocab", type=Path, default=None,
+                    help="JSON list of Dutch words instead of reading the Statenvertaling's from the database")
+    ap.add_argument("--ocr-changes", type=Path, default=None,
+                    help="write the words corrected from our own OCR pass (page, old, new) here")
     ap.add_argument("-o", "--output", type=Path)
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
@@ -454,6 +633,33 @@ def main() -> int:
     latin = [json.loads(line) for line in args.latin.read_text(encoding="utf-8").splitlines() if line.strip()]
     volume_1, volume_2 = ((args.raw_dir / f"los1900_deel{n}.txt").read_text(encoding="utf-8", errors="replace")
                           for n in (1, 2))
+    have_heb = all(d.exists() for d in args.hebrew_ocr_dirs)
+    # Our own nld+heb pass per page: the full-resolution one where it exists
+    # (fetch_los_hires_pages.py) -- the scan PDFs are too coarse for
+    # Tesseract to find most Hebrew -- else the PDF pass.
+    page_texts: list[dict[int, tuple[str, str | None]]] = [{}, {}]
+    if have_heb:
+        for n, (d, hires) in enumerate(zip(args.hebrew_ocr_dirs, args.hebrew_hires_dirs)):
+            for p in sorted(d.glob("p*.txt")):
+                better = hires / p.name
+                pdf_pass = p.read_text(encoding="utf-8")
+                page_texts[n][int(p.stem[1:])] = ((better.read_text(encoding="utf-8"), pdf_pass)
+                                                  if better.exists() else (pdf_pass, None))
+        # The archive.org OCR misreads some words ("dat zij zien Nen wachten"
+        # for "zich zullen"); our pass often has them right.
+        counts = word_counts([volume_1, volume_2])
+        vocab = load_dutch_vocab(args.dutch_vocab)
+        changes: list[tuple[int, str, str, str]] = []
+        volume_1, volume_2 = (combine_dutch(v, (args.raw_dir / f"los1900_deel{n + 1}_djvu.xml").read_text(
+                                  encoding="utf-8"), page_texts[n], counts, vocab, changes)
+                              for n, v in enumerate((volume_1, volume_2)))
+        print(f"[ocr]   {len(changes)} words corrected from our own OCR pass")
+        if args.ocr_changes:
+            args.ocr_changes.write_text("".join(f"{p}\t{a}\t{b}\t{line}\n" for p, a, b, line in changes),
+                                        encoding="utf-8")
+    counts = word_counts([volume_1, volume_2])
+    (volume_1, j1), (volume_2, j2) = fix_initial_j(volume_1, counts), fix_initial_j(volume_2, counts)
+    print(f"[ocr]   {j1 + j2} capital J's read as F restored")
     # Each volume ends with pages of scan junk (the back cover and binding,
     # hundreds of lines like "SNN", "we 4 GAD Al if)"), and volume 2 opens
     # with its title pages before its first chapter; without trimming, all
@@ -471,16 +677,8 @@ def main() -> int:
     rows: list[dict] = []
 
     heb_stats = {"filled": 0, "from_dutch_ocr": 0, "restored": 0}
-    have_heb = all(d.exists() for d in args.hebrew_ocr_dirs)
     if have_heb:
-        # Per page the full-resolution OCR (fetch_los_hires_pages.py) where it
-        # exists -- the scan PDFs are too coarse for Tesseract to find most
-        # Hebrew -- else the PDF pass.
-        pages = []
-        for d, hires in zip(args.hebrew_ocr_dirs, args.hebrew_hires_dirs):
-            for p in sorted(d.glob("p*.txt")):
-                better = hires / p.name
-                pages.append((better if better.exists() else p).read_text(encoding="utf-8"))
+        pages = [page_texts[n][k][0] for n in (0, 1) for k in sorted(page_texts[n])]
         text, found, missed = mark_hebrew(text, pages)
         print(f"[heb]   {found} Hebrew quotations located in the text, {missed} not")
         bible, strongs = load_hebrew_lexicon(args.hebrew_lexicon)
