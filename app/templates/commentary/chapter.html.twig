@@ -2,8 +2,7 @@
 {% import 'confession/_macros.html.twig' as c %}
 {% block title %}{{ meta.title }} {{ chapter }} – Bijbel Vergelijking{% endblock %}
 
-{% macro dutch(text) %}{% for p in text|split("\n\n") %}<p class="commentary-nl-para">{{ p }}</p>{% endfor %}{% endmacro %}
-{% import _self as self %}
+{% import 'commentary/_macros.html.twig' as cm %}
 
 {% block nav_center %}{% endblock %}
 
@@ -52,7 +51,7 @@
                     <div class="institutio-sentence-nl">
                         {% if s.text_nl %}
                         <span class="institutio-layer-label">Nederlands (Los, 1900)</span>
-                        {{ self.dutch(s.text_nl) }}
+                        {{ cm.dutch(s.nl_paras) }}
                         {% else %}
                         <span class="commentary-nl-missing">Geen afzonderlijke Nederlandse tekst: deze staat bij het vorige vers.</span>
                         {% endif %}

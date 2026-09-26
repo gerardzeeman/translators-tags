@@ -409,6 +409,12 @@ def clean_characters(volume: str, vol: int, djvu_xml: str, page_texts: dict[int,
             if key in readings:
                 scan = readings[key]["scan"]
                 new, look = (tok if scan is None else scan), False
+                if readings[key].get("intended"):
+                    # Los's own misprint: the intended word, with what he
+                    # printed and why -- ⟦C:intended‖printed‖note⟧, which
+                    # the app shows marked, the note on hover
+                    # (CommentaryController::dutchParagraphs)
+                    new = f"⟦C:{readings[key]['intended']}‖{scan}‖{readings[key]['note']}⟧"
             else:
                 new, look = clean_token(tok, aligned.get(n, ""), counts, vocab, k == len(lines[i].split()) - 1)
                 words = re.findall(r"[A-Za-zÀ-ÿ]+", new)

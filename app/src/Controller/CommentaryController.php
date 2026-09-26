@@ -131,6 +131,35 @@ class CommentaryController extends AbstractController
             'parts'     => $this->repository->insertNoteParts(
                 $this->repository->splitTextIntoWordParts($s['text_la'], $s['tokens']), $notes),
             'text_nl'   => $s['translations'][self::DUTCH_LAYER] ?? null,
+            'nl_paras'  => self::dutchParagraphs($s['translations'][self::DUTCH_LAYER] ?? null),
         ];
+    }
+
+    /**
+     * The Dutch text as paragraphs of parts: plain text, and the places
+     * where the translator's own print has a misprint -- marked in the text
+     * by parse_calvin_genesis_nl.py as ⟦C:intended‖printed‖note⟧ -- which
+     * show the intended word, marked, with what was printed and why on hover.
+     *
+     * @return list<list<array{type: string, content: string, printed?: string, note?: string}>>
+     */
+    public static function dutchParagraphs(?string $text): array
+    {
+        if ($text === null || $text === '') {
+            return [];
+        }
+        $paragraphs = [];
+        foreach (explode("\n\n", $text) as $paragraph) {
+            $parts = [];
+            foreach (preg_split('/(⟦C:[^‖⟧]*‖[^‖⟧]*‖[^⟧]*⟧)/u', $paragraph, -1, PREG_SPLIT_DELIM_CAPTURE | PREG_SPLIT_NO_EMPTY) as $piece) {
+                if (preg_match('/^⟦C:([^‖⟧]*)‖([^‖⟧]*)‖([^⟧]*)⟧$/u', $piece, $m)) {
+                    $parts[] = ['type' => 'correction', 'content' => $m[1], 'printed' => $m[2], 'note' => $m[3]];
+                } else {
+                    $parts[] = ['type' => 'text', 'content' => $piece];
+                }
+            }
+            $paragraphs[] = $parts;
+        }
+        return $paragraphs;
     }
 }

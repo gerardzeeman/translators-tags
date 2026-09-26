@@ -1,0 +1,7 @@
+{# The Dutch translation of a commentary segment, as paragraphs of parts
+   (CommentaryController::dutchParagraphs): plain text, and the translator's
+   misprints -- the intended word shown, marked, with a hover popup saying
+   what was printed and why (the note names the printed form itself). #}
+{% macro dutch(paras) %}{% for parts in paras %}<p class="commentary-nl-para">{% for part in parts %}{%- if part.type == 'correction' -%}
+<span class="commentary-correction" tabindex="0">{{ part.content }}<span class="institutio-note-popup"><span class="institutio-note-popup-kind">Drukfout bij Los</span>{{ part.note }}</span></span>
+{%- else -%}{{ part.content }}{%- endif -%}{% endfor %}</p>{% endfor %}{% endmacro %}

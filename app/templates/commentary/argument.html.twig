@@ -1,5 +1,6 @@
 {% extends 'base.html.twig' %}
 {% import 'confession/_macros.html.twig' as c %}
+{% import 'commentary/_macros.html.twig' as cm %}
 {% block title %}{{ meta.title }} · Argumentum – Bijbel Vergelijking{% endblock %}
 
 {% block nav_center %}{% endblock %}
@@ -27,7 +28,7 @@
                 <div class="institutio-sentence-row">
                     <div class="institutio-sentence-la">{{ c.la_parts(s.parts) }}</div>
                     <div class="institutio-sentence-nl">
-                        {% for p in (s.text_nl ?? '')|split("\n\n") %}<p class="commentary-nl-para">{{ p }}</p>{% endfor %}
+                        {{ cm.dutch(s.nl_paras) }}
                     </div>
                 </div>
             </div>

@@ -5383,6 +5383,21 @@ a:hover { text-decoration: underline; }
 }
 .commentary-nl-para { margin: 0 0 .6rem; }
 .commentary-nl-para:last-child { margin-bottom: 0; }
+/* A misprint of the translator's, shown corrected: marked, the printed form
+   and the reason in the popup (same popup as the edition's notes). */
+.commentary-correction {
+    position: relative;
+    cursor: help;
+    outline: none;
+    background: color-mix(in srgb, var(--gold) 22%, transparent);
+    border-bottom: 1px dashed var(--gold);
+    border-radius: 2px;
+    padding: 0 .1em;
+}
+.commentary-correction:hover .institutio-note-popup,
+.commentary-correction:focus .institutio-note-popup {
+    display: block;
+}
 .commentary-nl-missing {
     font-family: var(--font-ui);
     font-size: .82rem;
