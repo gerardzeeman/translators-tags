@@ -32,7 +32,8 @@ WORK_SOURCE = (
     "of words still unknown to the Institutio vocabulary (mostly names and rarer "
     "words, some OCR errors; Greek/Hebrew quotations garbled). Dutch: S.O. Los, "
     "Genesis. Uitlegging van Johannes Calvijn, Middelburg 1900 (public domain), "
-    "archive.org OCR, matched per comment."
+    "archive.org OCR combined with a Tesseract re-OCR (full-resolution page scans "
+    "where the text quotes Hebrew), matched per comment."
 )
 LAYER = "los1900"
 
