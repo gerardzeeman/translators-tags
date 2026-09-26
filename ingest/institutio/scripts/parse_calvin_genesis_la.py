@@ -106,8 +106,11 @@ def unknown_rate(text: str, vocab: set[str]) -> float:
     return sum(1 for w in words if strip_accents(w) not in vocab) / max(1, len(words))
 
 
-def combine(text_layer: str, tesseract: str, vocab: set[str]) -> str:
-    """Word-level combination of two OCRs of the same page (see docstring)."""
+def combine(text_layer: str, tesseract: str, vocab: set[str], keep_base: bool = False) -> str:
+    """Word-level combination of two OCRs of the same page (see docstring).
+    keep_base: never switch to Tesseract as the base (for footnotes: their
+    abbreviations -- "seqq.", "Ed.", "v." -- look unknown, which made a
+    note seem garbled and let Tesseract's digit misreads, 1563 -> 1569, in)."""
     def known(tok: str) -> bool:
         return strip_accents(tok.lower()) in vocab
 
@@ -120,7 +123,7 @@ def combine(text_layer: str, tesseract: str, vocab: set[str]) -> str:
     # (Tesseract's lines don't keep those as reliably: using it as the base
     # lost ~40 comment starts) -- unless the text layer is unusable on this
     # page (the Argumentum's second and third page).
-    if unknown_rate(text_layer, vocab) > GARBLED_TEXT_LAYER:
+    if not keep_base and unknown_rate(text_layer, vocab) > GARBLED_TEXT_LAYER:
         text_layer, tesseract = tesseract, text_layer
     a = _TOKEN_RE.findall(text_layer)
     b = _TOKEN_RE.findall(tesseract)
@@ -345,10 +348,55 @@ def split_footnote_blocks(page: pymupdf.Page) -> tuple[str, list[str]]:
     return "".join(kept), notes
 
 
-def drop_footnote_paragraphs(text: str) -> str:
-    """Tesseract puts a column's footnotes in a paragraph of its own."""
+def split_footnote_paragraphs(text: str) -> tuple[str, list[str]]:
+    """Tesseract puts a column's footnotes in a paragraph of its own: the
+    text without them, and the notes (a paragraph can hold several)."""
     parts = re.split(r"(\n\s*\n)", text)
-    return "".join(p for p in parts if not _FOOTNOTE_START_RE.match(p))
+    kept, notes = [], []
+    for p in parts:
+        if _FOOTNOTE_START_RE.match(p):
+            for note in re.split(r"(?:^|\n)\s*[1-9lI]\s?\)\s", p):
+                if note.strip():
+                    notes.append(note)
+        else:
+            kept.append(p)
+    return "".join(kept), notes
+
+
+def pair_notes(base: list[str], other: list[str]) -> list[str | None]:
+    """For each base note, the same note in the other OCR: by position when
+    both found as many, else the most similar one not yet used (in order)."""
+    if len(base) == len(other):
+        return list(other)
+    norm = lambda t: re.sub(r"\s+", " ", t.lower())
+    out, start = [], 0
+    for note in base:
+        best, best_k = 0.3, None
+        for k in range(start, len(other)):
+            ratio = difflib.SequenceMatcher(a=norm(note), b=norm(other[k])).ratio()
+            if ratio > best:
+                best, best_k = ratio, k
+        out.append(other[best_k] if best_k is not None else None)
+        if best_k is not None:
+            start = best_k + 1
+    return out
+
+
+def combine_notes(layer_notes: list[str], tesseract_notes: list[str], script_notes: list[str],
+                  vocab: set[str], hebrew_forms: set[str]) -> list[str]:
+    """The page's footnotes read like the running text: the text layer's
+    reading combined with Tesseract's (combine()), then the Hebrew/Greek
+    from the script pass (merge_script_words())."""
+    out = []
+    for note, tess, script in zip(layer_notes, pair_notes(layer_notes, tesseract_notes),
+                                  pair_notes(layer_notes, script_notes)):
+        text = combine(note, tess, vocab, keep_base=True) if tess else note
+        if script:
+            text = merge_script_words(text, script, vocab, hebrew_forms)
+        text = re.sub(r"(\w)-\s*\n\s*(\w)", r"\1\2", text)
+        text = re.sub(r"\s*Calvini\s+opera\.?\s+V\w{1,3}\.?\s+[XVIL]+\.?\s*$", "", text)  # the page footer
+        out.append(clean_word_accents(re.sub(r"\s+", " ", text).strip()))
+    return out
 
 
 def mark_note_calls(text: str, first_index: int) -> tuple[str, int]:
@@ -373,14 +421,17 @@ def page_text(pdf: pymupdf.Document, ocr_dir: Path, page: int, vocab: set[str],
               ) -> tuple[str, int | None, list[str]]:
     """Combined text of one page (header/footer and footnotes removed), its
     left CO column number, and the page's footnotes (see mark_note_calls)."""
-    text_layer, notes = split_footnote_blocks(pdf[page])
-    tesseract = drop_footnote_paragraphs((ocr_dir / f"p{page:04d}.txt").read_text(encoding="utf-8"))
+    text_layer, layer_notes = split_footnote_blocks(pdf[page])
+    tesseract, tesseract_notes = split_footnote_paragraphs(
+        (ocr_dir / f"p{page:04d}.txt").read_text(encoding="utf-8"))
     text = combine(text_layer, tesseract, vocab)
     text = restore_headings(text, tesseract)
     script_file = script_dir / f"p{page:04d}.txt" if script_dir else None
+    script_notes: list[str] = []
     if script_file and script_file.exists():
-        script = drop_footnote_paragraphs(script_file.read_text(encoding="utf-8"))
+        script, script_notes = split_footnote_paragraphs(script_file.read_text(encoding="utf-8"))
         text = merge_script_words(text, script, vocab, hebrew_forms or set())
+    notes = combine_notes(layer_notes, tesseract_notes, script_notes, vocab, hebrew_forms or set())
     column = None
     lines = []
     for line in text.splitlines():
@@ -416,15 +467,17 @@ _CONFUSIONS = [("rn", "m"), ("e", "c"), ("c", "e"), ("o", "c"), ("o", "e"), ("i"
                ("u", "n"), ("n", "u"), ("ii", "u"), ("in", "m")]
 
 
-def correct_words(text: str, vocab: set[str]) -> tuple[str, int]:
+def correct_words(text: str, vocab: set[str], freq_text: str | None = None) -> tuple[str, int]:
     """Replace an unknown word by a one-substitution variant (see
     _CONFUSIONS) that is a known word occurring more often in this text, or
     a form this text itself uses far more often -- so a real but unusual
     word (a name, a rare form) that happens to be one substitution away from
     something is left alone unless the text shows the other reading is the
     usual one."""
+    # freq_text: the text whose word frequencies decide (the whole commentary
+    # when correcting its short footnotes)
     freq: dict[str, int] = {}
-    for w in _WORD_RE.findall(text):
+    for w in _WORD_RE.findall(freq_text if freq_text is not None else text):
         freq[w.lower()] = freq.get(w.lower(), 0) + 1
 
     cache: dict[str, str | None] = {}
@@ -607,6 +660,7 @@ def main() -> int:
         pieces.append(f"\x00{column if column is not None else ''}\x00\n{text}")
     full = clean_word_accents(dehyphenate("\n".join(pieces)))
     full, corrections = correct_words(full, vocab)
+    all_notes = [correct_words(n, vocab, freq_text=full)[0] if n else n for n in all_notes]
     print(f"[fix]   {corrections} words corrected by known OCR confusions")
 
     rows, warnings = parse(full, columns)
