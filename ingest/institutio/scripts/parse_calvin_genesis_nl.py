@@ -389,7 +389,7 @@ def clean_characters(volume: str, vol: int, djvu_xml: str, page_texts: dict[int,
     for page, page_lines in by_page.items():
         tokens = [(i, k, tok, coords[k] if len(coords) == len(lines[i].split()) else None)
                   for i, coords in page_lines for k, tok in enumerate(lines[i].split())]
-        if not any(_odd(t[2]) for t in tokens):
+        if not any(_odd(t[2]) or f"{vol}:{page}:{t[3]}" in readings for t in tokens):
             continue
         tess = page_texts.get(page, ("", None))[0].split()
         norm = lambda w: re.sub(r"[^a-z]", "", _plain_letters(w).lower())
@@ -401,9 +401,11 @@ def clean_characters(volume: str, vol: int, djvu_xml: str, page_texts: dict[int,
                     aligned[n] = tess[min(b2 - 1, b1 + (n - a1) * (b2 - b1) // (a2 - a1))]
         new_tokens: dict[int, dict[int, str]] = {}
         for n, (i, k, tok, coords) in enumerate(tokens):
-            if not _odd(tok):
-                continue
             key = f"{vol}:{page}:{coords}"
+            # (a reading from the scan also for garble in plain letters:
+            # "DY (olam)" is עוֹלָם)
+            if not _odd(tok) and key not in readings:
+                continue
             if key in readings:
                 scan = readings[key]["scan"]
                 new, look = (tok if scan is None else scan), False
@@ -546,10 +548,13 @@ def clean_heb_ocr(text: str) -> str:
     return re.sub(f"([.,;:!?])([{_HEB}]+)", r"\2\1", text)
 
 
-def mark_hebrew(text: str, page_texts: list[str]) -> tuple[str, int, int]:
+def mark_hebrew(text: str, page_texts: list[str], counts: dict[str, int] | None = None) -> tuple[str, int, int]:
     """Replace the junk the archive.org OCR made of each Hebrew quotation by
     a ⟦H:guess⟧ marker, located via the Dutch words around the quotation in
     the nld+heb pass. Pages are processed in order, searching forward only.
+    "Junk" of lower-case words the book uses (`counts`) is no Hebrew:
+    Tesseract saw Hebrew in a smudge nearby ("God in Abraham", "te ver-
+    laten, en"), and filling it in put Hebrew in the middle of a sentence.
     Returns (text, found, not located)."""
     cursor, found, missed = 0, 0, 0
     for page in page_texts:
@@ -598,8 +603,18 @@ def mark_hebrew(text: str, page_texts: list[str]) -> tuple[str, int, int]:
                 missed += 1
                 continue
             junk_start, junk_end = m.span("junk")
-            # keep the punctuation after the junk (the quotation's own ".")
-            core = m.group("junk").rstrip(" .,;:”’\"'")
+            junk_words = re.findall(r"[A-Za-zÀ-ÿ]+", m.group("junk"))
+            if counts and junk_words and all(counts.get(w.lower(), 0) >= 3 and w[1:].islower()
+                                             for w in junk_words):
+                cursor = junk_end  # Dutch, not Hebrew
+                continue
+            if _HEB_LETTER_RE.search(m.group("junk")):
+                cursor = junk_end  # already read from the scan (clean_characters)
+                found += 1
+                continue
+            # keep the punctuation after the junk (the quotation's own ".",
+            # the "(" or „ that opens the transliteration after it)
+            core = m.group("junk").rstrip(" .,;:”’\"'(„“")
             text = (text[:junk_start] + f" ⟦H:{guess}‖{core.strip()}⟧" + text[junk_start + len(core):])
             cursor = junk_start + len(guess) + 6
             found += 1
@@ -735,6 +750,7 @@ def fill_hebrew(dutch: str, latin_texts: list[str], chapter: int | None, verse: 
         if word is None:
             out.append(m.group(2))
             stats["restored"] += 1
+            stats.setdefault("left", []).append(f"{chapter}:{verse}\t{m.group(2)}\t{m.group(1)}")
         else:
             out.append(vocalise(word, chapter, verse, bible, strongs, guess=m.group(1)))
             # the junk's end sometimes took the space with it ("יְהוָהaet")
@@ -880,7 +896,7 @@ def main() -> int:
     heb_stats = {"filled": 0, "from_dutch_ocr": 0, "restored": 0}
     if have_heb:
         pages = [page_texts[n][k][0] for n in (0, 1) for k in sorted(page_texts[n])]
-        text, found, missed = mark_hebrew(text, pages)
+        text, found, missed = mark_hebrew(text, pages, counts)
         print(f"[heb]   {found} Hebrew quotations located in the text, {missed} not")
         bible, strongs = load_hebrew_lexicon(args.hebrew_lexicon)
     else:
@@ -973,6 +989,9 @@ def main() -> int:
         print(f"[heb]   {heb_stats['filled']} Hebrew words filled in "
               f"({heb_stats['from_dutch_ocr']} from the Dutch OCR's own reading), "
               f"{heb_stats['restored']} left as they were; {left} markers left")
+        if args.ocr_changes:
+            with args.ocr_changes.open("a", encoding="utf-8") as fh:
+                fh.writelines(f"heb-left\t{x}\n" for x in heb_stats.get("left", []))
     if args.dry_run:
         return 0
     if args.output is None:
