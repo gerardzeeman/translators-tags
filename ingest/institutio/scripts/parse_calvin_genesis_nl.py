@@ -52,7 +52,7 @@ _ARGUMENT_START_RE = re.compile(r"Wijl Gods oneindige wijsheid")
 _ARGUMENT_END_RE = re.compile(r"HET EERSTE BOEK VAN MOZES")
 # A verse number as the OCR may have read it, then "." / "," / ":" (or the
 # "e" of a misread "1."), then the start of the lemma.
-_LEMMA_RE = re.compile(r"^\s*(\d{1,2}[A-Za-z]?|[lILgsS]\d?|le|Le|LE)\s?[.,:]?\s+(?=[A-Z„\"“‘'(])")
+_LEMMA_RE = re.compile(r"^\s*(\d{1,2}[A-Za-z]?|[lILgsS]\d?|le|Le|LE|Ll|[lI][lI1]|1[lI])\s?[.,:]?\s+(?=[A-Z„\"“‘'(])")
 _DIGITS = {"l": "1", "I": "1", "L": "1", "i": "1", "S": "5", "s": "5", "O": "0", "o": "0",
            "B": "8", "b": "6", "Z": "2", "g": "9"}
 # Pairs of digits the OCR confuses (3 read as 8, 5 as 6, ...).
@@ -368,12 +368,90 @@ def djvu_words(djvu_xml: str) -> list[tuple[int, list[str]]]:
     return out
 
 
+def margin_lines(djvu_xml: str) -> list[bool]:
+    """Per LINE of _djvu.xml: whether it lies in the page's top or bottom
+    margin -- the running head with the page number ("GENEsIs 15 : 10 en
+    11. 325"), the bottom's signature marks, and the specks around them.
+    The OCR reads the running head in ever new ways ("GENBSISe7.",
+    "GEeNEsis", "GrNesis"), and a head following a line that ends on a
+    hyphen was even joined to the word it broke ("hoe-" + "GENEsIis ..."),
+    so the head is recognised by where it is on the page, not by its text."""
+    out = []
+    for obj in re.split(r"<OBJECT\b", djvu_xml)[1:]:
+        height = int(re.search(r'height="(\d+)"', obj).group(1))
+        for line in re.split(r"<LINE\b", obj)[1:]:
+            boxes = [tuple(map(int, c.split(","))) for c in re.findall(r'<WORD coords="([^"]+)"', line)]
+            if not boxes:
+                out.append(False)
+                continue
+            bottom, top = max(b[1] for b in boxes), min(b[3] for b in boxes)
+            out.append(bottom < 0.085 * height or top > 0.93 * height)
+    return out
+
+
+_ABBREVIATIONS = {"enz", "vs", "vrs", "bl", "nl", "vgl", "hfdst", "hebr", "cap", "dergl", "bijv", "hoofdst",
+                  "d", "i", "l", "m", "n", "t", "z", "o", "v", "e", "a", "b", "c", "vert", "blz", "ps", "ed"}
+
+
+# Words a sentence never ends on: a full stop or colon after them is a speck
+# whatever follows ("van: Jacob", "bij. „wijze").
+_FUNCTION_WORDS = {"van", "de", "het", "een", "den", "der", "des", "te", "tot", "met", "bij", "en", "of", "dat",
+                   "zijne", "hunne", "eene"}
+
+
+def _speck_score(words: list[str]) -> float:
+    """Share of a page's words with punctuation where the print has none:
+    a full stop or colon before a word in lower case, or a hyphen or colon
+    inside a word ("werd-dus", "zich:naar") -- the specks of a badly
+    printed page (deel 2, blz. 367-380), read as punctuation."""
+    bad = 0
+    for a, b in zip(words, words[1:]):
+        core = re.sub(r"[^\wÀ-ÿ]", "", a).lower()
+        if re.search(r"[a-zà-ÿ]{2}[.:]$", a) and re.match(r"[a-zà-ÿ]", b) and core not in _ABBREVIATIONS:
+            bad += 1
+        if re.search(r"[a-zà-ÿ][:\-][a-zà-ÿ]", a):
+            bad += 1
+    return bad / max(1, len(words))
+
+
+def clean_specks(words: list[str], counts: dict[str, int]) -> list[str]:
+    """On a badly printed page (_speck_score), drop the punctuation that is
+    specks: see _speck_score; also a stray ‘ before a word ("‘van")."""
+    known = lambda w: counts.get(w.lower(), 0) >= 3
+    out = []
+    for n, w in enumerate(words):
+        nxt = words[n + 1] if n + 1 < len(words) else ""
+        # "‘van", "'des" -- but not "’t" / "'t"
+        w = re.sub(r"^[‘'](?=[a-zà-ÿ]{2})", "", w)
+        # "werd-dus", "zich:naar", "hetders--wdren" -> two words
+        parts = re.split(r"(?<=[a-zà-ÿ])(?:--?|:)(?=[a-zà-ÿ])", w)
+        if len(parts) > 1 and all(known(re.sub(r"[^\wÀ-ÿ]", "", p)) for p in parts) \
+                and not known(re.sub(r"[^\wÀ-ÿ]", "", "".join(parts))):
+            w = " ".join(parts)
+        core = re.sub(r"[^\wÀ-ÿ]", "", w.split()[-1]).lower() if w.split() else ""
+        if re.search(r"[a-zà-ÿ]{2}[.:]$", w) and core not in _ABBREVIATIONS and known(core) and (
+                re.match(r"[a-zà-ÿ„]", nxt) or core in _FUNCTION_WORDS):
+            w = w[:-1]
+        out.append(w)
+    return out
+
+
+def _prose(line: str, counts: dict[str, int]) -> bool:
+    """A line of ordinary Dutch: three or more words, most of them used in
+    the book (a page whose text starts high has its first line in the top
+    margin band)."""
+    words = re.findall(r"[a-zà-ÿ]{3,}", line)
+    return len(words) >= 3 and sum(counts.get(w, 0) >= 3 for w in words) >= 0.6 * len(words)
+
+
 def clean_characters(volume: str, vol: int, djvu_xml: str, page_texts: dict[int, tuple[str, str | None]],
                      counts: dict[str, int], vocab: set[str], readings: dict[str, dict],
-                     changes: list[tuple[str, str, str]]) -> tuple[str, list[str]]:
+                     changes: list[tuple[str, str, str]], margin: list[str],
+                     scan_pages: dict[str, str], specks: list[str]) -> tuple[str, list[str]]:
     """Unexpected characters in the archive.org OCR (see _JUNK, clean_token):
     each word that has any gets the reading checked on the scan
-    (`readings`, by volume:page:word coords) or else clean_token()'s.
+    (`readings`, by volume:page:word coords) or else clean_token()'s. Lines
+    in the page margins are dropped (collected in `margin`).
     Returns the text and the words neither could settle."""
     lines = volume.split("\n")
     xml_lines = djvu_words(djvu_xml)
@@ -434,6 +512,49 @@ def clean_characters(volume: str, vol: int, djvu_xml: str, page_texts: dict[int,
             # a line of nothing but specks goes (a blank line would be a
             # paragraph break)
             lines[i] = " ".join(p for p in parts if p) or None
+    # Badly printed pages: specks read as punctuation (see clean_specks),
+    # the page's words taken as one stream (a speck can end a line).
+    for page, page_lines in by_page.items():
+        ids = [i for i, _ in page_lines if lines[i] is not None]
+        words = [w for i in ids for w in lines[i].split()]
+        if len(words) < 150 or _speck_score(words) < 0.02:
+            continue
+        # a speck at a line end that stands for the hyphen of a broken
+        # word: "aan:" + "gezicht" is "aan-" + "gezicht"
+        for a, b in zip(ids, ids[1:]):
+            lines[a] = lines[a].rstrip()
+            last, first = lines[a].split()[-1], lines[b].split()[0]
+            if re.search(r"[a-zà-ÿ][.:]$", last) and re.match(r"[a-zà-ÿ]", first) and counts.get(
+                    (re.sub(r"[^\wÀ-ÿ]", "", last) + re.sub(r"[^\wÀ-ÿ].*$", "", first)).lower(), 0) >= 3:
+                lines[a] = lines[a][:-1] + "-" if not lines[a].endswith(" ") else lines[a]
+        words = [w for i in ids for w in lines[i].split()]
+        cleaned = clean_specks(words, counts)
+        k = 0
+        for i in ids:
+            n = len(lines[i].split())
+            new = " ".join(cleaned[k:k + n])
+            if new != lines[i]:
+                changes.append((f"{vol}:{page}", lines[i], new))
+            lines[i] = new
+            k += n
+        specks.append(f"{vol}:{page}")
+    # Pages too damaged for any OCR, read from the scan as a whole
+    # (`scan_pages`, by volume:page): the page's text replaces its lines.
+    from_scan: set[int] = set()
+    for page, page_lines in by_page.items():
+        if f"{vol}:{page}" in scan_pages:
+            first = page_lines[0][0]
+            for i, _ in page_lines:
+                lines[i] = None
+            lines[first] = scan_pages[f"{vol}:{page}"]
+            from_scan.add(first)
+            changes.append((f"{vol}:{page}", "(page)", "(read from the scan)"))
+    # running heads, page numbers and signature marks go (see margin_lines)
+    for i, in_margin in zip(text_lines, margin_lines(djvu_xml)):
+        if in_margin and lines[i] is not None and i not in from_scan and not _prose(lines[i], counts) \
+                and not is_heading(lines[i]):
+            margin.append(lines[i])
+            lines[i] = None
     return "\n".join(line for line in lines if line is not None), open_words
 
 
@@ -488,7 +609,7 @@ def lemma_number(paragraph: str) -> tuple[bool, int | None]:
     if not m:
         return False, None
     token = m.group(1)
-    if token in ("le", "Le", "LE"):
+    if token in ("le", "Le", "LE", "Ll"):  # "1." read as "le" or "Ll."
         return True, 1
     digits = "".join(_DIGITS.get(c, c) for c in token)
     digits = re.sub(r"\D+$", "", digits)  # "5D" -> "5"
@@ -827,6 +948,8 @@ def main() -> int:
                     help="JSON list of Dutch words instead of reading the Statenvertaling's from the database")
     ap.add_argument("--scan-readings", type=Path, default=Path(__file__).with_name("los1900_scan_readings.json"),
                     help="words with unexpected characters as read on the scan, by volume:page:word coords")
+    ap.add_argument("--scan-pages", type=Path, default=Path(__file__).with_name("los1900_scan_pages.json"),
+                    help="whole pages read from the scan (too damaged for OCR), by volume:page")
     ap.add_argument("--ocr-changes", type=Path, default=None,
                     help="write the words corrected from our own OCR pass (page, old, new) here")
     ap.add_argument("-o", "--output", type=Path)
@@ -864,22 +987,29 @@ def main() -> int:
         # accents made of specks): the scan's reading where it was checked
         # word for word, rules otherwise.
         readings = json.loads(args.scan_readings.read_text(encoding="utf-8")) if args.scan_readings.exists() else {}
+        scan_pages = json.loads(args.scan_pages.read_text(encoding="utf-8")) if args.scan_pages.exists() else {}
         char_changes: list[tuple[str, str, str]] = []
+        margin: list[str] = []
+        specks: list[str] = []
         open_words: list[str] = []
         cleaned_volumes = []
         for n, v in enumerate((volume_1, volume_2)):
             v, left = clean_characters(v, n + 1, (args.raw_dir / f"los1900_deel{n + 1}_djvu.xml").read_text(
-                encoding="utf-8"), page_texts[n], counts, vocab, readings, char_changes)
+                encoding="utf-8"), page_texts[n], counts, vocab, readings, char_changes, margin,
+                scan_pages, specks)
             cleaned_volumes.append(v)
             open_words += left
         volume_1, volume_2 = cleaned_volumes
         print(f"[chars] {len(char_changes)} words with unexpected characters corrected "
               f"({sum(k in readings for k, *_ in char_changes)} as read on the scan); "
               f"{len(open_words)} left unsettled")
+        print(f"[chars] {len(margin)} lines of running heads / page margins dropped")
+        print(f"[chars] specks read as punctuation cleaned on {len(specks)} badly printed pages: {' '.join(specks)}")
         if args.ocr_changes:
             with args.ocr_changes.open("a", encoding="utf-8") as fh:
                 fh.writelines(f"chars\t{a}\t{b}\t{k}\n" for k, a, b in char_changes)
                 fh.writelines(f"open\t{w}\n" for w in open_words)
+                fh.writelines(f"margin\t{w}\n" for w in margin)
     counts = word_counts([volume_1, volume_2])
     (volume_1, j1), (volume_2, j2) = fix_initial_j(volume_1, counts), fix_initial_j(volume_2, counts)
     print(f"[ocr]   {j1 + j2} capital J's read as F restored")
