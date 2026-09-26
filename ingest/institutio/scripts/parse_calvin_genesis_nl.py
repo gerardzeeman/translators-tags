@@ -569,7 +569,14 @@ def paragraphs(text: str) -> list[str]:
     return join_broken_sentences(out, capitals=False)
 
 
-def join_broken_sentences(paras: list[str], capitals: bool) -> list[str]:
+# Where join_broken_sentences() joined two paragraphs on a capital: kept in
+# the joined text so assign_comments() can still start a comment there (a
+# lemma whose number the OCR made a word of: "... weet ik niet," / "LEN De
+# naam dier plaats."), removed afterwards.
+SEAM = "\x02"
+
+
+def join_broken_sentences(paras: list[str], capitals: bool, seam: str = "") -> list[str]:
     """Join paragraphs that a page break split mid-sentence: the first
     doesn't end a sentence, and the next starts in lower case -- or, with
     `capitals`, the first ends on a word or comma ("wijst" / "Hij niet
@@ -579,10 +586,11 @@ def join_broken_sentences(paras: list[str], capitals: bool) -> list[str]:
     turned verses into a long numbered paragraph taken for the first comment."""
     merged: list[str] = []
     for p in paras:
-        if merged and not re.search(r"[.!?:;”’\"')—-]$", merged[-1]) and (
-                re.match(r"[a-zà-ÿ(„‘]", p)
-                or (capitals and re.search(r"[\w,]$", merged[-1]) and not lemma_number(p)[0])):
+        if merged and not re.search(r"[.!?:;”’\"')—-]$", merged[-1]) and re.match(r"[a-zà-ÿ(„‘]", p):
             merged[-1] += " " + p
+        elif merged and capitals and not re.search(r"[.!?:;”’\"')—-]$", merged[-1]) \
+                and re.search(r"[\w,]$", merged[-1]) and not lemma_number(p)[0]:
+            merged[-1] += " " + seam + p
         else:
             merged.append(p)
     return merged
@@ -911,6 +919,13 @@ def match_score(dutch: int | None, latin: int) -> float:
         x, y = next((x, y) for x, y in zip(a, b) if x != y)
         if frozenset((x, y)) in _CONFUSABLE:
             return 1.5
+    if len(a) < len(b) and a in b:
+        return 1.0  # part of the number read ("5D." for "57.")
+    if len(a) > len(b):
+        # a digit too many ("835." for "35." -- or "36.", 5 and 6 being
+        # confused too)
+        tail = int(a[-len(b):])
+        return 1.0 if tail == latin else (0.75 if match_score(tail, latin) > 1 else -3.0)
     return -3.0
 
 
@@ -944,10 +959,11 @@ def align(dutch: list[int | None], latin: list[int]) -> list[int | None]:
     return result
 
 
-_SENTENCE_START_RE = re.compile(r"(?<=[.!?”’:;])\s+(?=\S)|\n\n")
+# (not after a colon: "Jesaja 65: 24" is no sentence end)
+_SENTENCE_START_RE = re.compile(r"(?<=[.!?”’])\s+(?=\S)|\n\n|\x02")
 # A verse number as the OCR may have read it at a sentence start ("5.",
 # "D.", "o.", "9;", "„8."), before the capitalised lemma.
-_NUMBER_TOKEN_RE = re.compile(r"^[„\"“|]?\s*([0-9A-Za-z]{1,3})\s?[.,:;]\s+(?=[A-Z„\"“‘'(])")
+_NUMBER_TOKEN_RE = re.compile(r"^[„\"“|…]?\s*(?:[A-Za-z]{1,4}\s+(?=\d))?(?:([0-9A-Za-z]{1,3})\s?[.,:;]|(\d{1,2})(?=\s+[A-Z][a-z]))\s+(?=[A-Z„\"“‘'(])")
 
 
 def _norm_word(w: str) -> str:
@@ -975,6 +991,10 @@ def load_verses(path: Path | None) -> dict[tuple[int, int], set[str]]:
     return {(c, v): {_norm_word(w) for w in re.findall(r"[A-Za-zÀ-ÿ]+", t)} for c, v, t in rows}
 
 
+# The end of a lemma: its full stop -- or the comma the OCR often made of
+# it, before the capital that starts the comment ("aldaar, Uit andere").
+_LEMMA_END = re.compile(r"[.!?]|[,:”](?=\s+[A-Z])")
+
 _STOP = {"en", "de", "het", "een", "van", "dat", "die", "in", "hij", "zij", "tot", "te", "is", "den", "zijn"}
 
 
@@ -984,12 +1004,32 @@ def lemma_likeness(piece: str, words: set[str]) -> float:
     like the verse: the share of them found in it -- content words counting
     double, so "En hij zeide" alone does not make a lemma."""
     head = _NUMBER_TOKEN_RE.sub("", piece, count=1)
-    lemma = re.split(r"[.!?]", head, maxsplit=1)[0]
+    lemma = re.split(_LEMMA_END, head, maxsplit=1)[0]
     ws = [_norm_word(w) for w in re.findall(r"[A-Za-zÀ-ÿ]+", lemma)][:10]
     if len(ws) < 2 or not words:
         return 0.0
     weight = lambda w: 1.0 if w in _STOP else 2.0
     return sum(weight(w) for w in ws if w in words) / sum(weight(w) for w in ws)
+
+
+def lemma_words(piece: str) -> int:
+    """Number of words in a piece's first sentence, a verse number skipped."""
+    head = _NUMBER_TOKEN_RE.sub("", piece, count=1)
+    return len(re.findall(r"[A-Za-zÀ-ÿ]+", re.split(_LEMMA_END, head, maxsplit=1)[0]))
+
+
+def latin_lemma_verse(comment: dict, scripture: list[dict]) -> int | None:
+    """The verse of Calvin's own Latin text of the chapter that his lemma
+    quotes ("9. Cum omni anima vivente" is in his verse 10): where his
+    numbering of the comment and the verse it is about differ, Los's lemma
+    follows the verse ("11. Met alle levende ziel", SV 9:10)."""
+    head = re.sub(r"^\d{1,2}[a-z]?\.\s*", "", comment["text"])
+    words = [w.lower() for w in re.findall(r"[A-Za-z]{3,}", re.split(r"[.!?]", head, maxsplit=1)[0])][:8]
+    if len(words) < 2:
+        return None
+    best = max(((sum(w in {x.lower() for x in re.findall(r"[A-Za-z]{3,}", v["text"])} for w in words) / len(words),
+                 v["section"]) for v in scripture), default=(0.0, None))
+    return best[1] if best[0] >= 0.6 else None
 
 
 def assign_comments(text: str, la_comments: list[dict], chapter: int,
@@ -1023,7 +1063,7 @@ def assign_comments(text: str, la_comments: list[dict], chapter: int,
         if starts_at:
             previous = text[starts_at[-1]:p]
             if _NUMBER_TOKEN_RE.match(previous + " A") and len(previous) < 160 \
-                    or re.fullmatch(r"\s*[„\"“]?\s*\S{1,3}\s?[.,:;]\s*", previous):
+                    or re.fullmatch(r"\s*[„\"“]?\s*[0-9A-Za-z]{1,3}\s?[.,:;]\s*", previous):
                 continue
         starts_at.append(p)
     n, m = len(starts_at), len(la_comments)
@@ -1038,16 +1078,48 @@ def assign_comments(text: str, la_comments: list[dict], chapter: int,
     pieces = [text[p:p + 300] for p in starts_at]
     tokens = [_NUMBER_TOKEN_RE.match(p) for p in pieces]
 
+    paragraph_starts = {0} | {m.end() for m in re.finditer(r"\n\n\s*|\x02", text)}
+    chapter_verses = {v: w for (c, v), w in verses.items() if c == chapter}
+    likeness: dict[tuple[int, int], float] = {}
+
+    def like(i: int, verse: int) -> float:
+        if (i, verse) not in likeness:
+            likeness[i, verse] = lemma_likeness(pieces[i], chapter_verses.get(verse, set()))
+        return likeness[i, verse]
+
+    # per sentence start: (likeness, verse) of the verse its words fit best
+    best_other = [max(((like(i, v), v) for v in chapter_verses), default=(0.0, 0)) if tokens[i] else (0.0, 0)
+                  for i in range(n)]
+    long_lemma = [lemma_words(pieces[i]) > 15 for i in range(n)]
+
     def cost(j: int, i: int) -> float:
         verse = la_comments[j]["section"]
+        # the verse whose words Calvin's lemma quotes, where his numbering
+        # and the Dutch one differ (latin_lemma_verse)
+        alt = la_comments[j].get("lemma_verse") or verse
         tok = tokens[i]
+        lemma = max(like(i, verse), like(i, alt))
         if tok:
-            digits = re.sub(r"\D", "", "".join(_DIGITS.get(c, c) for c in tok.group(1)))
-            numbers = match_score(int(digits) if digits else None, verse)
+            digits = re.sub(r"\D", "", "".join(_DIGITS.get(c, c) for c in (tok.group(1) or tok.group(2))))
+            read = int(digits) if digits else None
+            numbers = max(match_score(read, verse), match_score(read, alt))
+            # the words are another verse's lemma: the number was misread
+            # ("1. En dit zijn de dagen" is the lemma of 25:7)
+            # (a verse further away than the next or previous: Calvin's
+            # numbering and the SV's differ by one here and there)
+            if lemma < 0.2 and best_other[i][0] - lemma > 0.35                     and min(abs(best_other[i][1] - v) for v in (verse, alt)) >= 2:
+                numbers = min(numbers, -3.0)
+        elif lemma >= 0.4 and lemma_words(pieces[i]) <= 12:
+            numbers = -1.0   # a lemma without its number
+        elif starts_at[i] in paragraph_starts:
+            numbers = -3.0   # a paragraph: the number and lemma may be lost
         else:
-            numbers = -2.0
-        lemma = 4.0 * lemma_likeness(pieces[i], verses.get((chapter, verse), set()))
-        return length_weight * abs(starts_at[i] / total_nl - la_pos[j] / total_la) - numbers - lemma
+            numbers = -7.0   # just a sentence in a paragraph
+        # a lemma is a few words; a long first sentence is Los's Bible text
+        # or ordinary prose
+        penalty = 3.0 if long_lemma[i] and numbers < 3.0 else 0.0
+        return (length_weight * abs(starts_at[i] / total_nl - la_pos[j] / total_la)
+                - numbers - 5.0 * lemma + penalty)
 
     INF = float("inf")
     F = [INF] * n
@@ -1243,13 +1315,24 @@ def main() -> int:
         la_comm = sum(len(r["text"]) for r in la_comments) or 1
         expected = la_text / (la_text + la_comm)
         body_len = sum(len(p) for p in paras) or 1
+        # Los's Bible text ends with the chapter's last verse: the paragraph
+        # after it opens the comments, also when the first comment has
+        # neither number nor lemma (25:1: "Het lijkt zeer ongerijmd, ...").
+        last_verse = max((v for c, v in verses if c == ch), default=0)
+        last_words = verses.get((ch, last_verse), set())
         pos, best = 0, None
         for k, p in enumerate(paras):
             is_lemma, number = lemma_number(p)
             if len(p) > 150:
-                score = (match_score(number, first_verse) if is_lemma else -2.0) \
-                    + 4.0 * lemma_likeness(p, verses.get((ch, first_verse), set())) \
-                    - 25.0 * abs(pos / body_len - expected)
+                after_text = lemma_likeness(paras[k - 1], last_words) if k else 0.0
+                own = lemma_likeness(p, verses.get((ch, first_verse), set()))
+                other = max((lemma_likeness(p, w) for (c, v), w in verses.items() if c == ch), default=0.0)
+                numbers = match_score(number, first_verse) if is_lemma else -2.0
+                if other - own > 0.35:
+                    numbers = min(numbers, -3.0)  # another verse's lemma, the number misread
+                score = numbers + 5.0 * own + 4.0 * after_text \
+                    - 25.0 * abs(pos / body_len - expected) \
+                    - (3.0 if lemma_words(p) > 15 and after_text < 0.5 else 0.0)
                 if best is None or score > best[0]:
                     best = (score, k)
             pos += len(p)
@@ -1257,13 +1340,33 @@ def main() -> int:
         if comment_start is None:
             warnings.append(f"chapter {ch}: no comments found")
             continue
-        comment_text = "\n\n".join(join_broken_sentences(paras[comment_start:], capitals=True))
+        comment_text = "\n\n".join(join_broken_sentences(paras[comment_start:], capitals=True, seam=SEAM))
+        scripture = [r for r in latin if r["kind"] == "scripture" and r["chapter"] == ch]
+        for r in la_comments:
+            r["lemma_verse"] = latin_lemma_verse(r, scripture)
         spans = assign_comments(comment_text, la_comments, ch, verses)
         texts: dict[int, list[str]] = {}
         for j, span in enumerate(spans):
             if span is None:
                 continue
-            block = comment_text[span[0]:span[1]].strip()
+            block = comment_text[span[0]:span[1]].replace(SEAM, "").strip()
+            # a garbled number without its stop ("LEN De naam dier plaats")
+            garbled = re.match(r"^[A-Z]{1,3}\s+(?=[A-Z][a-z])", block)
+            if garbled and j > 0 and block[:garbled.end()].strip().lower() not in _STOP | {"ik", "en"}:
+                block = f"{la_comments[j]['section']}. " + block[garbled.end():]
+            # the number as read ("o.", "D.", "9;", "BO.") -> the verse's
+            token = _NUMBER_TOKEN_RE.match(block)
+            if token and j > 0 or token and re.search(r"\d", token.group(1) or token.group(2)):
+                block = f"{la_comments[j]['section']}. " + block[token.end():]
+            elif not re.match(r"\d{1,2}\. ", block) and (j > 0 or lemma_likeness(
+                    block, verses.get((ch, la_comments[j]["section"]), set())) >= 0.4):
+                # a lemma printed (or read) without its number: the number
+                # before it, like everywhere else -- a speck read as a short
+                # word before the lemma dropped ("kh En het geschiedde")
+                junk = re.match(r"^[A-Za-z]{1,3}\.?\s*-?\s+(?=[A-Z„])", block)
+                if junk and counts.get(junk.group().strip(" .-").lower(), 0) < 20:
+                    block = block[junk.end():]
+                block = f"{la_comments[j]['section']}. " + block
             # (a comment that started mid-paragraph starts a paragraph now)
             texts[j] = [normalise_lemma(block, la_comments[j]["section"]) if lemma_number(block)[0] else block]
         for idx, r in enumerate(la_comments):

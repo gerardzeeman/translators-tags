@@ -541,6 +541,81 @@ def one_line(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
+# Text the OCR put in the wrong place, where a page's column order came out
+# wrong -- checked against the edition. (ref it landed in, first words, last
+# words, ref it belongs in, the words it belongs after, the words it belongs
+# before, junk between those two to drop.)
+_MISPLACED = [
+    # CO 23, 355: the end of the comments on Gen. 25 (the rest of 25:30 and
+    # those on 25:33 and 34) came out in the middle of Calvin's Latin of
+    # 26:15, between "servi patris" and "in diebus Abraham".
+    ("Comm. Gen. 26 tekst.15", "versam fuisse a parentibus", "illud incomparabile sui",
+     "Comm. Gen. 25:30", "rem serio animad", "bonum quo privatus erat", "23 l "),
+]
+
+
+def split_first_comment(rows: list[dict]) -> list[dict]:
+    """A chapter's first comment whose number the OCR spoiled ("l.. Et
+    levavit", "1: Porro", or none: "Et venerunt duo angeli") was not seen
+    as the start of the comments, and ended up in Calvin's Latin of the
+    chapter's last verse. Such a verse -- far longer than a verse is -- is
+    split at its first sentence end followed by a lemma."""
+    out: list[dict] = []
+    for idx, r in enumerate(rows):
+        out.append(r)
+        nxt = rows[idx + 1] if idx + 1 < len(rows) else None
+        if r["kind"] != "scripture" or len(r["text"]) < 450 or r["notes"]:
+            continue
+        if nxt and nxt["kind"] == "scripture" and nxt["chapter"] == r["chapter"]:
+            continue   # not the chapter's last verse
+        # a spoiled number is the surer sign; else the first sentence end
+        m = re.search(r"(?<=.{40}\.) ([lI1]|\d{1,2})\s?[.:,]+\s(?=[A-Z][a-z]+ [a-z]+)", r["text"]) \
+            or re.search(r"(?<=.{40}\.) ()(?=[A-Z][a-z]+ [a-z]+)", r["text"])
+        if not m:
+            continue
+        verse = 1 if not m.group(1) or not m.group(1).isdigit() else int(m.group(1))
+        comment = r["text"][m.end():]
+        r["text"] = r["text"][:m.start()].strip()
+        out.append({**r, "kind": "commentary", "ref": f"Comm. Gen. {r['chapter']}:{verse}", "section": verse,
+                    "text": f"{verse}. {comment}", "notes": []})
+    return out
+
+
+def repair_misplaced_text(rows: list[dict], warnings: list[str]) -> list[dict]:
+    """Move the text of _MISPLACED back, and split the comments it holds
+    ("33. Iura mihi.") off as comments of their own."""
+    by_ref = {r["ref"]: r for r in rows}
+    for src, first, last, dst, after, before, junk in _MISPLACED:
+        s, d = by_ref.get(src), by_ref.get(dst)
+        if not s or not d or first not in s["text"] or last not in s["text"] or after not in d["text"]:
+            warnings.append(f"misplaced text {src} -> {dst} not found; left as it is")
+            continue
+        if s["notes"] or d["notes"]:
+            warnings.append(f"misplaced text {src} -> {dst}: footnotes in the way; left as it is")
+            continue
+        i, j = s["text"].index(first), s["text"].index(last) + len(last)
+        chunk = s["text"][i:j]
+        s["text"] = re.sub(r"\s+", " ", s["text"][:i] + " " + s["text"][j:]).strip()
+        k = d["text"].index(after) + len(after)
+        rest = d["text"][k:]
+        rest = rest[len(junk):] if rest.startswith(junk) else rest
+        d["text"] = d["text"][:k] + chunk + " " + rest
+        # comments on later verses inside the moved text
+        parts = re.split(r"(?<=[.!?] )(?=(\d{1,2})\. [A-Z][a-z]+ [a-z])", d["text"])
+        head, new_rows = parts[0], []
+        for n in range(1, len(parts), 2):
+            verse, text = int(parts[n]), parts[n + 1]
+            if verse <= d["section"]:
+                head += text
+                continue
+            new_rows.append({**d, "ref": f"Comm. Gen. {d['chapter']}:{verse}", "section": verse,
+                             "text": text.strip(), "notes": []})
+        d["text"] = head.strip()
+        at = rows.index(d) + 1
+        rows[at:at] = new_rows
+    return rows
+
+
 def comment_starts(starts: list[re.Match], comments: str, last_verse: int) -> list[re.Match]:
     """The line-start verse numbers that really open a comment: the best
     non-decreasing sequence of them (a comment's lemma follows the number:
@@ -715,6 +790,8 @@ def main() -> int:
         n_notes += len(notes)
     print(f"[notes] {n_notes} editorial footnotes attached; {len(note_mismatch)} pages where calls and "
           f"notes didn't pair up ({', '.join(note_mismatch[:8])}{' ...' if len(note_mismatch) > 8 else ''})")
+    rows = repair_misplaced_text(rows, warnings)
+    rows = split_first_comment(rows)
     for seq, r in enumerate(rows, start=1):
         r["seq"] = seq
     for w in warnings:
