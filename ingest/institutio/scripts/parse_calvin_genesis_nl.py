@@ -152,8 +152,11 @@ def normalise_lemma(text: str, verse: int) -> str:
 _HEB = "\u0590-\u05FF\uFB1D-\uFB4F"
 _HEB_WORD_RE = re.compile(f"[{_HEB}]+")
 _POINTS_RE = re.compile("[\u0591-\u05C7]")
+_HEB_LETTER_RE = re.compile("[\u05D0-\u05EA]")
 _CANTILLATION_RE = re.compile("[\u0591-\u05AF\u05BD\u05C0\u05C3]")
-_MARKER_RE = re.compile(r"⟦H:([^⟧]*)⟧")
+# ⟦H:<what the nld+heb pass read>‖<the archive.org OCR's junk there>⟧ -- the
+# junk is kept so an unresolved marker can be put back as it was.
+_MARKER_RE = re.compile(r"⟦H:([^‖⟧]*)‖([^⟧]*)⟧")
 _DUTCH_WORD_RE = re.compile(r"[A-Za-zÀ-ÿ]+")
 
 
@@ -187,21 +190,41 @@ def mark_hebrew(text: str, page_texts: list[str]) -> tuple[str, int, int]:
             after = [t for t in tokens[j:j + 3] if not _HEB_WORD_RE.fullmatch(t)]
             guess = " ".join(tokens[i:j])
             i = j
+            # A lone letter is mostly Tesseract seeing Hebrew in a smudge
+            # or a Latin letter ("א", "ו", "ה" all over the page).
+            if len(_HEB_LETTER_RE.findall(guess)) < 2:
+                continue
             if len(before) < 2 or len(after) < 2:
                 missed += 1
                 continue
+            # The quotation's junk may run over a line end; and the two
+            # Dutch OCRs sometimes differ in one context word, so fall back
+            # to fewer context words on either side.
             sep = r"[\W\d_]*"
-            pattern = (sep.join(re.escape(w) for w in before) + r"(?P<junk>[^\n]{0,30}?)"
-                       + sep.join(re.escape(w) for w in after[:2]))
-            m = re.compile(pattern, re.IGNORECASE).search(text, cursor, cursor + 60000)
-            if not m or _DUTCH_WORD_RE.search(m.group("junk").strip(" .,;:„”’\"'()")) and \
-                    len(m.group("junk").strip()) > 12:
+            m = None
+            for b_n, a_n in ((len(before), 2), (2, 1), (1, 2)):
+                ctx_before, ctx_after = before[-b_n:], after[:a_n]
+                if len(ctx_before) < b_n or len(ctx_after) < a_n:
+                    continue
+                pattern = (sep.join(re.escape(w) for w in ctx_before) + r"(?P<junk>[\s\S]{1,40}?)"
+                           + r"(?<![A-Za-zÀ-ÿ])" + sep.join(re.escape(w) for w in ctx_after) + r"(?![A-Za-zÀ-ÿ])")
+                m = re.compile(pattern, re.IGNORECASE).search(text, cursor, cursor + 60000)
+                # Never across a verse number at a line start ("\n\n18. Is niet
+                # goed...") -- the comment structure hangs on those. A blank
+                # line alone is fine: page breaks mid-sentence leave one
+                # ("Het Hebr. woord \n\n„95 (phalah)").
+                if m and not re.search(r"\n\s*(?:\d{1,2}|[lIS]\d?)\s?[.,]\s", m.group("junk")) \
+                        and not (_DUTCH_WORD_RE.search(m.group("junk").strip(" .,;:„”’\"'()"))
+                                 and len(m.group("junk").strip()) > 12):
+                    break
+                m = None
+            if not m:
                 missed += 1
                 continue
             junk_start, junk_end = m.span("junk")
             # keep the punctuation after the junk (the quotation's own ".")
             core = m.group("junk").rstrip(" .,;:”’\"'")
-            text = (text[:junk_start] + f" ⟦H:{guess}⟧" + text[junk_start + len(core):])
+            text = (text[:junk_start] + f" ⟦H:{guess}‖{core.strip()}⟧" + text[junk_start + len(core):])
             cursor = junk_start + len(guess) + 6
             found += 1
     return text, found, missed
@@ -271,38 +294,60 @@ def vocalise(word: str, chapter: int | None, verse: int | None, bible: dict, str
 
 def fill_hebrew(dutch: str, latin_texts: list[str], chapter: int | None, verse: int | None,
                 bible: dict, strongs: dict, stats: dict) -> str:
-    """Replace the ⟦H:guess⟧ markers of one Dutch comment by pointed Hebrew
-    (see the block comment above)."""
+    """Replace the ⟦H:...⟧ markers of one Dutch comment by pointed Hebrew
+    (see the block comment above). Markers and the Latin comment's Hebrew
+    words are paired in order -- one to one when the counts agree, else by
+    a monotonic alignment on how alike their consonants are. A marker left
+    without a convincing Latin partner keeps its own reading only if that is
+    a real Hebrew word; otherwise the original text goes back unchanged
+    (wrong Hebrew would be worse than the junk it replaces)."""
     markers = list(_MARKER_RE.finditer(dutch))
     if not markers:
         return dutch
     latin_words = [w for t in latin_texts for w in _HEB_WORD_RE.findall(t)]
-    chosen: list[str] = []
+    guesses = [consonants(m.group(1)).replace(" ", "") for m in markers]
+    chosen: list[str | None] = [None] * len(markers)
     if len(latin_words) == len(markers):
-        chosen = latin_words
-    else:
-        # Different counts: match each marker to the Latin word most like
-        # its own (poor) reading, keeping the order.
-        pos = 0
-        for m in markers:
-            guess = consonants(m.group(1).replace(" ", ""))
-            best, best_k = None, None
-            for k in range(pos, len(latin_words)):
-                ratio = difflib.SequenceMatcher(a=guess, b=latin_words[k]).ratio()
-                if ratio >= 0.5 and (best is None or ratio > best):
-                    best, best_k = ratio, k
-            if best_k is not None:
-                chosen.append(latin_words[best_k])
-                pos = best_k + 1
+        chosen = list(latin_words)
+    elif latin_words:
+        n, k = len(markers), len(latin_words)
+        sim = [[difflib.SequenceMatcher(a=guesses[i], b=latin_words[j]).ratio() for j in range(k)]
+               for i in range(n)]
+        score = [[0.0] * (k + 1) for _ in range(n + 1)]
+        for i in range(1, n + 1):
+            for j in range(1, k + 1):
+                pair = score[i - 1][j - 1] + sim[i - 1][j - 1] if sim[i - 1][j - 1] >= 0.4 else -1.0
+                score[i][j] = max(score[i - 1][j], score[i][j - 1], pair)
+        i, j = n, k
+        while i > 0 and j > 0:
+            if sim[i - 1][j - 1] >= 0.4 and score[i][j] == score[i - 1][j - 1] + sim[i - 1][j - 1]:
+                chosen[i - 1] = latin_words[j - 1]
+                i, j = i - 1, j - 1
+            elif score[i][j] == score[i - 1][j]:
+                i -= 1
             else:
-                chosen.append(consonants(m.group(1)).replace(" ", ""))
-                stats["from_dutch_ocr"] += 1
+                j -= 1
     out, last = [], 0
-    for m, word in zip(markers, chosen):
+    for m, word, guess in zip(markers, chosen, guesses):
         out.append(dutch[last:m.start()])
-        out.append(vocalise(word, chapter, verse, bible, strongs, guess=m.group(1)))
+        # The Dutch pass's own reading only when it is a real word of 3+
+        # letters over junk -- short ones are mostly Dutch misread as
+        # Hebrew: "d. i." (dat is) came out as גת, "in" as תו / גו.
+        junk = m.group(2).strip(" .,;:„”“’'\"()")
+        if word is None and len(guess) >= 3 and (guess in bible or guess in strongs) \
+                and not re.fullmatch(r"(?:[a-zà-ÿ]{1,3}\.?\s?)+", junk, re.IGNORECASE):
+            word = guess
+            stats["from_dutch_ocr"] += 1
+        if word is None:
+            out.append(m.group(2))
+            stats["restored"] += 1
+        else:
+            out.append(vocalise(word, chapter, verse, bible, strongs, guess=m.group(1)))
+            # the junk's end sometimes took the space with it ("יְהוָהaet")
+            if dutch[m.end():m.end() + 1].isalnum() or dutch[m.end():m.end() + 1] in "„“(":
+                out.append(" ")
+            stats["filled"] += 1
         last = m.end()
-        stats["filled"] += 1
     out.append(dutch[last:])
     return "".join(out)
 
@@ -377,7 +422,7 @@ def main() -> int:
     warnings: list[str] = []
     rows: list[dict] = []
 
-    heb_stats = {"filled": 0, "from_dutch_ocr": 0}
+    heb_stats = {"filled": 0, "from_dutch_ocr": 0, "restored": 0}
     have_heb = all(d.exists() for d in args.hebrew_ocr_dirs)
     if have_heb:
         # Per page the full-resolution OCR (fetch_los_hires_pages.py) where it
@@ -479,7 +524,8 @@ def main() -> int:
     if have_heb:
         left = sum(len(_MARKER_RE.findall(r["text"])) for r in rows)
         print(f"[heb]   {heb_stats['filled']} Hebrew words filled in "
-              f"({heb_stats['from_dutch_ocr']} from the Dutch OCR's own reading); {left} markers left")
+              f"({heb_stats['from_dutch_ocr']} from the Dutch OCR's own reading), "
+              f"{heb_stats['restored']} left as they were; {left} markers left")
     if args.dry_run:
         return 0
     if args.output is None:
