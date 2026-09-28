@@ -197,6 +197,29 @@ class ConfessionRepository
     }
 
     /**
+     * The first meaning of a Strong's entry, for a word popup: the first
+     * numbered sense of the definition ("1) to create, shape, form") that
+     * says more than a grammatical label ("1) (plural)" -> "1a) rulers,
+     * judges"), else the short definition (the Greek entries have no
+     * numbered senses: "previously").
+     */
+    public static function firstMeaning(?string $definition, ?string $shortDef): ?string
+    {
+        $clean = fn(string $s): string => trim((string) preg_replace('/^(\s*\([^)]*\))+\s*/', '', trim($s)));
+        foreach (preg_split('/\R/', (string) $definition) as $line) {
+            if (preg_match('/^\d+[a-z0-9]*\)\s*(.*)$/', trim($line), $m) && ($meaning = $clean($m[1])) !== '') {
+                break;
+            }
+            $meaning = null;
+        }
+        $meaning ??= $shortDef !== null && $clean($shortDef) !== '' ? $clean($shortDef) : null;
+        if ($meaning !== null && mb_strlen($meaning) > 80) {
+            $meaning = preg_replace('/\s+\S*$/u', '', mb_substr($meaning, 0, 80)) . '…';
+        }
+        return $meaning;
+    }
+
+    /**
      * @param array<int, array<string, mixed>> $rows each with at least 'id', 'text_la'
      * @return array<int, array<string, mixed>> same rows, with a 'tokens' key added
      */
@@ -204,9 +227,17 @@ class ConfessionRepository
     {
         $segmentIds = array_map(fn($r) => (int) $r['id'], $rows);
         $tokenRows = $this->connection->fetchAllAssociative(
-            'SELECT t.segment_id, t.char_start, t.char_end, t.lemma, lg.gloss_nl, lg.number
+            // A Hebrew/Greek word Calvin quotes gets its Strong's entry
+            // instead (work_word_strongs, link_commentary_strongs.py).
+            'SELECT t.segment_id, t.char_start, t.char_end, t.lemma, lg.gloss_nl, lg.number,
+                    se.strongs_id, se.transliteration, se.definition, se.definition_nl,
+                    se.short_def, se.short_def_nl
              FROM token t
+             JOIN segment s ON s.id = t.segment_id
              LEFT JOIN lemma_gloss lg ON lg.lemma = t.lemma
+             LEFT JOIN work_word_strongs ws
+                    ON ws.work_id = s.work_id AND ws.chapter = COALESCE(s.chapter, 0) AND ws.surface = t.surface
+             LEFT JOIN strongs_entries se ON se.strongs_id = ws.strongs_id
              WHERE t.segment_id IN (' . implode(',', array_fill(0, count($segmentIds), '?')) . ')
                AND t.is_word
              ORDER BY t.segment_id, t.char_start',
@@ -221,6 +252,12 @@ class ConfessionRepository
                 'lemma'      => $t['lemma'],
                 'gloss'      => $t['gloss_nl'],
                 'number'     => $t['number'] !== null ? (int) $t['number'] : null,
+                'strongs'    => $t['strongs_id'] === null ? null : [
+                    'id'              => $t['strongs_id'],
+                    'transliteration' => $t['transliteration'],
+                    'meaning'         => self::firstMeaning(
+                        $t['definition_nl'] ?: $t['definition'], $t['short_def_nl'] ?: $t['short_def']),
+                ],
             ];
         }
 
@@ -657,6 +694,7 @@ class ConfessionRepository
                 'lemma'   => $tok['lemma'],
                 'gloss'   => $tok['gloss'],
                 'number'  => $tok['number'] ?? null,
+                'strongs' => $tok['strongs'] ?? null,
             ];
             $cursor = $end;
         }
