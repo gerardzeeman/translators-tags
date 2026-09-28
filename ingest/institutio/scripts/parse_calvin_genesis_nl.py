@@ -1165,6 +1165,9 @@ def typeset(text: str) -> str:
     gendeel ;"), and no stray apostrophe after a closing quote ("„ordenen”’"
     -- a speck read after the quote)."""
     text = re.sub(r"(?<=[\w”’)\]])[ \t]+([;:?!])", r"\1", text)
+    # and always a space after a semicolon (the OCR joins it to the next
+    # word: "zijn;en")
+    text = re.sub(r";(?=[^\s\d⟧‖”’)\].,;:])", "; ", text)
     return text.replace("”’", "”")
 
 
