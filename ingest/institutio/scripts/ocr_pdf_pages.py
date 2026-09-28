@@ -29,13 +29,13 @@ import pymupdf
 DPI = 300
 
 
-def ocr_page(pdf: str, page: int, out_dir: str, lang: str = "lat") -> tuple[int, str]:
+def ocr_page(pdf: str, page: int, out_dir: str, lang: str = "lat", dpi: int = DPI, psm: int = 1) -> tuple[int, str]:
     out = Path(out_dir) / f"p{page:04d}.txt"
     if out.exists():
         return page, "cached"
     with tempfile.TemporaryDirectory() as tmp:
         png = Path(tmp) / "page.png"
-        pymupdf.open(pdf)[page].get_pixmap(dpi=DPI).save(png)
+        pymupdf.open(pdf)[page].get_pixmap(dpi=dpi, colorspace=pymupdf.csGRAY).save(png)
         base = Path(tmp) / "out"
         # psm 1: automatic page segmentation with orientation detection --
         # reads the two-column layout column by column.
@@ -43,7 +43,7 @@ def ocr_page(pdf: str, page: int, out_dir: str, lang: str = "lat") -> tuple[int,
         # processes. Without this every Tesseract spins up a thread per core
         # and a full pool grinds to a halt (seen: 12 workers x 12 threads,
         # no page finished in 10 minutes).
-        subprocess.run(["tesseract", str(png), str(base), "-l", lang, "--psm", "1"],
+        subprocess.run(["tesseract", str(png), str(base), "-l", lang, "--psm", str(psm)],
                        check=True, capture_output=True, env={**os.environ, "OMP_THREAD_LIMIT": "1"})
         out.write_text((base.with_suffix(".txt")).read_text(encoding="utf-8"), encoding="utf-8")
     return page, "ok"
@@ -55,6 +55,10 @@ def main() -> int:
     ap.add_argument("--pages", required=True, help="0-based range, e.g. 30-338")
     ap.add_argument("--out-dir", type=Path, required=True)
     ap.add_argument("--workers", type=int, default=os.cpu_count() or 4)
+    ap.add_argument("--dpi", type=int, default=DPI,
+                    help="render resolution (600 for the Argumentum's small type)")
+    ap.add_argument("--psm", type=int, default=1,
+                    help="Tesseract page segmentation; 6 (one block) for the Argumentum's full-width pages")
     ap.add_argument("--lang", default="lat",
                     help="Tesseract languages, e.g. lat+grc+heb for the pass that reads the "
                          "Hebrew/Greek quotations (see parse_calvin_genesis_la.py)")
@@ -66,7 +70,8 @@ def main() -> int:
     done = 0
     with ProcessPoolExecutor(max_workers=args.workers) as pool:
         for page, status in pool.map(ocr_page, [str(args.pdf)] * len(pages), pages,
-                                     [str(args.out_dir)] * len(pages), [args.lang] * len(pages)):
+                                     [str(args.out_dir)] * len(pages), [args.lang] * len(pages),
+                                     [args.dpi] * len(pages), [args.psm] * len(pages)):
             done += 1
             if done % 25 == 0 or done == len(pages):
                 print(f"[ocr]   {done}/{len(pages)} (last: page {page}, {status})", flush=True)

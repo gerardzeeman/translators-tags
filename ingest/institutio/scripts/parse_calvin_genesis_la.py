@@ -422,15 +422,22 @@ def page_text(pdf: pymupdf.Document, ocr_dir: Path, page: int, vocab: set[str],
     """Combined text of one page (header/footer and footnotes removed), its
     left CO column number, and the page's footnotes (see mark_note_calls)."""
     text_layer, layer_notes = split_footnote_blocks(pdf[page])
+    # The Argumentum (pages 30-33) is set in small type across the full
+    # page width: the two-column pass lost a third of its text there, so it
+    # has a pass of its own (ocr_pdf_pages.py --dpi 450 --psm 6 into ocr_arg)
+    arg_file = ocr_dir.with_name("ocr_arg") / f"p{page:04d}.txt"
+    argumentum = arg_file.exists()
     tesseract, tesseract_notes = split_footnote_paragraphs(
-        (ocr_dir / f"p{page:04d}.txt").read_text(encoding="utf-8"))
+        (arg_file if argumentum else ocr_dir / f"p{page:04d}.txt").read_text(encoding="utf-8"))
     text = combine(text_layer, tesseract, vocab)
     text = restore_headings(text, tesseract)
     script_file = script_dir / f"p{page:04d}.txt" if script_dir else None
     script_notes: list[str] = []
     if script_file and script_file.exists():
         script, script_notes = split_footnote_paragraphs(script_file.read_text(encoding="utf-8"))
-        text = merge_script_words(text, script, vocab, hebrew_forms or set())
+        # (no Hebrew in the Argumentum: what the script pass reads there as
+        # Hebrew is Latin in small type)
+        text = merge_script_words(text, script, vocab, set() if argumentum else hebrew_forms or set())
     notes = combine_notes(layer_notes, tesseract_notes, script_notes, vocab, hebrew_forms or set())
     column = None
     lines = []
@@ -668,10 +675,22 @@ def parse(full: str, columns: list[tuple[int, int | None]]) -> tuple[list[dict],
     argument = full[:headings[0].start()] if headings else ""
     argument = re.sub(r"^.*?ARGUMENTUM\.?\s*", "", argument, count=1, flags=re.DOTALL)
     argument = re.sub(r"\n\s*GENESIS\.?\s*$", "", argument.strip())
-    paragraphs = [p for p in re.split(r"\n\s*\n", argument) if len(one_line(p.replace("\x00", ""))) > 40]
+    # The Argumentum is printed as one unbroken text (the blank lines are page
+    # breaks, where the OCR leaves a speck or two: "corrumpi ab . hominibus"):
+    # it is cut into pieces of about 250 words at sentence ends, which keeps
+    # the Latin next to its Dutch.
+    words = one_line(re.sub(r"\x00\d*\x00", " ", argument)).split(" ")
+    words = [w for w in words if re.search(r"[A-Za-z0-9Ͱ-Ͽἀ-῿]", w)]
+    paragraphs: list[str] = []
+    while words:
+        cut = next((k for k in range(250, len(words) - 60) if re.search(r"[a-z]{3}[.?!]$", words[k - 1])), None)
+        if cut is None:
+            cut = len(words)
+        paragraphs.append(" ".join(words[:cut]))
+        words = words[cut:]
     for n, p in enumerate(paragraphs, start=1):
         rows.append({"ref": f"Comm. Gen. arg.{n}", "kind": "argument", "chapter": None, "section": n,
-                     "text": one_line(re.sub(r"\x00\d*\x00", " ", p)), "co_col": None})
+                     "text": p, "co_col": None})
 
     for idx, h in enumerate(headings):
         chapter = idx + 1
@@ -772,6 +791,28 @@ def main() -> int:
     print(f"[fix]   {corrections} words corrected by known OCR confusions")
 
     rows, warnings = parse(full, columns)
+    # Hebrew / Greek (and the words around them) as read on the scan, where
+    # both OCRs failed ("quin ^ p- pn sit Tigris" -> "quin חידקל sit Tigris")
+    readings_file = Path(__file__).with_name("co23_scan_readings.json")
+    if readings_file.exists():
+        by_ref = {r["ref"]: r for r in rows}
+        n_read = 0
+        for fix in json.loads(readings_file.read_text(encoding="utf-8")):
+            # ("Comm. Gen. arg": any piece of the Argumentum, whose division
+            # into pieces is ours)
+            r = by_ref.get(fix["ref"]) or next(
+                (x for x in rows if x["ref"].startswith(fix["ref"] + ".") and fix["ocr"] in x["text"]), None)
+            # (footnote calls -- placeholders -- inside the stretch are kept,
+            # before the reading)
+            pattern = "[-]?".join(re.escape(c) for c in fix["ocr"])
+            m = re.search(pattern, r["text"]) if r is not None else None
+            if m is None:
+                warnings.append(f"scan reading not applied ({fix['ref']}: {fix['ocr']!r})")
+                continue
+            calls = "".join(re.findall("[-]", m.group()))
+            r["text"] = r["text"][:m.start()] + calls + fix["scan"] + r["text"][m.end():]
+            n_read += 1
+        print(f"[scan]  {n_read} readings from the scan applied")
     # Footnote placeholders -> annotations at their position in the text.
     n_notes = 0
     for r in rows:

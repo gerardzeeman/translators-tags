@@ -97,7 +97,7 @@
 },
 "1:149:1059,2108,1121,2051": {
 "ocr": "}à",
-"scan": ""
+"scan": "נַע"
 },
 "1:150:185,1403,282,1335": {
 "ocr": "dát",
@@ -757,7 +757,9 @@
 },
 "2:449:2002,2763,2053,2702": {
 "ocr": "9%,",
-"scan": "ר."
+"scan": "ר.",
+"intended": "ו.",
+"note": "Los drukt ר; Calvijn heeft hier ו, de letter die voor het betrekkelijk voornaamwoord (‘zijn’) staat."
 },
 "2:372:2026,3487,2284,3420": {
 "ocr": "EÉgypte-",
@@ -953,7 +955,9 @@
 },
 "1:387:1267,2290,1373,2224": {
 "ocr": "A93",
-"scan": "כָּלָה"
+"scan": "כָּלָה",
+"intended": "פֶּלֶא",
+"note": "Los drukt כָּלָה (kalah); Calvijn bespreekt hier het woord פלא (‘wonderlijk’), dat sommigen door ‘verborgen’ vertalen."
 },
 "1:456:1490,1383,1648,1314": {
 "ocr": "PMm$@",
@@ -1057,7 +1061,7 @@
 "ocr": "7'24",
 "scan": "גְבִיר",
 "intended": "כָּבוֹד",
-"note": "Los drukt גְבִיר (‘heer’); zijn transcriptie (kebood) en de uitleg (‘eer’, ‘tong’) wijzen op כָּבוֹד."
+"note": "Los drukt גְבִיר (‘heer’); Calvijn heeft hier כבד, en Los’ eigen transcriptie (kebood) en uitleg (‘eer’, ‘tong’) wijzen op כָּבוֹד."
 },
 "2:449:1030,1463,1066,1417": {
 "ocr": "A",
@@ -1185,9 +1189,7 @@
 },
 "1:112:1307,2993,1432,2927": {
 "ocr": "HIW",
-"scan": "שָׁפָה",
-"intended": "שָׁאַף",
-"note": "Los drukt hier שָׁפָה, dat pas enkele regels later ter sprake komt; Calvijn noemt hier שאף (shaaph)."
+"scan": "שָׁפָה"
 },
 "1:112:161,3362,364,3283": {
 "ocr": "PPO",
@@ -1393,7 +1395,9 @@
 },
 "1:396:222,1807,331,1731": {
 "ocr": "„95",
-"scan": "פלה"
+"scan": "פלה",
+"intended": "כָּלָה",
+"note": "Los drukt פלה (phalah); Calvijn heeft hier כלה (‘voleinding’), het woord dat de uitleg bespreekt."
 },
 "1:32:1584,3593,1673,3527": {
 "ocr": "’9%°",
@@ -1420,5 +1424,91 @@
 "scan": "דגַם",
 "intended": "וְגַם",
 "note": "Los drukt דגַם, met ד voor ו; bedoeld is וְגַם (wegam), ‘en ook’, zoals zijn transcriptie aangeeft."
+},
+"1:78:2142,3732,2284,3657": {
+"ocr": "17422",
+"scan": "כְּנֶגְדוֹ"
+},
+"1:79:1713,1758,1798,1691": {
+"ocr": "7)",
+"scan": "נֶגֶד)"
+},
+"1:149:1015,2199,1076,2142": {
+"ocr": "7}",
+"scan": "נָד"
+},
+"1:152:491,3378,596,3293": {
+"ocr": "72?",
+"scan": "לָכֵן"
+},
+"1:341:2371,555,2444,488": {
+"ocr": "19",
+"scan": "בֵּן"
+},
+"2:49:881,3734,990,3669": {
+"ocr": "923",
+"scan": "בֶּקַע"
+},
+"2:64:1181,2021,1275,1927": {
+"ocr": "553",
+"scan": "נָפַל"
+},
+"2:160:1903,2134,2014,2068": {
+"ocr": "999",
+"scan": "פָּתַל"
+},
+"2:161:2131,3618,2232,3552": {
+"ocr": "743",
+"scan": "בָּגָד"
+},
+"2:161:1061,3798,1125,3734": {
+"ocr": "1",
+"scan": "גָּד"
+},
+"2:318:1921,3150,1955,3083": {
+"ocr": "3",
+"scan": "בְּ"
+},
+"2:385:2182,869,2277,787": {
+"ocr": "947",
+"scan": "רָגַל",
+"intended": "רָגַז",
+"note": "Los drukt רָגַל, met ל voor ז; bedoeld is רָגַז (ragaz), ‘beven’, zoals zijn transcriptie (ragats) en Calvijns tekst aangeven."
+},
+"2:406:204,1677,319,1609": {
+"ocr": "152",
+"scan": "לָהָה"
+},
+"2:443:2095,2947,2267,2872": {
+"ocr": "1032",
+"scan": "מְכֵרוֹת"
+},
+"1:78:1079,3828,1111,3762": {
+"ocr": "3",
+"scan": "כְּ"
+},
+"1:334:1608,1588,1914,1518": {
+"ocr": "yypdrpoPov",
+"scan": "γηρότροφον"
+},
+"1:59:2378,2114,2502,2046": {
+"ocr": "Wip",
+"scan": "קדש"
+},
+"2:449:2108,2656,2145,2610": {
+"ocr": "5",
+"scan": "ה"
+},
+"2:336:266,1452,352,1383": {
+"ocr": "j)",
+"scan": "רֵךְ"
+},
+"1:149:1174,2111,1353,2048": {
+"ocr": "„nah”",
+"scan": "„nah”"
+},
+"2:449:2072,1200,2236,1132": {
+"ocr": "ni®",
+"scan": "שִׁילוֹה"
 }
 }
