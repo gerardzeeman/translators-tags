@@ -1,0 +1,1064 @@
+#!/usr/bin/env python3
+"""Parse Calvin's Latin Genesis commentary (Calvini Opera vol. 23, see
+fetch_calvin_genesis.py) into segments (JSONL), from two independent OCRs:
+the PDF's own text layer and Tesseract's (ocr_pdf_pages.py).
+
+OCR COMBINATION
+---------------
+Neither OCR is clean on its own (measured against the Institutio's word
+forms: ~13-17% unknown words each, much of it systematic -- the text layer
+reads "m" as "rn" ("tarnen", "earn", "quern") and "c" as "e" ("nee",
+"donee", "hie"); Tesseract has its own "c"/"e" slips ("peceati", "hine")),
+but their errors mostly differ. Per page the two word sequences are aligned
+(difflib) and, where they disagree word for word, a known Latin word wins
+over an unknown one (known = a word form of the ingested Institutio, which
+is Calvin's own Latin of the same period). On pages where the text layer is
+unusable (>35% unknown, e.g. the Argumentum's second and third page),
+Tesseract's text is used as is. Accents that the OCR invented on plain
+Latin letters ("fidéles") are stripped. Greek and Hebrew quotations stay
+garbled -- neither OCR reads them.
+
+The combined text still has OCR errors (names, rarer words, the Greek/Hebrew);
+the unknown-word rate is reported per run as a quality measure.
+
+STRUCTURE
+---------
+Pages 30-338 (0-based PDF pages) hold the commentary: the Argumentum, then
+50 chapters, each opening with a "CAPUT N." heading (OCR variants: "CAP. V.",
+"CAPUT XLYII.", "CAPUT XL" for XI -- so headings are numbered by position,
+1..50, and the count is checked), followed by Calvin's own Latin translation
+of the whole chapter (numbered verses) and then his comments, each starting
+at the beginning of a line with the verse number and the words commented on
+("8. Audierunt vocem Domini."). The chapter text ends where the verse
+numbering starts over at the beginning of a line.
+
+Segments (ref / kind / chapter / section):
+  "Comm. Gen. arg.N"      argument     NULL  N    Argumentum, per paragraph
+  "Comm. Gen. 3 tekst.8"  scripture    3     8    Calvin's Latin of verse 3:8
+  "Comm. Gen. 3:8"        commentary   3     8    comment on 3:8 (a second
+                                                   comment on the same verse
+                                                   gets "Comm. Gen. 3:8b")
+Each row also carries `co_col`: the Calvini Opera column where it starts
+(the page's left column number), for citation ("CO 23, 65").
+
+Usage:
+    python scripts/parse_calvin_genesis_la.py -o /data/institutio/calvin_genesis_la.jsonl
+    python scripts/parse_calvin_genesis_la.py --pdf ... --ocr-dir ... --vocab vocab.txt --dry-run
+
+Without --vocab the known-word list is read from the database (Institutio
+tokens). Requires: pymupdf, psycopg (unless --vocab)
+"""
+from __future__ import annotations
+
+import argparse
+import collections
+import difflib
+import json
+import os
+import re
+import sys
+import unicodedata
+from pathlib import Path
+
+import pymupdf
+
+RAW = Path("/data/institutio/raw/calvin_genesis")
+FIRST_PAGE, LAST_PAGE = 30, 338
+CHAPTERS = 50
+GARBLED_TEXT_LAYER = 0.35
+
+_WORD_RE = re.compile(r"[A-Za-zÀ-ɏæœ]+")
+# Hebrew (letters + points) and Greek words are single tokens too, so a
+# quotation from the script-OCR pass can be aligned and put in as a whole.
+_SCRIPT = "\u0590-\u05FF\uFB1D-\uFB4F\u0370-\u03FF\u1F00-\u1FFF"
+_SCRIPT_RE = re.compile(f"[{_SCRIPT}]")
+_HEBREW_RE = re.compile("[א-ת]")
+
+
+def greek_letters(token: str) -> int:
+    """Number of Greek letters, not counting accents and breathings
+    (decomposed first: "ἀρχῇ" -> α ρ χ η + marks)."""
+    return sum(1 for c in unicodedata.normalize("NFD", token) if "Α" <= c <= "ω")
+_TOKEN_RE = re.compile(f"\\n|[{_SCRIPT}]+|[A-Za-zÀ-ɏæœ]+|\\d+|[^\\sA-Za-zÀ-ɏæœ\\d{_SCRIPT}]")
+_HEADER_RE = re.compile(r"^\W*(\d+)?\W*[A-Z0-9 .,]*(?:GENESIN|GENES1N|GENE8IN)\W*(\d+)?\W*$")
+_FOOTER_RE = re.compile(r"^\W*Ca\S{0,3}ini\s+o\S{1,3}era\b.*$", re.IGNORECASE)
+_CHAPTER_RE = re.compile(r"^\s*C\s*[AÀ]\s*[PF]\s*(?:[UVÜ]\s*T\s*)?\.?\s+([IVXLCYl1]+|\w{1,6})\s*[.,]?\s*[.,]?\s*$", re.MULTILINE)
+_MARKER_RE = re.compile(r"(?:(?<=\s)|^)(\d{1,2})\s?\.\s+(?=\S)")
+
+
+def strip_accents(word: str) -> str:
+    return "".join(c for c in unicodedata.normalize("NFD", word) if unicodedata.category(c) != "Mn")
+
+
+def load_vocab(path: Path | None) -> set[str]:
+    if path is not None:
+        return {line.strip() for line in path.read_text(encoding="utf-8").splitlines() if line.strip()}
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    from db import get_connection
+    with get_connection() as conn, conn.cursor() as cur:
+        cur.execute(
+            """SELECT DISTINCT lower(substring(s.text_la FROM t.char_start + 1 FOR t.char_end - t.char_start))
+               FROM token t JOIN segment s ON s.id = t.segment_id JOIN work w ON w.id = s.work_id
+               WHERE w.slug = 'institutio-1559' AND t.is_word""")
+        return {r[0] for r in cur.fetchall()}
+
+
+def unknown_rate(text: str, vocab: set[str]) -> float:
+    words = [w.lower() for w in _WORD_RE.findall(text) if len(w) > 2]
+    return sum(1 for w in words if strip_accents(w) not in vocab) / max(1, len(words))
+
+
+def combine(text_layer: str, tesseract: str, vocab: set[str], keep_base: bool = False) -> str:
+    """Word-level combination of two OCRs of the same page (see docstring).
+    keep_base: never switch to Tesseract as the base (for footnotes: their
+    abbreviations -- "seqq.", "Ed.", "v." -- look unknown, which made a
+    note seem garbled and let Tesseract's digit misreads, 1563 -> 1569, in)."""
+    def known(tok: str) -> bool:
+        return strip_accents(tok.lower()) in vocab
+
+    def known_ratio(tokens: list[str]) -> tuple[int, float]:
+        words = [t for t in tokens if _WORD_RE.fullmatch(t) and len(t) > 1]
+        return len(words), (sum(1 for w in words if known(w)) / len(words) if words else 0.0)
+
+    # The base is the PDF's text layer -- its line breaks match the print
+    # closely, and the verse numbers that start comments sit at line starts
+    # (Tesseract's lines don't keep those as reliably: using it as the base
+    # lost ~40 comment starts) -- unless the text layer is unusable on this
+    # page (the Argumentum's second and third page).
+    if not keep_base and unknown_rate(text_layer, vocab) > GARBLED_TEXT_LAYER:
+        text_layer, tesseract = tesseract, text_layer
+    a = _TOKEN_RE.findall(text_layer)
+    b = _TOKEN_RE.findall(tesseract)
+    # Compare without newlines (the two OCRs break lines differently), but
+    # keep the base's newlines in the output: they carry the line starts.
+    a_words = [t for t in a if t != "\n"]
+    b_words = [t for t in b if t != "\n"]
+    replacement: dict[int, list[str]] = {}   # base word index => tokens instead of it
+    matcher = difflib.SequenceMatcher(a=a_words, b=b_words, autojunk=False)
+    for op, a1, a2, b1, b2 in matcher.get_opcodes():
+        if op == "replace" and a2 - a1 == b2 - b1:
+            for k in range(a2 - a1):
+                x, y = a_words[a1 + k], b_words[b1 + k]
+                if _WORD_RE.fullmatch(x) and not known(x) and _WORD_RE.fullmatch(y) and known(y):
+                    replacement[a1 + k] = [y]
+        elif op in ("replace", "delete", "insert"):
+            # Stretches the two OCRs cut up differently: take the other
+            # OCR's reading when it is clearly the better Latin (e.g. a
+            # garbled line in the base, or a line the base lost).
+            n_a, ratio_a = known_ratio(a_words[a1:a2])
+            n_b, ratio_b = known_ratio(b_words[b1:b2])
+            if n_b >= 2 and ratio_b >= 0.7 and ratio_b - ratio_a >= 0.3:
+                if a2 > a1:
+                    replacement[a1] = b_words[b1:b2]
+                    for k in range(a1 + 1, a2):
+                        replacement[k] = []
+                elif a1 < len(a_words):
+                    replacement[a1] = b_words[b1:b2] + [a_words[a1]]
+    out, i = [], 0
+    for tok in a:
+        if tok == "\n":
+            out.append("\n")
+            continue
+        out.extend(replacement.get(i, [tok]))
+        i += 1
+    return detokenize(out)
+
+
+def restore_headings(text: str, tesseract: str) -> str:
+    """A chapter heading only Tesseract read (the text layer misses e.g.
+    "CAPUT VIII.") is put back into the combined text, on its own line
+    right before the words that follow it in Tesseract's text."""
+    if _CHAPTER_RE.search(text):
+        return text
+    for h in _CHAPTER_RE.finditer(tesseract):
+        following = _WORD_RE.findall(tesseract[h.end():])[:6]
+        if len(following) < 3:
+            continue
+        pattern = r"\W+".join(re.escape(w) for w in following[:3])
+        m = re.search(pattern, text)
+        if m:
+            line_start = text.rfind("\n", 0, m.start()) + 1
+            # The verse number before those words belongs after the heading too.
+            prefix = text[line_start:m.start()]
+            cut = line_start if re.fullmatch(r"\s*\d{0,2}\s?\.?\s*", prefix) else m.start()
+            text = text[:cut] + f"\n{h.group().strip()}\n" + text[cut:]
+    return text
+
+
+def detokenize(tokens: list[str]) -> str:
+    text = ""
+    for tok in tokens:
+        if tok == "\n":
+            text = text.rstrip(" ") + "\n"
+        elif not text or text.endswith(("\n", " ", "(", "[", "„", '"')) and tok not in ".,;:!?)]":
+            text += tok
+        elif tok in ".,;:!?)]-":
+            # "-" too: a line-end hyphen must stay attached to its word
+            # ("pro-" + newline + "fectus") for dehyphenate() to rejoin it.
+            text = text.rstrip(" ") + tok
+        else:
+            text += " " + tok
+    return text
+
+
+def clean_word_accents(text: str) -> str:
+    return _WORD_RE.sub(lambda m: strip_accents(m.group()), text)
+
+
+def clean_script_ocr(text: str) -> str:
+    """Tesseract's lat+grc+heb output: drop the bidi marks it adds around
+    Hebrew, and put punctuation it attached to the wrong (logical) side of a
+    Hebrew word back after it (",יצר" -> "יצר,")."""
+    text = re.sub("[\u200e\u200f\u202a-\u202e]", "", text)
+    return re.sub(r"([.,;:!?])([\u0590-\u05FF\uFB1D-\uFB4F]+)", r"\2\1", text)
+
+
+def load_hebrew_forms(path: Path | None) -> set[str]:
+    """Every consonantal word form of the Hebrew Bible (hebrew_words, points
+    and accents stripped, maqaf compounds split) plus Strong's lexical
+    forms: a Hebrew token from the script pass is only believed if it is
+    one of these (it also reads stray junk as "מ", "יי", "הפב")."""
+    if path is not None:
+        return {line.strip() for line in path.read_text(encoding="utf-8").splitlines() if line.strip()}
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    from db import get_connection
+    with get_connection() as conn, conn.cursor() as cur:
+        cur.execute(
+            r"""SELECT DISTINCT regexp_replace(w, '[֑-ׇ]', '', 'g')
+                FROM (SELECT unnest(string_to_array(word_text, E'־')) AS w FROM hebrew_words
+                      UNION SELECT lemma FROM strongs_entries WHERE lang = 'HE' AND lemma IS NOT NULL) x""")
+        return {r[0] for r in cur.fetchall()}
+
+
+def merge_script_words(text: str, script_ocr: str, vocab: set[str], hebrew_forms: set[str]) -> str:
+    """Put the Hebrew and Greek quotations from the lat+grc+heb pass into the
+    combined text. The two Latin OCRs read Hebrew as Latin-looking junk
+    ("IS1" for יצר, "N13" for ברא); the script pass reads it right, but
+    also misreads some Latin as Hebrew, Greek or digits ("vocat" -> "70086")
+    -- so only stretches where the combined text has no known Latin word
+    are replaced, and only by the script pass's Hebrew/Greek tokens (plus
+    their punctuation)."""
+    a = _TOKEN_RE.findall(text)
+    b = _TOKEN_RE.findall(clean_script_ocr(script_ocr))
+    a_words = [t for t in a if t != "\n"]
+    b_words = [t for t in b if t != "\n"]
+    line_starts, k, after_newline = set(), 0, True
+    for tok in a:
+        if tok == "\n":
+            after_newline = True
+            continue
+        if after_newline:
+            line_starts.add(k)
+        after_newline = False
+        k += 1
+
+    def known(tok: str) -> bool:
+        return strip_accents(tok.lower()) in vocab
+
+    replacement: dict[int, list[str]] = {}
+    matcher = difflib.SequenceMatcher(a=a_words, b=b_words, autojunk=False)
+    for op, a1, a2, b1, b2 in matcher.get_opcodes():
+        if op not in ("replace", "insert"):
+            continue
+        script = [t for t in b_words[b1:b2] if _SCRIPT_RE.search(t)
+                  and (not _HEBREW_RE.search(t) or re.sub("[֑-ׇ]", "", t) in hebrew_forms)]
+        if not script:
+            continue
+        # Greek only when it's real words: the script pass turns stray Latin
+        # junk into short Greek forms ("ἃ", "οἱ", "δὲ") far more often than
+        # Calvin quotes Greek in this commentary.
+        if not any(_HEBREW_RE.search(t) for t in script) and \
+                not any(greek_letters(t) >= 3 for t in script):
+            continue
+        span = a_words[a1:a2]
+        # Real Latin here (even "a", "et", "In") means the script pass misread
+        # it. But the junk the Latin OCRs make of Hebrew ("IS 1" for יצר,
+        # "D ^ N" for אלהים) has known-looking bits too -- capitals that
+        # aren't a word's normal casing don't count.
+        if any(_WORD_RE.fullmatch(t) and known(t) and (t.islower() or (t[0].isupper() and t[1:].islower()))
+               for t in span):
+            continue
+        # A verse number ("9." at a line start or after a sentence) -- the
+        # comment/verse structure hangs on these. Not the digits in junk
+        # like "N 13." (for ברא), which follow a letter.
+        def is_verse_number(k: int) -> bool:
+            nxt = a_words[k + 1] if k + 1 < len(a_words) else ""
+            prev = a_words[k - 1] if k > 0 else "."
+            return a_words[k].isdigit() and nxt == "." and (k in line_starts or not _WORD_RE.fullmatch(prev))
+        if any(is_verse_number(k) for k in range(a1, a2)):
+            continue
+        tail = [t for t in b_words[b1:b2] if not _SCRIPT_RE.search(t) and not _WORD_RE.fullmatch(t)
+                and not t.isdigit()][-1:]  # keep trailing punctuation ("ברא.")
+        new = script + tail
+        if a2 > a1:
+            replacement[a1] = new
+            for k in range(a1 + 1, a2):
+                replacement[k] = []
+        elif a1 < len(a_words):
+            replacement[a1] = new + [a_words[a1]]
+    out, i = [], 0
+    for tok in a:
+        if tok == "\n":
+            out.append("\n")
+            continue
+        out.extend(replacement.get(i, [tok]))
+        i += 1
+    return detokenize(out)
+
+
+# ── Editorial footnotes ──────────────────────────────────────────────────────
+# The Calvini Opera prints its apparatus at the foot of each column, under a
+# short rule, in small type: "1) Hic et in seqq. v. 11. 20. 24 Ed. princeps
+# habebat: Et." -- with a superscript call in the text ("Postea ¹) dixit").
+# Both OCRs run these into the text. They are taken out: the footnote blocks
+# from all three OCR layers before combining (else one layer would put them
+# back), and each call is replaced by a private-use placeholder character
+# (_NOTE_BASE + n) that survives the later steps, so parse() can record where
+# in the segment text note n belongs and drop the placeholder. The notes are
+# kept (segment_annotation, kind 'variant'), not thrown away: they are the
+# edition's textual notes.
+_FOOTNOTE_START_RE = re.compile(r"^\s*[1-9lI]\s?\)\s")
+# The call as the OCR reads it: "1)", "])", "!)", "*)", "')" (a superscript 1
+# seen as an apostrophe) -- after a word, punctuation or a closing bracket
+# ("(Psal. 115, 17.) 1)").
+_NOTE_CALL_RE = re.compile(r"(?<=[A-Za-z\u00C0-\u024F.,;:!?'\")])\s?(?:[1-9lI!*\]'\u2019]|\d)\s?\)")
+_NOTE_BASE = 0xE000
+_NOTE_PLACEHOLDER_RE = re.compile("\\s?[\\uE000-\\uF8FF]")
+
+
+def split_footnote_blocks(page: pymupdf.Page) -> tuple[str, list[str]]:
+    """The page's text layer without its footnote blocks, and the notes."""
+    height = page.rect.height
+    blocks = page.get_text("blocks")
+    footnotes = [b for b in blocks if b[1] > 0.55 * height and _FOOTNOTE_START_RE.match(b[4])]
+    kept, notes = [], []
+    for block in blocks:
+        x0, y0, x1, y1, text = block[:5]
+        if block in footnotes:
+            for note in re.split(r"(?:^|\n)\s*[1-9lI]\s?\)\s", text):
+                note = re.sub(r"(\w)-\s*\n\s*(\w)", r"\1\2", note)
+                note = re.sub(r"\s+", " ", note).strip()
+                if note:
+                    notes.append(note)
+            continue
+        # A block under a footnote *in the same column* is its continuation;
+        # the other column can go on lower down (Gen. 47:8 starts at the
+        # foot of the right column, below the left column's footnote).
+        if any(y0 >= f[1] and x0 < f[2] and x1 > f[0] for f in footnotes):
+            continue
+        kept.append(text)
+    return "".join(kept), notes
+
+
+def split_footnote_paragraphs(text: str) -> tuple[str, list[str]]:
+    """Tesseract puts a column's footnotes in a paragraph of its own: the
+    text without them, and the notes (a paragraph can hold several)."""
+    parts = re.split(r"(\n\s*\n)", text)
+    kept, notes = [], []
+    for p in parts:
+        if _FOOTNOTE_START_RE.match(p):
+            for note in re.split(r"(?:^|\n)\s*[1-9lI]\s?\)\s", p):
+                if note.strip():
+                    notes.append(note)
+        else:
+            kept.append(p)
+    return "".join(kept), notes
+
+
+def pair_notes(base: list[str], other: list[str]) -> list[str | None]:
+    """For each base note, the same note in the other OCR: by position when
+    both found as many, else the most similar one not yet used (in order)."""
+    if len(base) == len(other):
+        return list(other)
+    norm = lambda t: re.sub(r"\s+", " ", t.lower())
+    out, start = [], 0
+    for note in base:
+        best, best_k = 0.3, None
+        for k in range(start, len(other)):
+            ratio = difflib.SequenceMatcher(a=norm(note), b=norm(other[k])).ratio()
+            if ratio > best:
+                best, best_k = ratio, k
+        out.append(other[best_k] if best_k is not None else None)
+        if best_k is not None:
+            start = best_k + 1
+    return out
+
+
+def combine_notes(layer_notes: list[str], tesseract_notes: list[str], script_notes: list[str],
+                  vocab: set[str], hebrew_forms: set[str]) -> list[str]:
+    """The page's footnotes read like the running text: the text layer's
+    reading combined with Tesseract's (combine()), then the Hebrew/Greek
+    from the script pass (merge_script_words())."""
+    out = []
+    for note, tess, script in zip(layer_notes, pair_notes(layer_notes, tesseract_notes),
+                                  pair_notes(layer_notes, script_notes)):
+        text = combine(note, tess, vocab, keep_base=True) if tess else note
+        if script:
+            text = merge_script_words(text, script, vocab, hebrew_forms)
+        text = re.sub(r"(\w)-\s*\n\s*(\w)", r"\1\2", text)
+        text = re.sub(r"\s*Calvini\s+opera\.?\s+V\w{1,3}\.?\s+[XVIL]+\.?\s*$", "", text)  # the page footer
+        out.append(clean_word_accents(re.sub(r"\s+", " ", text).strip()))
+    return out
+
+
+def mark_note_calls(text: str, first_index: int) -> tuple[str, int]:
+    """Replace every footnote call ("Postea])", "cuiusque. 2)") by a
+    placeholder numbered from first_index; not the closing of a real
+    parenthesis ("(cap. 2, 5)"). Returns (text, number of calls)."""
+    out, last, n = [], 0, 0
+    for m in _NOTE_CALL_RE.finditer(text):
+        before = text[max(0, m.start() - 60):m.start()]
+        if before.rfind("(") > before.rfind(")"):
+            continue  # inside a parenthesis: its own closing bracket
+        out.append(text[last:m.start()])
+        out.append(chr(_NOTE_BASE + first_index + n))
+        last = m.end()
+        n += 1
+    out.append(text[last:])
+    return "".join(out), n
+
+
+def page_text(pdf: pymupdf.Document, ocr_dir: Path, page: int, vocab: set[str],
+              script_dir: Path | None = None, hebrew_forms: set[str] | None = None
+              ) -> tuple[str, int | None, list[str]]:
+    """Combined text of one page (header/footer and footnotes removed), its
+    left CO column number, and the page's footnotes (see mark_note_calls)."""
+    text_layer, layer_notes = split_footnote_blocks(pdf[page])
+    # The Argumentum (pages 30-33) is set in small type across the full
+    # page width: the two-column pass lost a third of its text there, so it
+    # has a pass of its own (ocr_pdf_pages.py --dpi 450 --psm 6 into ocr_arg)
+    arg_file = ocr_dir.with_name("ocr_arg") / f"p{page:04d}.txt"
+    argumentum = arg_file.exists()
+    tesseract, tesseract_notes = split_footnote_paragraphs(
+        (arg_file if argumentum else ocr_dir / f"p{page:04d}.txt").read_text(encoding="utf-8"))
+    text = combine(text_layer, tesseract, vocab)
+    text = restore_headings(text, tesseract)
+    script_file = script_dir / f"p{page:04d}.txt" if script_dir else None
+    script_notes: list[str] = []
+    if script_file and script_file.exists():
+        script, script_notes = split_footnote_paragraphs(script_file.read_text(encoding="utf-8"))
+        # (no Hebrew in the Argumentum: what the script pass reads there as
+        # Hebrew is Latin in small type)
+        text = merge_script_words(text, script, vocab, set() if argumentum else hebrew_forms or set())
+    notes = combine_notes(layer_notes, tesseract_notes, script_notes, vocab, hebrew_forms or set())
+    column = None
+    lines = []
+    for line in text.splitlines():
+        if not lines and not line.strip():
+            continue
+        # Running head anywhere on the page (the reading order doesn't
+        # always put it first): all caps + "GENESIN", never real text.
+        header = _HEADER_RE.match(line)
+        if header:
+            if header.group(1) and column is None:
+                column = int(header.group(1))
+            continue
+        # ...or garbled by the OCR ("17 COMMENTAftlUS IN GENESIN. 18",
+        # "43 COMMENTARH", "21 COM ^ ENTAMTJS") -- a short line near the
+        # top with a column number and a mostly-capitals C/O-word.
+        # The column numbers can also stand on lines of their own.
+        if len(lines) < 3 and (is_garbled_header(line) or re.fullmatch(r"\W*\d{1,3}\W*", line)):
+            if column is None:
+                number = re.search(r"\d{1,3}", line)
+                column = int(number.group()) if number else None
+            continue
+        if _FOOTER_RE.match(line):
+            continue
+        lines.append(line)
+    return "\n".join(lines), column, notes
+
+
+# Single substitutions that undo the OCR confusions seen in this volume:
+# "rn" for "m" (tarnen, earn, saltern), "e" for "c" (hie, nee, donee,
+# seimus), "o" for "c" (neo, oommentarius), "l" for "I" at the start of a
+# name (lahacob, loseph, lehova), and a few rarer ones.
+_CONFUSIONS = [("rn", "m"), ("e", "c"), ("c", "e"), ("o", "c"), ("o", "e"), ("i", "l"), ("l", "i"),
+               ("u", "n"), ("n", "u"), ("ii", "u"), ("in", "m")]
+
+
+def correct_words(text: str, vocab: set[str], freq_text: str | None = None) -> tuple[str, int]:
+    """Replace an unknown word by a one-substitution variant (see
+    _CONFUSIONS) that is a known word occurring more often in this text, or
+    a form this text itself uses far more often -- so a real but unusual
+    word (a name, a rare form) that happens to be one substitution away from
+    something is left alone unless the text shows the other reading is the
+    usual one."""
+    # freq_text: the text whose word frequencies decide (the whole commentary
+    # when correcting its short footnotes)
+    freq: dict[str, int] = {}
+    for w in _WORD_RE.findall(freq_text if freq_text is not None else text):
+        freq[w.lower()] = freq.get(w.lower(), 0) + 1
+
+    cache: dict[str, str | None] = {}
+
+    def best(word: str) -> str | None:
+        low = word.lower()
+        if low in cache:
+            return cache[low]
+        result = None
+        if len(low) > 2 and low not in vocab:
+            candidates = set()
+            for wrong, right in _CONFUSIONS:
+                start = low.find(wrong)
+                while start != -1:
+                    candidates.add(low[:start] + right + low[start + len(wrong):])
+                    start = low.find(wrong, start + 1)
+            own = freq.get(low, 0)
+            # Known word that is more common here than the OCR form; or,
+            # for names the Institutio lacks ("Iahacob" vs OCR "lahacob"),
+            # a form this text itself uses much more often.
+            scored = [(freq.get(c, 0), c) for c in candidates
+                      if (c in vocab and freq.get(c, 0) > own)
+                      or (freq.get(c, 0) >= 20 and freq.get(c, 0) >= 3 * own)]
+            if scored:
+                result = max(scored)[1]
+        cache[low] = result
+        return result
+
+    changes = 0
+
+    def fix(m: re.Match) -> str:
+        nonlocal changes
+        word = m.group()
+        replacement = best(word)
+        if replacement is None:
+            return word
+        changes += 1
+        if word[0].isupper():
+            replacement = ("I" + replacement[1:]) if word[0] == "L" and replacement[0] == "i" else replacement.capitalize()
+        return replacement
+
+    return _WORD_RE.sub(fix, text), changes
+
+
+def load_latin_lexicon(vocab: set[str]) -> set[str]:
+    """The known-word list, widened with the word forms LatinCy knows
+    (its string table: "semel", "coelo", "filiam" -- the Institutio alone
+    lacks many), when the model is installed."""
+    try:
+        import spacy
+        nlp = spacy.load(os.environ.get("LATINCY_MODEL", "la_core_web_lg"), exclude=["ner", "parser", "tagger"])
+    except Exception:          # noqa: BLE001 -- no model: the vocabulary alone
+        return vocab
+    return vocab | {s.lower() for s in nlp.vocab.strings if re.fullmatch(r"[A-Za-zæœ]+", s)}
+
+
+# "s" read as "8" -- loose or glued, at either side of the rest of its word
+# ("satis fuisset 8 emel dici", "sump 8 it", "magi 8 fuerat", "numero8 um").
+# Not a number: after or before digits, in a reference ("Psalmus 20, 8
+# docet"); a verse number ("terra. 8 Et") has no word glued to it, and no
+# lower-case one after it.
+_S_AS_8_RE = re.compile(r"(?<![\d,.:])\b([A-Za-z]*)([ \n]?)8([ \n]?)([a-z]*)\b(?![ \n]?\d)")
+
+
+# Short words an s is welcome in ("Nam 8 i" -> si, "datam 8 uo" -> suo);
+# other short ones are rather a word of their own ("in 8", "Dei 8").
+_SHORT_S_WORDS = {"si", "se", "sed", "sic", "sua", "suo", "sui", "sum", "sit", "sin", "vis", "his", "eis", "nos",
+                  "vos", "tus", "ius", "sus", "hos", "eos", "quos", "quas"}
+
+
+def fix_s_read_as_8(text: str, lexicon: set[str]) -> tuple[str, int]:
+    freq = collections.Counter(w.lower() for w in _WORD_RE.findall(text))
+
+    def known(w: str) -> bool:
+        w = strip_accents(w.lower())
+        return w in lexicon or freq[w] >= 3 or any(
+            w.endswith(e) and w[:-len(e)] in lexicon for e in ("que", "ne", "ve"))
+
+    changes = 0
+
+    def fix(m: re.Match) -> str:
+        nonlocal changes
+        left, right = m.group(1), m.group(4)
+        if not (left or right) or re.search(r"[A-Z]", left[1:]):
+            return m.group()
+        # the readings, best first: one word through the s; the s ending the
+        # word before; the s opening the word after
+        # (the word the s goes into must be known -- its neighbour may be a
+        # rare one: "violavit 8 anctam" -- and not a word itself far more
+        # common without it: "Dei 8", "in 8", "et" -> "set")
+        def better(with_s: str, without: str) -> bool:
+            if not known(with_s) or (len(with_s) < 4 and with_s.lower() not in _SHORT_S_WORDS):
+                return False
+            if not without or not known(without) or len(without) >= 5:
+                return True     # ("philosophi 8" -> philosophis, "filii 8" -> filiis)
+            return freq[with_s.lower()] + 1 >= 0.3 * (freq[without.lower()] + 1)
+
+        if len(left) == 1 and left.isupper():
+            return m.group()            # "U 8 um": a letter misread as well
+        options = []            # (reading, the word the s went into)
+        if left and right:
+            # one word: a known one, or two short fragments ("obdure 8 cimus")
+            merged = left + "s" + right
+            if known(merged) or (not known(left) and not known(right) and len(left) < 7 and len(right) < 8):
+                options.append((merged, merged))
+        # (the s with one side only if the other is a word by itself -- known,
+        # or long enough to be a rare one: "violavit 8 anctam", "strepitu 8
+        # foreuses" -- not a fragment: "mon 8 trosum" isn't "mons trosum")
+        if left and better(left + "s", left) and (not right or known(right) or len(right) >= 7):
+            options.append((left + "s" + m.group(3) + right, left + "s"))
+        if right and better("s" + right, right) and (not left or known(left) or len(left) >= 6):
+            options.append((left + m.group(2) + "s" + right, "s" + right))
+        if not options and 2 <= len(left) <= 4 and len(right) >= 3 and not known(right):
+            options.append((left + "s" + right, ""))      # "mon 8 trosum": one word after all
+        if options:
+            changes += 1
+            # the reading whose word this text uses most ("in suo", not the
+            # rare "insuo"); first listed on a tie
+            return max(options, key=lambda o: freq[o[1].lower()])[0]
+        return m.group()
+
+    return _S_AS_8_RE.sub(fix, text), changes
+
+
+# The running head read into a line of text instead of on its own
+# ("sermo Dei, qui \ COM ^ ENTAMTJS IN GENESIN. " dies", "et COMMENTARIUS IN
+# GENESIN. arcanum", "apprehenS IN GENBSIN. 220 dunt"), with the page number
+# and specks around it. Capitals only: "Quaestionum in Genesin" stays.
+_INLINE_HEAD_RE = re.compile(
+    r"(?:\s*\\)?(?:\s*\d{1,3}\s?\*)?(?:\s*[.•])?\s*"
+    r"(?:[CGe]?O[MN]\S{0,3}\s?\^?\s?[A-Z]{2,9}\s?\.?\s*)?"
+    r"\bIN\s?G[\s-]*EN[EB]\s?[S8]?\s?(?:IN|1\s?N)\b\.?(?:\s*\d{2,3}\b)?(?:\s*[\"•])?"
+    # (or the first word of it alone: "vestivit GOMMENTARIl Deus")
+    r"|\s[CG]OMMENT\s?ARI[A-Za-z]{0,3}\b(?:\s*\\)?")
+
+
+def is_garbled_header(line: str) -> bool:
+    stripped = line.strip()
+    if _CHAPTER_RE.fullmatch(stripped) or re.match(r"\W*GENESIS\b", stripped):
+        return False  # "CAPUT I." / "GENESIS." at the top of a page are content
+    letters = [ch for ch in stripped if ch.isalpha()]
+    upper = sum(ch.isupper() for ch in letters)
+    return (len(stripped) <= 50
+            and re.search(r"(?:^|\W)[CO0ÖÔ][A-Za-z^ÜüÖ]{4,}", stripped) is not None
+            and upper >= 5 and upper >= 0.6 * len(letters))
+
+
+def dehyphenate(text: str) -> str:
+    return re.sub(r"(\w)-\s*\n\s*(\w)", r"\1\2", text)
+
+
+def one_line(text: str) -> str:
+    return re.sub(r"\s+", " ", text).strip()
+
+
+# Text the OCR put in the wrong place, where a page's column order came out
+# wrong -- checked against the edition. (ref it landed in, first words, last
+# words, ref it belongs in, the words it belongs after, the words it belongs
+# before, junk between those two to drop.)
+_MISPLACED = [
+    # CO 23, 355: the end of the comments on Gen. 25 (the rest of 25:30 and
+    # those on 25:33 and 34) came out in the middle of Calvin's Latin of
+    # 26:15, between "servi patris" and "in diebus Abraham".
+    ("Comm. Gen. 26 tekst.15", "versam fuisse a parentibus", "illud incomparabile sui",
+     "Comm. Gen. 25:30", "rem serio animad", "bonum quo privatus erat", "23 l "),
+]
+
+
+def split_first_comment(rows: list[dict]) -> list[dict]:
+    """A chapter's first comment whose number the OCR spoiled ("l.. Et
+    levavit", "1: Porro", or none: "Et venerunt duo angeli") was not seen
+    as the start of the comments, and ended up in Calvin's Latin of the
+    chapter's last verse. Such a verse -- far longer than a verse is -- is
+    split at its first sentence end followed by a lemma."""
+    out: list[dict] = []
+    for idx, r in enumerate(rows):
+        out.append(r)
+        nxt = rows[idx + 1] if idx + 1 < len(rows) else None
+        if r["kind"] != "scripture" or len(r["text"]) < 450 or r["notes"]:
+            continue
+        if nxt and nxt["kind"] == "scripture" and nxt["chapter"] == r["chapter"]:
+            continue   # not the chapter's last verse
+        # a spoiled number is the surer sign; else the first sentence end
+        m = re.search(r"(?<=.{40}\.) ([lI1]|\d{1,2})\s?[.:,]+\s(?=[A-Z][a-z]+ [a-z]+)", r["text"]) \
+            or re.search(r"(?<=.{40}\.) ()(?=[A-Z][a-z]+ [a-z]+)", r["text"])
+        if not m:
+            continue
+        verse = 1 if not m.group(1) or not m.group(1).isdigit() else int(m.group(1))
+        comment = r["text"][m.end():]
+        r["text"] = r["text"][:m.start()].strip()
+        out.append({**r, "kind": "commentary", "ref": f"Comm. Gen. {r['chapter']}:{verse}", "section": verse,
+                    "text": f"{verse}. {comment}", "notes": []})
+    return out
+
+
+def repair_misplaced_text(rows: list[dict], warnings: list[str]) -> list[dict]:
+    """Move the text of _MISPLACED back, and split the comments it holds
+    ("33. Iura mihi.") off as comments of their own."""
+    by_ref = {r["ref"]: r for r in rows}
+    for src, first, last, dst, after, before, junk in _MISPLACED:
+        s, d = by_ref.get(src), by_ref.get(dst)
+        if not s or not d or first not in s["text"] or last not in s["text"] or after not in d["text"]:
+            warnings.append(f"misplaced text {src} -> {dst} not found; left as it is")
+            continue
+        if s["notes"] or d["notes"]:
+            warnings.append(f"misplaced text {src} -> {dst}: footnotes in the way; left as it is")
+            continue
+        i, j = s["text"].index(first), s["text"].index(last) + len(last)
+        chunk = s["text"][i:j]
+        s["text"] = re.sub(r"\s+", " ", s["text"][:i] + " " + s["text"][j:]).strip()
+        k = d["text"].index(after) + len(after)
+        rest = d["text"][k:]
+        rest = rest[len(junk):] if rest.startswith(junk) else rest
+        d["text"] = d["text"][:k] + chunk + " " + rest
+        # comments on later verses inside the moved text
+        parts = re.split(r"(?<=[.!?] )(?=(\d{1,2})\. [A-Z][a-z]+ [a-z])", d["text"])
+        head, new_rows = parts[0], []
+        for n in range(1, len(parts), 2):
+            verse, text = int(parts[n]), parts[n + 1]
+            if verse <= d["section"]:
+                head += text
+                continue
+            new_rows.append({**d, "ref": f"Comm. Gen. {d['chapter']}:{verse}", "section": verse,
+                             "text": text.strip(), "notes": []})
+        d["text"] = head.strip()
+        at = rows.index(d) + 1
+        rows[at:at] = new_rows
+    return rows
+
+
+def lemma_verse(lemma_start: str, verse_texts: dict[int, str], read: int) -> int:
+    """The verse a comment's lemma quotes: the number as read, unless the
+    lemma's words are clearly those of another verse of Calvin's own text
+    of the chapter -- "1. Formaverat autem Deus hominem" is verse 7, its
+    7 read as 1."""
+    lemma = re.split(r"[.?!:]", lemma_start, maxsplit=1)[0]
+    words = [w.lower() for w in re.findall(r"[A-Za-z]{3,}", lemma)][:8]
+    if len(words) < 2 or not verse_texts:
+        return read
+
+    def share(v: int) -> float:
+        vocab = {w.lower() for w in re.findall(r"[A-Za-z]{3,}", verse_texts.get(v, ""))}
+        return sum(w in vocab for w in words) / len(words)
+
+    if share(read) >= 0.5:
+        return read
+    best = max(verse_texts, key=share)
+    return best if share(best) >= 0.75 else read
+
+
+# Verses of Calvin's scripture text without a number of their own -- the
+# edition doesn't print "3." in 13:2-3 (checked on the scan) -- split off
+# still, to stand next to Los's and the Statenvertaling's verse:
+# (chapter, verse) -> the words the verse starts with.
+_LATIN_MISSING_VERSES = {(13, 3): "Et perrexit per profectiones"}
+
+
+class _VerseMarker:
+    """A verse number found by missing_verses(): the re.Match interface the
+    verse markers are used through (group(1) = the verse)."""
+
+    def __init__(self, verse: int, start: int, end: int):
+        self.verse, self._start, self._end = verse, start, end
+
+    def group(self, n: int = 0) -> str:
+        return str(self.verse)
+
+    def start(self) -> int:
+        return self._start
+
+    def end(self) -> int:
+        return self._end
+
+
+def missing_verses(text: str, lo: int, hi: int, after: int, before: int) -> list[_VerseMarker]:
+    """The verse numbers after+1 .. before-1 in text[lo:hi], where the
+    scripture text runs on without them: their stop misread ("terra. 23, Et
+    fuit", "19.- Et tu", "26.. Et", "(28. Et"), missing ("Deus. 24 Abraham"),
+    split ("1. 8. Et" for 18) or half a letter ("4 A. Et" for 44, "3 p.
+    Loquutus" for 30). Each after a sentence end or other mark and before a
+    capital -- and only the very number that is missing, in order."""
+    found, pos = [], lo
+    for verse in range(after + 1, before):
+        tens, units = divmod(verse, 10)
+        forms = [rf"\(?\s*{verse}\s?[.,;]*-?"]
+        if tens:
+            forms += [rf"{tens}\.\s?{units}\.", rf"{tens}\s?[A-Za-z]\."]
+        pattern = re.compile(rf"(?<=[.!?:;,)\]])\s*(?:{'|'.join(forms)})\s+(?=[A-Z])")
+        m = pattern.search(text, pos, hi)
+        if m is None:
+            continue
+        found.append(_VerseMarker(verse, m.start(), m.end()))
+        pos = m.end()
+    return found
+
+
+def comment_starts(starts: list[re.Match], comments: str, last_verse: int,
+                   verse_texts: dict[int, str] | None = None) -> list[tuple[re.Match, int]]:
+    """The line-start verse numbers that really open a comment: the best
+    non-decreasing sequence of them (a comment's lemma follows the number:
+    "7. Et vocavit" weighs more than a reference that happens to start a
+    line, "capite 22. v. 18."). A greedy pass kept that "22." and then
+    dropped every comment of verses 7..21 as smaller numbers."""
+    def weight(m: re.Match) -> float:
+        after = comments[m.end():m.end() + 12]
+        if re.match(r"v\.|vers|cap", after):
+            return 0.2   # "22. v. 18.": a reference
+        if re.match(r"[A-Z„\"“‘'(]", after):
+            return 1.0   # a lemma
+        return 0.4
+    # Each start as read, and -- a little less weight -- as the verse its
+    # lemma quotes where that differs (lemma_verse): the latter only wins
+    # where the number as read breaks the order ("1. Formaverat" after 5).
+    # Calvin's printed number otherwise stands, also where it differs from
+    # his own verse numbering on purpose.
+    cands = []
+    for m in starts:
+        read = int(m.group(1))
+        if read > max(last_verse, 1) + 5:
+            continue
+        cands.append((read, m, weight(m)))
+        quoted = lemma_verse(comments[m.end():m.end() + 120], verse_texts or {}, read)
+        if quoted != read:
+            cands.append((quoted, m, weight(m) * 0.8))
+    best: list[float] = []
+    prev: list[int | None] = []
+    for i, (n, m_i, w) in enumerate(cands):
+        best.append(w)
+        prev.append(None)
+        for j in range(i):
+            if cands[j][1].start() < m_i.start() and cands[j][0] <= n and best[j] + w > best[i]:
+                best[i], prev[i] = best[j] + w, j
+    if not cands:
+        return []
+    i = max(range(len(cands)), key=lambda k: best[k])
+    chain = []
+    while i is not None:
+        chain.append((cands[i][1], cands[i][0]))
+        i = prev[i]
+    return chain[::-1]
+
+
+def parse(full: str, columns: list[tuple[int, int | None]]) -> tuple[list[dict], list[str]]:
+    """full: the combined text with "\\x00<column>\\x00" markers at page starts."""
+    warnings: list[str] = []
+
+    def column_at(pos: int) -> int | None:
+        best = None
+        for m in re.finditer(r"\x00(\d*)\x00", full[:pos]):
+            best = int(m.group(1)) if m.group(1) else best
+        return best
+
+    headings = list(_CHAPTER_RE.finditer(full))
+    if len(headings) != CHAPTERS:
+        warnings.append(f"{len(headings)} chapter headings found, expected {CHAPTERS}: "
+                        + ", ".join(repr(h.group().strip()) for h in headings))
+    rows: list[dict] = []
+
+    # Argumentum: everything before chapter 1, per paragraph (blank line).
+    argument = full[:headings[0].start()] if headings else ""
+    argument = re.sub(r"^.*?ARGUMENTUM\.?\s*", "", argument, count=1, flags=re.DOTALL)
+    argument = re.sub(r"\n\s*GENESIS\.?\s*$", "", argument.strip())
+    # The Argumentum is printed as one unbroken text (the blank lines are page
+    # breaks, where the OCR leaves a speck or two: "corrumpi ab . hominibus"):
+    # it is cut into pieces of about 250 words at sentence ends, which keeps
+    # the Latin next to its Dutch.
+    words = one_line(re.sub(r"\x00\d*\x00", " ", argument)).split(" ")
+    words = [w for w in words if re.search(r"[A-Za-z0-9Ͱ-Ͽἀ-῿]", w)]
+    paragraphs: list[str] = []
+    while words:
+        cut = next((k for k in range(250, len(words) - 60) if re.search(r"[a-z]{3}[.?!]$", words[k - 1])), None)
+        if cut is None:
+            cut = len(words)
+        paragraphs.append(" ".join(words[:cut]))
+        words = words[cut:]
+    for n, p in enumerate(paragraphs, start=1):
+        rows.append({"ref": f"Comm. Gen. arg.{n}", "kind": "argument", "chapter": None, "section": n,
+                     "text": p, "co_col": None})
+
+    for idx, h in enumerate(headings):
+        chapter = idx + 1
+        end = headings[idx + 1].start() if idx + 1 < len(headings) else len(full)
+        body = full[h.end():end]
+        markers = list(_MARKER_RE.finditer(body))
+        # Chapter text: markers counting up; the comments start at the first
+        # line-start marker that doesn't continue that count.
+        last = 0
+        comment_start = None
+        verse_markers = []  # only markers that continue the count: a stray
+                            # number inside a verse is just text
+        for m in markers:
+            n = int(m.group(1))
+            at_line_start = m.start() == 0 or body[m.start() - 1] == "\n"
+            if at_line_start and last and n <= last:
+                comment_start = m.start()
+                break
+            if n == last + 1 or (last and last < n <= last + 3):
+                last = n
+                verse_markers.append(m)
+        if comment_start is None:
+            warnings.append(f"chapter {chapter}: no start of the comments found")
+            comment_start = len(body)
+        text_part = body[:comment_start]
+        # A verse number read as the next one ("6" for 5 in 19:5, "43" for
+        # 42 in 30:42): the real next one follows in its text ("… 6. Et
+        # egressus est") -- the first is the verse missing before it.
+        for i in range(len(verse_markers) - 1, -1, -1):
+            n = int(verse_markers[i].group(1))
+            prev = int(verse_markers[i - 1].group(1)) if i else 0
+            v_end = verse_markers[i + 1].start() if i + 1 < len(verse_markers) else len(text_part)
+            again = re.compile(rf"(?<=[.!?:]\s){n}\.\s+(?=[A-Z])").search(text_part, verse_markers[i].end(), v_end)
+            if again and prev == n - 2:
+                verse_markers[i:i + 1] = [_VerseMarker(n - 1, verse_markers[i].start(), verse_markers[i].end()),
+                                          _VerseMarker(n, again.start(), again.end())]
+        # A verse without a number in print: where it starts, by hand.
+        for (ch, verse), opening in _LATIN_MISSING_VERSES.items():
+            if ch == chapter and verse not in {int(m.group(1)) for m in verse_markers}:
+                at = text_part.find(opening)
+                if at >= 0:
+                    verse_markers.append(_VerseMarker(verse, at, at))
+                    verse_markers.sort(key=lambda m: m.start())
+        # Verse numbers missing from the sequence, misread: see missing_verses().
+        for i in range(len(verse_markers) - 1, -1, -1):
+            n = int(verse_markers[i].group(1))
+            gap_end = verse_markers[i + 1].start() if i + 1 < len(verse_markers) else len(text_part)
+            upto = int(verse_markers[i + 1].group(1)) if i + 1 < len(verse_markers) else n + 2
+            for marker in reversed(missing_verses(text_part, verse_markers[i].end(), gap_end, n, upto)):
+                verse_markers.insert(i + 1, marker)
+        verses = verse_markers
+        for i, m in enumerate(verses):
+            verse = int(m.group(1))
+            v_end = verses[i + 1].start() if i + 1 < len(verses) else len(text_part)
+            vtext = one_line(re.sub(r"\x00\d*\x00", " ", text_part[m.end():v_end]))
+            if vtext:
+                rows.append({"ref": f"Comm. Gen. {chapter} tekst.{verse}", "kind": "scripture",
+                             "chapter": chapter, "section": verse, "text": vtext,
+                             "co_col": column_at(h.end() + m.start())})
+        comments = body[comment_start:]
+        # A comment starts at the beginning of a line -- or, where the OCR
+        # ran two lines together, after a sentence end: a word of six or
+        # more letters and a full stop ("recuperare liceat. 17. Et
+        # surrexit"; "liGeat" as the OCR read it), not an abbreviation
+        # ("Psal. 2.", "Matth. 5.").
+        starts = [m for m in _MARKER_RE.finditer(comments)
+                  if m.start() == 0 or comments[m.start() - 1] == "\n"
+                  or (re.search(r"(?:[a-z][A-Za-z]{5}[.!?](?:\s*\.)?|[a-z]{3}\.\s*\.)\s+$",
+                                comments[max(0, m.start() - 14):m.start()])
+                      and re.match(r"[A-Z][a-z]+ [a-z]", comments[m.end():m.end() + 20]))]
+        verse_texts = {int(v.group(1)): text_part[v.end():(verses[k + 1].start() if k + 1 < len(verses)
+                                                           else len(text_part))]
+                       for k, v in enumerate(verses)}
+        kept = comment_starts(starts, comments, last, verse_texts)
+        seen: dict[int, int] = {}
+        for i, (m, verse) in enumerate(kept):
+            c_end = kept[i + 1][0].start() if i + 1 < len(kept) else len(comments)
+            ctext = one_line(re.sub(r"\x00\d*\x00", " ", comments[m.start():c_end]))
+            # the number as printed, where the OCR misread it ("1." for "7.")
+            ctext = re.sub(r"^\d{1,2}", str(verse), ctext, count=1)
+            seen[verse] = seen.get(verse, 0) + 1
+            suffix = "" if seen[verse] == 1 else chr(ord("a") + seen[verse] - 1)
+            rows.append({"ref": f"Comm. Gen. {chapter}:{verse}{suffix}", "kind": "commentary",
+                         "chapter": chapter, "section": verse, "text": ctext,
+                         "co_col": column_at(h.end() + comment_start + m.start())})
+        if last == 0:
+            warnings.append(f"chapter {chapter}: no verse numbers in the chapter text")
+    return rows, warnings
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--pdf", type=Path, default=RAW / "co23_cr51.pdf")
+    ap.add_argument("--ocr-dir", type=Path, default=RAW / "ocr")
+    ap.add_argument("--script-ocr-dir", type=Path, default=RAW / "ocr_script",
+                    help="the lat+grc+heb pass (ocr_pdf_pages.py --lang lat+grc+heb); "
+                         "skipped if the directory doesn't exist")
+    ap.add_argument("--hebrew-forms", type=Path, default=None,
+                    help="consonantal Hebrew word forms, one per line, instead of reading them "
+                         "from hebrew_words / strongs_entries")
+    ap.add_argument("--vocab", type=Path, default=None)
+    ap.add_argument("-o", "--output", type=Path)
+    ap.add_argument("--dry-run", action="store_true")
+    args = ap.parse_args()
+
+    vocab = {strip_accents(w) for w in load_vocab(args.vocab)}
+    pdf = pymupdf.open(args.pdf)
+    script_dir = args.script_ocr_dir if args.script_ocr_dir.exists() else None
+    hebrew_forms = load_hebrew_forms(args.hebrew_forms) if script_dir else set()
+    pieces, columns = [], []
+    all_notes: list[str | None] = []
+    note_mismatch: list[str] = []
+    for page in range(FIRST_PAGE, LAST_PAGE + 1):
+        text, column, page_notes = page_text(pdf, args.ocr_dir, page, vocab, script_dir, hebrew_forms)
+        text, n_calls = mark_note_calls(text, len(all_notes))
+        # Calls and notes are paired in page order; the OCR sometimes misses
+        # one of either -- surplus calls get no note (dropped from the text
+        # anyway), surplus notes are reported.
+        all_notes.extend(page_notes[:n_calls] + [None] * max(0, n_calls - len(page_notes)))
+        if len(page_notes) != n_calls:
+            note_mismatch.append(f"p{page}: {n_calls} calls / {len(page_notes)} notes")
+        columns.append((page, column))
+        pieces.append(f"\x00{column if column is not None else ''}\x00\n{text}")
+    full = clean_word_accents(dehyphenate("\n".join(pieces)))
+    full, corrections = correct_words(full, vocab)
+    all_notes = [correct_words(n, vocab, freq_text=full)[0] if n else n for n in all_notes]
+    print(f"[fix]   {corrections} words corrected by known OCR confusions")
+    full, n_s = fix_s_read_as_8(full, load_latin_lexicon(vocab))
+    print(f"[fix]   {n_s} times s read as 8")
+    full, n_heads = _INLINE_HEAD_RE.subn(" ", full)
+    print(f"[fix]   {n_heads} running heads inside the text dropped")
+
+    rows, warnings = parse(full, columns)
+    # Hebrew / Greek (and the words around them) as read on the scan, where
+    # both OCRs failed ("quin ^ p- pn sit Tigris" -> "quin חידקל sit Tigris")
+    readings_file = Path(__file__).with_name("co23_scan_readings.json")
+    if readings_file.exists():
+        by_ref = {r["ref"]: r for r in rows}
+        n_read = 0
+        for fix in json.loads(readings_file.read_text(encoding="utf-8")):
+            # ("Comm. Gen. arg": any piece of the Argumentum, whose division
+            # into pieces is ours)
+            r = by_ref.get(fix["ref"]) or next(
+                (x for x in rows if x["ref"].startswith(fix["ref"] + ".") and fix["ocr"] in x["text"]), None)
+            # (footnote calls -- placeholders -- inside the stretch are kept,
+            # before the reading)
+            pattern = "[-]?".join(re.escape(c) for c in fix["ocr"])
+            m = re.search(pattern, r["text"]) if r is not None else None
+            if m is None:
+                warnings.append(f"scan reading not applied ({fix['ref']}: {fix['ocr']!r})")
+                continue
+            calls = "".join(re.findall("[-]", m.group()))
+            r["text"] = r["text"][:m.start()] + calls + fix["scan"] + r["text"][m.end():]
+            n_read += 1
+        print(f"[scan]  {n_read} readings from the scan applied")
+    # Footnote placeholders -> annotations at their position in the text.
+    n_notes = 0
+    for r in rows:
+        notes, pieces_out, pos = [], [], 0
+        for part in re.split(r"(\s?[\uE000-\uF8FF])", r["text"]):
+            m = re.fullmatch(r"\s?([\uE000-\uF8FF])", part)
+            if m:
+                note = all_notes[ord(m.group(1)) - _NOTE_BASE] if ord(m.group(1)) - _NOTE_BASE < len(all_notes) else None
+                if note:
+                    notes.append({"pos": pos, "glyph": chr(ord("a") + len(notes) % 26), "note": note})
+                continue
+            pieces_out.append(part)
+            pos += len(part)
+        r["text"] = "".join(pieces_out)
+        r["notes"] = notes
+        n_notes += len(notes)
+    print(f"[notes] {n_notes} editorial footnotes attached; {len(note_mismatch)} pages where calls and "
+          f"notes didn't pair up ({', '.join(note_mismatch[:8])}{' ...' if len(note_mismatch) > 8 else ''})")
+    rows = repair_misplaced_text(rows, warnings)
+    rows = split_first_comment(rows)
+    for seq, r in enumerate(rows, start=1):
+        r["seq"] = seq
+    for w in warnings:
+        print(f"[warn]  {w}")
+    by_kind = {k: sum(1 for r in rows if r["kind"] == k) for k in ("argument", "scripture", "commentary")}
+    all_text = " ".join(r["text"] for r in rows)
+    print(f"[ok]    {len(rows)} segments {by_kind}; {len(all_text.split())} words; "
+          f"unknown-word rate {100 * unknown_rate(all_text, vocab):.1f}%")
+
+    if args.dry_run:
+        return 0
+    if args.output is None:
+        ap.error("-o/--output is required unless --dry-run")
+    with args.output.open("w", encoding="utf-8") as fh:
+        for r in rows:
+            fh.write(json.dumps(r, ensure_ascii=False) + "\n")
+    print(f"[ok]    wrote {args.output}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

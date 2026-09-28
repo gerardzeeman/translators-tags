@@ -105,6 +105,18 @@
                 </div>
             </div>
 
+            {# Commentaren (Calvijn) -- zelfde opzet als Belijdenisgeschriften hierboven;
+               alleen voor wie ze mag zien (security.yaml: ^/commentaren = ROLE_VIEWER). #}
+            {% if is_granted('ROLE_VIEWER') %}
+            <div class="nav-sep"></div>
+            <div class="nav-dropdown">
+                <a href="{{ path('app_commentary_index') }}" class="nav-book-btn">Commentaren ▾</a>
+                <div class="nav-dropdown-menu">
+                    <a href="{{ path('app_commentary_toc', {boek: 'genesis'}) }}">Calvijn – Genesis</a>
+                </div>
+            </div>
+            {% endif %}
+
             <div class="nav-sep"></div>
             <a href="{{ path('app_blog_index') }}" class="nav-book-btn">Blog</a>
 

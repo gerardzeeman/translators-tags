@@ -29,6 +29,12 @@ export default class extends Controller {
         const link = event.target.closest('[data-turbo-frame="institutio-verse-panel"]')
         if (!link) return
 
+        // Op de commentaarpagina's staat ook het Strong's-paneel
+        // (strongs_panel_controller.js) op dezelfde plek: dat gaat dicht.
+        this.element.querySelectorAll('.strongs-sidebar.is-open')
+            .forEach(el => el.classList.remove('is-open'))
+        this.element.classList.remove('strongs-open')
+
         this.sidebarTarget.classList.add('is-open')
         this.element.classList.add('verse-panel-open')
     }

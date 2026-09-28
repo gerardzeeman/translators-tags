@@ -1,0 +1,9 @@
+{# The Dutch translation of a commentary segment, as paragraphs of parts
+   (CommentaryController::dutchParagraphs): plain text, and the translator's
+   misprints -- the intended word shown, marked, with a hover popup saying
+   what was printed and why (the note names the printed form itself); and
+   the Hebrew/Greek words with a Strong's entry, with the Latin text's word
+   popup. #}
+{% macro dutch(paras) %}{% import 'institutio/_macros.html.twig' as m %}{% for parts in paras %}<p class="commentary-nl-para">{% for part in parts %}{%- if part.type == 'word' -%}{{ m.word_hover(part.content, null, null, false, null, part.strongs) }}{%- elseif part.type == 'correction' -%}
+<span class="commentary-correction" tabindex="0">{{ part.content }}<span class="institutio-note-popup"><span class="institutio-note-popup-kind">Drukfout bij Los</span>{{ part.note }}</span></span>
+{%- else -%}{{ part.content }}{%- endif -%}{% endfor %}</p>{% endfor %}{% endmacro %}

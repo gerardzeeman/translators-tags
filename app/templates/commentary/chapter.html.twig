@@ -1,0 +1,78 @@
+{% extends 'base.html.twig' %}
+{% import 'confession/_macros.html.twig' as c %}
+{% block title %}{{ meta.title }} {{ chapter }} – Bijbel Vergelijking{% endblock %}
+
+{% import 'commentary/_macros.html.twig' as cm %}
+
+{% block nav_center %}{% endblock %}
+
+{% block body %}
+<div class="page-institutio" data-controller="verse-panel strongs-panel">
+
+    <nav class="chapter-nav" aria-label="Commentaar navigatie">
+        <a href="{{ path('app_commentary_toc', {boek: boek}) }}" class="chapter-nav-book">{{ meta.title }}</a>
+        <span class="chapter-nav-sep">›</span>
+        <span class="chapter-nav-current">Hoofdstuk {{ chapter }}</span>
+        <div class="chapter-nav-arrows">
+            {% if nav.prev %}<a href="{{ path('app_commentary_chapter', {boek: boek, chapter: nav.prev}) }}" class="nav-btn" title="Vorig hoofdstuk">‹</a>{% endif %}
+            {% if nav.next %}<a href="{{ path('app_commentary_chapter', {boek: boek, chapter: nav.next}) }}" class="nav-btn" title="Volgend hoofdstuk">›</a>{% endif %}
+        </div>
+    </nav>
+
+    <div class="institutio-heading institutio-heading-solo">{{ meta.book_nl }} {{ chapter }}</div>
+
+    {% if scripture %}
+    <h2 class="commentary-part-heading">Tekst</h2>
+    <p class="commentary-part-hint">Calvijns eigen Latijnse weergave van het hoofdstuk, Los' vertaling daarvan (1900), en de Statenvertaling.</p>
+    <div class="commentary-verses">
+        <div class="commentary-verse-row commentary-verse-head" aria-hidden="true">
+            <span></span>
+            <span class="institutio-layer-label">Calvijn (Latijn)</span>
+            <span class="institutio-layer-label">Los (1900)</span>
+            <span class="institutio-layer-label">Statenvertaling (Jongbloed)</span>
+        </div>
+        {% for s in scripture %}
+        <div class="commentary-verse-row" id="tekst-{{ s.section }}">
+            <a href="{{ path('app_confession_verse', {r: meta.usfm ~ '.' ~ chapter ~ '.' ~ s.section ~ '-' ~ s.section}) }}"
+               data-turbo-frame="institutio-verse-panel" class="commentary-verse-num" title="Bekijk Bijbeltekst">{{ s.section }}</a>
+            <p class="institutio-sentence-la">{{ c.la_parts(s.parts) }}</p>
+            <p class="institutio-sentence-nl commentary-verse-los">{{ s.text_nl ?? '' }}</p>
+            <p class="institutio-sentence-nl commentary-verse-sv">{{ verses[s.section] ?? '' }}</p>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <h2 class="commentary-part-heading">Commentaar</h2>
+    <div class="institutio-sections">
+        {% for s in comments %}
+        <div class="institutio-section" id="v{{ s.section }}">
+            <a href="{{ path('app_confession_verse', {r: meta.usfm ~ '.' ~ chapter ~ '.' ~ s.section ~ '-' ~ s.section}) }}"
+               data-turbo-frame="institutio-verse-panel" class="institutio-section-num commentary-verse-link" title="Bekijk {{ meta.book_nl }} {{ chapter }}:{{ s.section }}">{{ s.section }}</a>
+            <div class="institutio-sentence-group">
+                <div class="institutio-sentence-row">
+                    <div class="institutio-sentence-la">
+                        {{ c.la_parts(s.parts) }}
+                        {% if s.print_ref %}<span class="commentary-print-ref">{{ s.print_ref }}</span>{% endif %}
+                    </div>
+                    <div class="institutio-sentence-nl">
+                        {% if s.text_nl %}
+                        <span class="institutio-layer-label">Nederlands (Los, 1900)</span>
+                        {{ cm.dutch(s.nl_paras) }}
+                        {% else %}
+                        <span class="commentary-nl-missing">Geen afzonderlijke Nederlandse tekst: deze staat bij het vorige vers.</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <p class="no-verse">Geen commentaar bij dit hoofdstuk.</p>
+        {% endfor %}
+    </div>
+
+    {% include 'confession/_verse_sidebar.html.twig' %}
+    {% include 'commentary/_strongs_sidebar.html.twig' %}
+
+</div>
+{% endblock %}

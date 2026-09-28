@@ -1,0 +1,15 @@
+{# Strong's zijpaneel (desktop) / bottom sheet (mobiel) voor de Hebreeuwse en
+   Griekse woorden die Calvijn aanhaalt -- zelfde paneel als bij de
+   Bijbeltekst (bible/chapter_view.html.twig), gevuld via Turbo vanuit de
+   Strong's-link in de woordpopup. Vereist data-controller="strongs-panel"
+   op het omringende .page-institutio. #}
+<aside class="strongs-sidebar" data-strongs-panel-target="sidebar">
+    <div class="strongs-sidebar-header">
+        <span class="strongs-sidebar-title" data-strongs-panel-target="title">Lexicon</span>
+        <button class="strongs-sidebar-close" type="button"
+                data-action="click->strongs-panel#close" aria-label="Sluiten">×</button>
+    </div>
+    <turbo-frame id="strongs-panel">
+        <p class="strongs-placeholder">Klik op een Strong's nummer om details te zien.</p>
+    </turbo-frame>
+</aside>

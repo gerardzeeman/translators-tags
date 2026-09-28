@@ -128,7 +128,7 @@ class ConfessionRepository
         }
 
         $rows = $this->connection->fetchAllAssociative(
-            'SELECT id, ref, section, kind, heading, text_la
+            'SELECT id, ref, section, kind, heading, print_ref, text_la
              FROM segment
              WHERE work_id = :work_id AND chapter = :chapter
              ORDER BY seq',
@@ -197,6 +197,60 @@ class ConfessionRepository
     }
 
     /**
+     * The first meaning of a Strong's entry, for a word popup: the first
+     * numbered sense of the definition ("1) to create, shape, form") that
+     * says more than a grammatical label ("1) (plural)" -> "1a) rulers,
+     * judges"), else the short definition (the Greek entries have no
+     * numbered senses: "previously").
+     */
+    public static function firstMeaning(?string $definition, ?string $shortDef): ?string
+    {
+        $clean = fn(string $s): string => trim((string) preg_replace('/^(\s*\([^)]*\))+\s*/', '', trim($s)));
+        foreach (preg_split('/\R/', (string) $definition) as $line) {
+            if (preg_match('/^\d+[a-z0-9]*\)\s*(.*)$/', trim($line), $m) && ($meaning = $clean($m[1])) !== '') {
+                break;
+            }
+            $meaning = null;
+        }
+        $meaning ??= $shortDef !== null && $clean($shortDef) !== '' ? $clean($shortDef) : null;
+        if ($meaning !== null && mb_strlen($meaning) > 80) {
+            $meaning = preg_replace('/\s+\S*$/u', '', mb_substr($meaning, 0, 80)) . '…';
+        }
+        return $meaning;
+    }
+
+    /**
+     * The Strong's entries of the Hebrew/Greek words quoted in one chapter
+     * of a work (0: the chapterless Argumentum), by the word as printed --
+     * for the untokenized Dutch translation, which marks them itself
+     * (CommentaryController::dutchParagraphs). See work_word_strongs.
+     *
+     * @return array<string, array{id: string, transliteration: ?string, meaning: ?string}>
+     */
+    public function getWorkWordStrongs(string $workSlug, int $chapter): array
+    {
+        $rows = $this->connection->fetchAllAssociative(
+            'SELECT ws.surface, se.strongs_id, se.transliteration, se.definition, se.definition_nl,
+                    se.short_def, se.short_def_nl
+             FROM work_word_strongs ws
+             JOIN work w ON w.id = ws.work_id
+             JOIN strongs_entries se ON se.strongs_id = ws.strongs_id
+             WHERE w.slug = ? AND ws.chapter = ?',
+            [$workSlug, $chapter]
+        );
+        $bySurface = [];
+        foreach ($rows as $r) {
+            $bySurface[$r['surface']] = [
+                'id'              => $r['strongs_id'],
+                'transliteration' => $r['transliteration'],
+                'meaning'         => self::firstMeaning($r['definition_nl'] ?: $r['definition'],
+                                                        $r['short_def_nl'] ?: $r['short_def']),
+            ];
+        }
+        return $bySurface;
+    }
+
+    /**
      * @param array<int, array<string, mixed>> $rows each with at least 'id', 'text_la'
      * @return array<int, array<string, mixed>> same rows, with a 'tokens' key added
      */
@@ -204,9 +258,17 @@ class ConfessionRepository
     {
         $segmentIds = array_map(fn($r) => (int) $r['id'], $rows);
         $tokenRows = $this->connection->fetchAllAssociative(
-            'SELECT t.segment_id, t.char_start, t.char_end, t.lemma, lg.gloss_nl, lg.number
+            // A Hebrew/Greek word Calvin quotes gets its Strong's entry
+            // instead (work_word_strongs, link_commentary_strongs.py).
+            'SELECT t.segment_id, t.char_start, t.char_end, t.lemma, lg.gloss_nl, lg.number,
+                    se.strongs_id, se.transliteration, se.definition, se.definition_nl,
+                    se.short_def, se.short_def_nl
              FROM token t
+             JOIN segment s ON s.id = t.segment_id
              LEFT JOIN lemma_gloss lg ON lg.lemma = t.lemma
+             LEFT JOIN work_word_strongs ws
+                    ON ws.work_id = s.work_id AND ws.chapter = COALESCE(s.chapter, 0) AND ws.surface = t.surface
+             LEFT JOIN strongs_entries se ON se.strongs_id = ws.strongs_id
              WHERE t.segment_id IN (' . implode(',', array_fill(0, count($segmentIds), '?')) . ')
                AND t.is_word
              ORDER BY t.segment_id, t.char_start',
@@ -221,6 +283,12 @@ class ConfessionRepository
                 'lemma'      => $t['lemma'],
                 'gloss'      => $t['gloss_nl'],
                 'number'     => $t['number'] !== null ? (int) $t['number'] : null,
+                'strongs'    => $t['strongs_id'] === null ? null : [
+                    'id'              => $t['strongs_id'],
+                    'transliteration' => $t['transliteration'],
+                    'meaning'         => self::firstMeaning(
+                        $t['definition_nl'] ?: $t['definition'], $t['short_def_nl'] ?: $t['short_def']),
+                ],
             ];
         }
 
@@ -292,6 +360,7 @@ class ConfessionRepository
                 'section'               => (int) $r['section'],
                 'kind'                  => $r['kind'],
                 'heading'               => $r['heading'],
+                'print_ref'             => $r['print_ref'] ?? null,
                 'text_la'               => $r['text_la'],
                 'tokens'                => $tokensBySegment[(int) $r['id']] ?? [],
                 'translations'          => $translationsBySegment[(int) $r['id']] ?? [],
@@ -437,6 +506,96 @@ class ConfessionRepository
     }
 
     /**
+     * Annotations (segment_annotation) per segment -- for the commentaries,
+     * the edition's own footnotes, anchored at their call's position.
+     * @param int[] $segmentIds
+     * @return array<int, array<int, array{char_position: int, glyph: string, kind: string, note: string}>>
+     */
+    public function getSegmentAnnotations(array $segmentIds): array
+    {
+        if (!$segmentIds) {
+            return [];
+        }
+        $rows = $this->connection->fetchAllAssociative(
+            'SELECT segment_id, char_position, glyph, kind, note FROM segment_annotation
+             WHERE segment_id IN (' . implode(',', array_fill(0, count($segmentIds), '?')) . ')
+             ORDER BY segment_id, char_position',
+            $segmentIds
+        );
+        $bySegment = [];
+        foreach ($rows as $r) {
+            $bySegment[(int) $r['segment_id']][] = [
+                'char_position' => (int) $r['char_position'], 'glyph' => $r['glyph'],
+                'kind' => $r['kind'], 'note' => $r['note'],
+            ];
+        }
+        return $bySegment;
+    }
+
+    /**
+     * Zero-width {type: 'note', kind, glyph, note} parts inserted into a
+     * text's parts (splitTextIntoWordParts() output, covering the text
+     * contiguously) at each annotation's character position. A plain-text
+     * part is split at the position; a word part never is (a footnote call
+     * follows a word, never the middle of one).
+     * @param array<int, array{type: string, content: string}> $parts
+     * @param array<int, array{char_position: int, glyph: string, kind: string, note: string}> $annotations
+     */
+    public function insertNoteParts(array $parts, array $annotations): array
+    {
+        if (!$annotations) {
+            return $parts;
+        }
+        $out = [];
+        $offset = 0;
+        $k = 0;
+        $n = count($annotations);
+        foreach ($parts as $part) {
+            $len = mb_strlen($part['content']);
+            while ($k < $n && $annotations[$k]['char_position'] <= $offset) {
+                $out[] = ['type' => 'note'] + $annotations[$k];
+                $k++;
+            }
+            while ($k < $n && $part['type'] === 'text'
+                   && $annotations[$k]['char_position'] < $offset + $len) {
+                $cut = $annotations[$k]['char_position'] - $offset;
+                $out[] = ['type' => 'text', 'content' => mb_substr($part['content'], 0, $cut)];
+                $out[] = ['type' => 'note'] + $annotations[$k];
+                $part['content'] = mb_substr($part['content'], $cut);
+                $offset += $cut;
+                $len -= $cut;
+                $k++;
+            }
+            $out[] = $part;
+            $offset += $len;
+        }
+        for (; $k < $n; $k++) {
+            $out[] = ['type' => 'note'] + $annotations[$k];
+        }
+        return $out;
+    }
+
+    /**
+     * All verses of one Bible chapter in the given translation, verse =>
+     * text -- for the commentary pages, which show the Dutch Bible verse next
+     * to Calvin's own Latin rendering of it.
+     * @return array<int, string>
+     */
+    public function getChapterVerses(string $usfm, int $chapter, string $translationCode): array
+    {
+        $rows = $this->connection->fetchAllKeyValue(
+            'SELECT tv.verse, tv.verse_text
+             FROM translation_verses tv
+             JOIN translations t ON t.id = tv.translation_id
+             JOIN books b ON b.id = tv.book_id
+             WHERE t.code = :code AND b.usfm_code = :usfm AND tv.chapter = :chapter
+             ORDER BY tv.verse',
+            ['code' => $translationCode, 'usfm' => $usfm, 'chapter' => $chapter]
+        );
+        return array_combine(array_map('intval', array_keys($rows)), array_values($rows));
+    }
+
+    /**
      * Verse text for a list of references (from ScriptureReferenceFinder --
      * the clickable Bible references inline in the confession texts), in the
      * given Bible translation, for the verse side panel. A reference without
@@ -566,6 +725,7 @@ class ConfessionRepository
                 'lemma'   => $tok['lemma'],
                 'gloss'   => $tok['gloss'],
                 'number'  => $tok['number'] ?? null,
+                'strongs' => $tok['strongs'] ?? null,
             ];
             $cursor = $end;
         }

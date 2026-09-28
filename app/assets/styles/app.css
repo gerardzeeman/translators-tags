@@ -5336,3 +5336,97 @@ a:hover { text-decoration: underline; }
     .hist-align-chapter-card-actions { display: flex; gap: .5rem; }
     .hist-align-chapter-card-actions .btn { flex: 1; text-align: center; }
 }
+
+/* ── Commentaren van Calvijn (/commentaren) ─────────────────────────────────── */
+.commentary-part-heading {
+    font-family: var(--font-ui);
+    font-size: .78rem;
+    font-weight: 600;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--col-label);
+    margin: 2rem 0 .3rem;
+}
+.commentary-part-hint {
+    font-family: var(--font-ui);
+    font-size: .82rem;
+    color: var(--col-label);
+    margin: 0 0 1rem;
+}
+.commentary-verses {
+    display: flex;
+    flex-direction: column;
+    gap: .55rem;
+}
+.commentary-verse-row {
+    display: grid;
+    grid-template-columns: 2rem 1.1fr 1fr 1fr;  /* nr | Latijn | Los | SV */
+    gap: 1.2rem;
+    align-items: baseline;
+}
+.commentary-verse-row p { margin: 0; }
+.commentary-verse-num,
+.commentary-verse-link {
+    font-family: var(--font-ui);
+    font-size: .8rem;
+    color: var(--color-accent-2);
+    text-decoration: none;
+}
+.commentary-verse-num:hover,
+.commentary-verse-link:hover { text-decoration: underline; }
+.commentary-print-ref {
+    display: block;
+    margin-top: .4rem;
+    font-family: var(--font-ui);
+    font-size: .72rem;
+    color: var(--col-label);
+}
+.commentary-nl-para { margin: 0 0 .6rem; }
+.commentary-nl-para:last-child { margin-bottom: 0; }
+/* A misprint of the translator's, shown corrected: marked, the printed form
+   and the reason in the popup (same popup as the edition's notes). */
+.commentary-correction {
+    position: relative;
+    cursor: help;
+    outline: none;
+    background: color-mix(in srgb, var(--gold) 22%, transparent);
+    border-bottom: 1px dashed var(--gold);
+    border-radius: 2px;
+    padding: 0 .1em;
+}
+.commentary-correction:hover .institutio-note-popup,
+.commentary-correction:focus .institutio-note-popup {
+    display: block;
+}
+.commentary-nl-missing {
+    font-family: var(--font-ui);
+    font-size: .82rem;
+    font-style: italic;
+    color: var(--col-label);
+}
+.commentary-source-note {
+    max-width: 40rem;
+    margin: 2rem auto 0;
+    font-family: var(--font-ui);
+    font-size: .82rem;
+    color: var(--col-label);
+    text-align: center;
+}
+.commentary-verse-head .institutio-layer-label { margin: 0; }
+@media (max-width: 720px) {
+    .commentary-verse-row { grid-template-columns: 1.6rem 1fr; }
+    .commentary-verse-row .institutio-sentence-nl { grid-column: 2; }
+    /* stacked: the column heads above each text instead */
+    .commentary-verse-head { display: none; }
+    .commentary-verse-los::before,
+    .commentary-verse-sv::before {
+        display: block;
+        font-family: var(--font-ui);
+        font-size: .65rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        color: var(--col-label);
+    }
+    .commentary-verse-los::before { content: "Los (1900)"; }
+    .commentary-verse-sv::before { content: "Statenvertaling"; }
+}
