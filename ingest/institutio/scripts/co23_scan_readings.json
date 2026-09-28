@@ -20,7 +20,7 @@
 "scan": "μικρόκοσμος"
 },
 {
-"ref": "Comm. Gen. 2:5",
+"ref": "Comm. Gen. 2:7",
 "ocr": "viventem. WBi accipio",
 "scan": "viventem. נפש accipio"
 },
@@ -458,5 +458,10 @@
 "ref": "Comm. Gen. arg",
 "ocr": "Apostolus apostolus vocat vd uw ix pasvop vtov. φαινομένων βλεπόμενα., (Ab. 11, 3) ae sidicas",
 "scan": "Apostolus saecula vocat τὰ μὴ ἐκ φαινομένων βλεπόμενα, (Heb. 11, 3) ac si dicas"
+},
+{
+"ref": "Comm. Gen. 2:5",
+"ocr": "in eius manu. . sumptum e terra fuisse eius corpus.",
+"scan": "in eius manu."
 }
 ]

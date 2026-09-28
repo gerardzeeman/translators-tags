@@ -1159,6 +1159,15 @@ def assign_comments(text: str, la_comments: list[dict], chapter: int,
     return result
 
 
+def typeset(text: str) -> str:
+    """Punctuation as it is set today: no space before ; : ? ! (the 1900
+    print has a thin space there, which the OCR reads as a full one, "Inte-
+    gendeel ;"), and no stray apostrophe after a closing quote ("„ordenen”’"
+    -- a speck read after the quote)."""
+    text = re.sub(r"(?<=[\w”’)\]])[ \t]+([;:?!])", r"\1", text)
+    return text.replace("”’", "”")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--raw-dir", type=Path, default=RAW)
@@ -1385,6 +1394,9 @@ def main() -> int:
                 rows.append({"ref": r["ref"], "layer": LAYER, "text": dutch, "model": MODEL})
             else:
                 warnings.append(f"{r['ref']}: no Dutch comment matched")
+
+    for r in rows:
+        r["text"] = typeset(r["text"])
 
     for w in warnings:
         print(f"[warn]  {w}")

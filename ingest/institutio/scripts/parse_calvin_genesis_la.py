@@ -623,7 +623,28 @@ def repair_misplaced_text(rows: list[dict], warnings: list[str]) -> list[dict]:
     return rows
 
 
-def comment_starts(starts: list[re.Match], comments: str, last_verse: int) -> list[re.Match]:
+def lemma_verse(lemma_start: str, verse_texts: dict[int, str], read: int) -> int:
+    """The verse a comment's lemma quotes: the number as read, unless the
+    lemma's words are clearly those of another verse of Calvin's own text
+    of the chapter -- "1. Formaverat autem Deus hominem" is verse 7, its
+    7 read as 1."""
+    lemma = re.split(r"[.?!:]", lemma_start, maxsplit=1)[0]
+    words = [w.lower() for w in re.findall(r"[A-Za-z]{3,}", lemma)][:8]
+    if len(words) < 2 or not verse_texts:
+        return read
+
+    def share(v: int) -> float:
+        vocab = {w.lower() for w in re.findall(r"[A-Za-z]{3,}", verse_texts.get(v, ""))}
+        return sum(w in vocab for w in words) / len(words)
+
+    if share(read) >= 0.5:
+        return read
+    best = max(verse_texts, key=share)
+    return best if share(best) >= 0.75 else read
+
+
+def comment_starts(starts: list[re.Match], comments: str, last_verse: int,
+                   verse_texts: dict[int, str] | None = None) -> list[tuple[re.Match, int]]:
     """The line-start verse numbers that really open a comment: the best
     non-decreasing sequence of them (a comment's lemma follows the number:
     "7. Et vocavit" weighs more than a reference that happens to start a
@@ -636,21 +657,34 @@ def comment_starts(starts: list[re.Match], comments: str, last_verse: int) -> li
         if re.match(r"[A-Z„\"“‘'(]", after):
             return 1.0   # a lemma
         return 0.4
-    cands = [(int(m.group(1)), m, weight(m)) for m in starts if int(m.group(1)) <= max(last_verse, 1) + 5]
+    # Each start as read, and -- a little less weight -- as the verse its
+    # lemma quotes where that differs (lemma_verse): the latter only wins
+    # where the number as read breaks the order ("1. Formaverat" after 5).
+    # Calvin's printed number otherwise stands, also where it differs from
+    # his own verse numbering on purpose.
+    cands = []
+    for m in starts:
+        read = int(m.group(1))
+        if read > max(last_verse, 1) + 5:
+            continue
+        cands.append((read, m, weight(m)))
+        quoted = lemma_verse(comments[m.end():m.end() + 120], verse_texts or {}, read)
+        if quoted != read:
+            cands.append((quoted, m, weight(m) * 0.8))
     best: list[float] = []
     prev: list[int | None] = []
-    for i, (n, _, w) in enumerate(cands):
+    for i, (n, m_i, w) in enumerate(cands):
         best.append(w)
         prev.append(None)
         for j in range(i):
-            if cands[j][0] <= n and best[j] + w > best[i]:
+            if cands[j][1].start() < m_i.start() and cands[j][0] <= n and best[j] + w > best[i]:
                 best[i], prev[i] = best[j] + w, j
     if not cands:
         return []
     i = max(range(len(cands)), key=lambda k: best[k])
     chain = []
     while i is not None:
-        chain.append(cands[i][1])
+        chain.append((cands[i][1], cands[i][0]))
         i = prev[i]
     return chain[::-1]
 
@@ -736,12 +770,16 @@ def parse(full: str, columns: list[tuple[int, int | None]]) -> tuple[list[dict],
                   or (re.search(r"(?:[a-z][A-Za-z]{5}[.!?](?:\s*\.)?|[a-z]{3}\.\s*\.)\s+$",
                                 comments[max(0, m.start() - 14):m.start()])
                       and re.match(r"[A-Z][a-z]+ [a-z]", comments[m.end():m.end() + 20]))]
-        kept = comment_starts(starts, comments, last)
+        verse_texts = {int(v.group(1)): text_part[v.end():(verses[k + 1].start() if k + 1 < len(verses)
+                                                           else len(text_part))]
+                       for k, v in enumerate(verses)}
+        kept = comment_starts(starts, comments, last, verse_texts)
         seen: dict[int, int] = {}
-        for i, m in enumerate(kept):
-            verse = int(m.group(1))
-            c_end = kept[i + 1].start() if i + 1 < len(kept) else len(comments)
+        for i, (m, verse) in enumerate(kept):
+            c_end = kept[i + 1][0].start() if i + 1 < len(kept) else len(comments)
             ctext = one_line(re.sub(r"\x00\d*\x00", " ", comments[m.start():c_end]))
+            # the number as printed, where the OCR misread it ("1." for "7.")
+            ctext = re.sub(r"^\d{1,2}", str(verse), ctext, count=1)
             seen[verse] = seen.get(verse, 0) + 1
             suffix = "" if seen[verse] == 1 else chr(ord("a") + seen[verse] - 1)
             rows.append({"ref": f"Comm. Gen. {chapter}:{verse}{suffix}", "kind": "commentary",
