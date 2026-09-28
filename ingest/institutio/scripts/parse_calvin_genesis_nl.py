@@ -1168,6 +1168,112 @@ def typeset(text: str) -> str:
     return text.replace("”’", "”")
 
 
+def load_reference(pdf_path: Path) -> dict[int, str]:
+    """reformata.nl's transcription of Los's Genesis (J.K. Abbink, 2013),
+    per chapter. It has Los's page numbers in brackets ("[28]") and page
+    footers ("Pagina 4 van 1301"); both go, and words hyphenated over a line
+    are joined again."""
+    import pymupdf
+    text = "\n".join(page.get_text() for page in pymupdf.open(pdf_path))
+    text = re.sub(r"Pagina \d+ van \d+", " ", text)
+    text = re.sub(r"\[[IVXLC\d]+\]", " ", text)
+    text = re.sub(r"(\w)-\s*\n\s*(\w)", r"\1\2", text)
+    # Its quotes and apostrophes as Los's: ‘ordenen’ -> „ordenen”, 't -> ’t.
+    text = text.replace("'", "’").replace("‘", "„")
+    text = re.sub(r"(?<=[\w.,;:!?])’(?=[\s.,;:!?)]|$)", "”", text)
+    parts = re.split(r"\nGENESIS (\d+)\s*\n", text)
+    return {int(parts[i]): parts[i + 1] for i in range(1, len(parts) - 1, 2)}
+
+
+_REF_TOKEN_RE = re.compile(r"[A-Za-zÀ-ÿ’']+|[^\sA-Za-zÀ-ÿ’']")
+# Los's own spelling, which the reference writes otherwise ("des te").
+_REF_KEEP = {"deste"}
+_LATIN_END = re.compile(r"[A-Za-zÀ-ÿ]$")
+_DIVINE = {"hij", "hem", "zijn", "zijne", "zijnen", "zijns", "zijner", "zich", "zichzelven", "zelf", "gij", "u",
+           "uw", "uwe", "uwen", "die", "wien", "wiens", "welke", "wij", "ons", "onze"}
+
+
+def mirror_reference(text: str, reference: list[str], counts: dict[str, int], vocab: set[str],
+                     changes: list[tuple[str, str]]) -> str:
+    """Correct OCR errors in one Dutch comment from the reference text of
+    its chapter (tokens of load_reference()), aligned word for word.
+
+    Taken only where our word isn't a known word and the reference's is a
+    word of Los himself (in his volumes at least twice -- so never the
+    reference's modernised spelling, "mensen" for "menschen"):
+      - words glued or split by the OCR ("Voortsleert", "li chaam"), same
+        letters in both;
+      - one word misread, at most two letters off ("kfacht", "ilk");
+      - a capital mid-sentence ("of „Ordenen”").
+    "Known" allows for OCR errors the book makes often ("datde", "tn").
+    Accents are Los's (nòch, óntelbare -- checked on the scan), as are our
+    quotes and punctuation; Hebrew and misprint markers stay untouched."""
+    def n(w: str) -> int:
+        return counts.get(w.lower().strip("’'"), 0)
+
+    def los(w: str) -> bool:
+        return n(w) >= 2
+
+    def settled(ours: str, theirs: list[str]) -> bool:
+        # A word of the book -- unless it is an OCR error the book makes
+        # often ("datde" 7x, "tn" 7x), next to the reference's words that
+        # are far more common.
+        return ours.lower() in vocab or (n(ours) >= 3 and n(ours) * 20 >= min(n(w) for w in theirs))
+
+    def letters(ws: list[str]) -> str:
+        return "".join(ws).lower().replace("’", "").replace("'", "")
+
+    masked = [(m.start(), m.end()) for m in re.finditer(r"⟦[^⟧]*⟧", text)]
+    toks = [m for m in _REF_TOKEN_RE.finditer(text)
+            if not any(a <= m.start() < b for a, b in masked)]
+    sm = difflib.SequenceMatcher(a=[t.group().lower() for t in toks], b=[t.lower() for t in reference],
+                                 autojunk=False)
+    edits = []
+    for op, a1, a2, b1, b2 in sm.get_opcodes():
+        if op == "equal":
+            # A capital the OCR made of a speck or a quote ("„Ordenen”"
+            # mid-sentence): lower case, as in the reference. Not Los's
+            # capitals for God ("de Heere geeft het Zijnen"), which the
+            # reference drops, nor names; and only after a word of the book
+            # (not after junk that may have swallowed a full stop).
+            for k in range(a2 - a1):
+                t, theirs = toks[a1 + k], reference[b1 + k]
+                prev = next((p.group() for p in reversed(toks[:a1 + k]) if p.group() not in "„“”‘’\"'("), ".")
+                if (t.group()[:1].isupper() and theirs[:1].islower() and t.group()[1:].islower()
+                        and theirs not in _DIVINE and prev not in ".!?:" and settled(prev, [prev])
+                        and reference.count(theirs) > reference.count(t.group())):
+                    edits.append((t.start(), t.end(), theirs))
+                    changes.append((t.group(), theirs))
+            continue
+        if op != "replace":
+            continue
+        A, B = toks[a1:a2], reference[b1:b2]
+        aw = [t.group() for t in A if _LATIN_END.search(t.group())]      # (’t; not Hebrew)
+        if not aw or not all(_LATIN_END.search(t) for t in B):
+            continue
+        old = text[A[0].start():A[-1].end()]
+        if "\n" in old:
+            continue
+        if len(aw) != len(A) and len(B) != 1:
+            continue          # punctuation in between: only in a word split by specks ("won : derlijke")
+        if (letters(aw) == letters(B) and len(aw) != len(B) and all(los(w) for w in B)
+                and not all(settled(w, B) for w in aw) and letters(aw) not in _REF_KEEP):
+            new = " ".join(B).replace("'", "’")
+        elif (len(aw) == len(A) == len(B) == 1 and not settled(aw[0], B) and los(B[0])
+              and not re.search(r"[’']", aw[0] + B[0])
+              and _plain_letters(aw[0]).lower() != _plain_letters(B[0]).lower()
+              and _edit_distance(aw[0].lower(), B[0].lower()) <= 2):
+            new = B[0]
+        else:
+            continue
+        edits.append((A[0].start(), A[-1].end(), new))
+        changes.append((old, new))
+    edits.sort()
+    for start, end, new in reversed(edits):
+        text = text[:start] + new + text[end:]
+    return text
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--raw-dir", type=Path, default=RAW)
@@ -1190,6 +1296,9 @@ def main() -> int:
                     help="JSON [[chapter, verse, text], ...] of Genesis (SV) instead of reading it from the database")
     ap.add_argument("--ocr-changes", type=Path, default=None,
                     help="write the words corrected from our own OCR pass (page, old, new) here")
+    ap.add_argument("--reference", type=Path, default=RAW / "reformata_genesis.pdf",
+                    help="reformata.nl's transcription of Los's Genesis, to correct OCR errors from "
+                         "(mirror_reference); skipped if missing")
     ap.add_argument("-o", "--output", type=Path)
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
@@ -1397,6 +1506,22 @@ def main() -> int:
 
     for r in rows:
         r["text"] = typeset(r["text"])
+
+    if args.reference.exists():
+        reference = {ch: _REF_TOKEN_RE.findall(t) for ch, t in load_reference(args.reference).items()}
+        chapter_of = {r["ref"]: r["chapter"] for r in latin if r["kind"] == "commentary"}
+        vocab = load_dutch_vocab(args.dutch_vocab)
+        ref_changes: list[tuple[str, str]] = []
+        for r in rows:
+            if chapter_of.get(r["ref"]) in reference:
+                # twice: a correction can settle its neighbour ("Onr Een Sraf")
+                for _ in range(2):
+                    r["text"] = mirror_reference(r["text"], reference[chapter_of[r["ref"]]], counts, vocab,
+                                                 ref_changes)
+        print(f"[ref]   {len(ref_changes)} words corrected from the reformata.nl text")
+        if args.ocr_changes:
+            with args.ocr_changes.open("a", encoding="utf-8") as fh:
+                fh.writelines(f"ref\t{a}\t{b}\n" for a, b in ref_changes)
 
     for w in warnings:
         print(f"[warn]  {w}")

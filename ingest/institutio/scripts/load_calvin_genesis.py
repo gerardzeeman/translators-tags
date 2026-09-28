@@ -33,7 +33,8 @@ WORK_SOURCE = (
     "words, some OCR errors; Greek/Hebrew quotations garbled). Dutch: S.O. Los, "
     "Genesis. Uitlegging van Johannes Calvijn, Middelburg 1900 (public domain), "
     "archive.org OCR combined with a Tesseract re-OCR (full-resolution page scans "
-    "where the text quotes Hebrew), matched per comment."
+    "where the text quotes Hebrew), OCR errors corrected against the transcription "
+    "of Los's text on reformata.nl (J.K. Abbink, 2013), matched per comment."
 )
 LAYER = "los1900"
 
