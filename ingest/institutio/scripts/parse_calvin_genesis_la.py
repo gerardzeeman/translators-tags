@@ -51,8 +51,10 @@ tokens). Requires: pymupdf, psycopg (unless --vocab)
 from __future__ import annotations
 
 import argparse
+import collections
 import difflib
 import json
+import os
 import re
 import sys
 import unicodedata
@@ -529,6 +531,98 @@ def correct_words(text: str, vocab: set[str], freq_text: str | None = None) -> t
     return _WORD_RE.sub(fix, text), changes
 
 
+def load_latin_lexicon(vocab: set[str]) -> set[str]:
+    """The known-word list, widened with the word forms LatinCy knows
+    (its string table: "semel", "coelo", "filiam" -- the Institutio alone
+    lacks many), when the model is installed."""
+    try:
+        import spacy
+        nlp = spacy.load(os.environ.get("LATINCY_MODEL", "la_core_web_lg"), exclude=["ner", "parser", "tagger"])
+    except Exception:          # noqa: BLE001 -- no model: the vocabulary alone
+        return vocab
+    return vocab | {s.lower() for s in nlp.vocab.strings if re.fullmatch(r"[A-Za-zæœ]+", s)}
+
+
+# "s" read as "8" -- loose or glued, at either side of the rest of its word
+# ("satis fuisset 8 emel dici", "sump 8 it", "magi 8 fuerat", "numero8 um").
+# Not a number: after or before digits, in a reference ("Psalmus 20, 8
+# docet"); a verse number ("terra. 8 Et") has no word glued to it, and no
+# lower-case one after it.
+_S_AS_8_RE = re.compile(r"(?<![\d,.:])\b([A-Za-z]*)([ \n]?)8([ \n]?)([a-z]*)\b(?![ \n]?\d)")
+
+
+# Short words an s is welcome in ("Nam 8 i" -> si, "datam 8 uo" -> suo);
+# other short ones are rather a word of their own ("in 8", "Dei 8").
+_SHORT_S_WORDS = {"si", "se", "sed", "sic", "sua", "suo", "sui", "sum", "sit", "sin", "vis", "his", "eis", "nos",
+                  "vos", "tus", "ius", "sus", "hos", "eos", "quos", "quas"}
+
+
+def fix_s_read_as_8(text: str, lexicon: set[str]) -> tuple[str, int]:
+    freq = collections.Counter(w.lower() for w in _WORD_RE.findall(text))
+
+    def known(w: str) -> bool:
+        w = strip_accents(w.lower())
+        return w in lexicon or freq[w] >= 3 or any(
+            w.endswith(e) and w[:-len(e)] in lexicon for e in ("que", "ne", "ve"))
+
+    changes = 0
+
+    def fix(m: re.Match) -> str:
+        nonlocal changes
+        left, right = m.group(1), m.group(4)
+        if not (left or right) or re.search(r"[A-Z]", left[1:]):
+            return m.group()
+        # the readings, best first: one word through the s; the s ending the
+        # word before; the s opening the word after
+        # (the word the s goes into must be known -- its neighbour may be a
+        # rare one: "violavit 8 anctam" -- and not a word itself far more
+        # common without it: "Dei 8", "in 8", "et" -> "set")
+        def better(with_s: str, without: str) -> bool:
+            if not known(with_s) or (len(with_s) < 4 and with_s.lower() not in _SHORT_S_WORDS):
+                return False
+            if not without or not known(without) or len(without) >= 5:
+                return True     # ("philosophi 8" -> philosophis, "filii 8" -> filiis)
+            return freq[with_s.lower()] + 1 >= 0.3 * (freq[without.lower()] + 1)
+
+        if len(left) == 1 and left.isupper():
+            return m.group()            # "U 8 um": a letter misread as well
+        options = []            # (reading, the word the s went into)
+        if left and right:
+            # one word: a known one, or two short fragments ("obdure 8 cimus")
+            merged = left + "s" + right
+            if known(merged) or (not known(left) and not known(right) and len(left) < 7 and len(right) < 8):
+                options.append((merged, merged))
+        # (the s with one side only if the other is a word by itself -- known,
+        # or long enough to be a rare one: "violavit 8 anctam", "strepitu 8
+        # foreuses" -- not a fragment: "mon 8 trosum" isn't "mons trosum")
+        if left and better(left + "s", left) and (not right or known(right) or len(right) >= 7):
+            options.append((left + "s" + m.group(3) + right, left + "s"))
+        if right and better("s" + right, right) and (not left or known(left) or len(left) >= 6):
+            options.append((left + m.group(2) + "s" + right, "s" + right))
+        if not options and 2 <= len(left) <= 4 and len(right) >= 3 and not known(right):
+            options.append((left + "s" + right, ""))      # "mon 8 trosum": one word after all
+        if options:
+            changes += 1
+            # the reading whose word this text uses most ("in suo", not the
+            # rare "insuo"); first listed on a tie
+            return max(options, key=lambda o: freq[o[1].lower()])[0]
+        return m.group()
+
+    return _S_AS_8_RE.sub(fix, text), changes
+
+
+# The running head read into a line of text instead of on its own
+# ("sermo Dei, qui \ COM ^ ENTAMTJS IN GENESIN. " dies", "et COMMENTARIUS IN
+# GENESIN. arcanum", "apprehenS IN GENBSIN. 220 dunt"), with the page number
+# and specks around it. Capitals only: "Quaestionum in Genesin" stays.
+_INLINE_HEAD_RE = re.compile(
+    r"(?:\s*\\)?(?:\s*\d{1,3}\s?\*)?(?:\s*[.•])?\s*"
+    r"(?:[CGe]?O[MN]\S{0,3}\s?\^?\s?[A-Z]{2,9}\s?\.?\s*)?"
+    r"\bIN\s?G[\s-]*EN[EB]\s?[S8]?\s?(?:IN|1\s?N)\b\.?(?:\s*\d{2,3}\b)?(?:\s*[\"•])?"
+    # (or the first word of it alone: "vestivit GOMMENTARIl Deus")
+    r"|\s[CG]OMMENT\s?ARI[A-Za-z]{0,3}\b(?:\s*\\)?")
+
+
 def is_garbled_header(line: str) -> bool:
     stripped = line.strip()
     if _CHAPTER_RE.fullmatch(stripped) or re.match(r"\W*GENESIS\b", stripped):
@@ -898,6 +992,10 @@ def main() -> int:
     full, corrections = correct_words(full, vocab)
     all_notes = [correct_words(n, vocab, freq_text=full)[0] if n else n for n in all_notes]
     print(f"[fix]   {corrections} words corrected by known OCR confusions")
+    full, n_s = fix_s_read_as_8(full, load_latin_lexicon(vocab))
+    print(f"[fix]   {n_s} times s read as 8")
+    full, n_heads = _INLINE_HEAD_RE.subn(" ", full)
+    print(f"[fix]   {n_heads} running heads inside the text dropped")
 
     rows, warnings = parse(full, columns)
     # Hebrew / Greek (and the words around them) as read on the scan, where
