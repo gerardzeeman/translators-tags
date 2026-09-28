@@ -7,7 +7,7 @@
 {% block nav_center %}{% endblock %}
 
 {% block body %}
-<div class="page-institutio" data-controller="verse-panel strongs-panel">
+<div class="page-institutio page-commentary" data-controller="verse-panel strongs-panel">
 
     <nav class="chapter-nav" aria-label="Commentaar navigatie">
         <a href="{{ path('app_commentary_toc', {boek: boek}) }}" class="chapter-nav-book">{{ meta.title }}</a>
@@ -44,13 +44,14 @@
     {% endif %}
 
     <h2 class="commentary-part-heading">Commentaar</h2>
+    {% include 'commentary/_spelling_bar.html.twig' %}
     <div class="institutio-sections">
         {% for s in comments %}
         <div class="institutio-section" id="v{{ s.section }}">
             <a href="{{ path('app_confession_verse', {r: meta.usfm ~ '.' ~ chapter ~ '.' ~ s.section ~ '-' ~ s.section}) }}"
                data-turbo-frame="institutio-verse-panel" class="institutio-section-num commentary-verse-link" title="Bekijk {{ meta.book_nl }} {{ chapter }}:{{ s.section }}">{{ s.section }}</a>
             <div class="institutio-sentence-group">
-                <div class="institutio-sentence-row">
+                <div class="institutio-sentence-row commentary-row-3">
                     <div class="institutio-sentence-la">
                         {{ c.la_parts(s.parts) }}
                         {% if s.print_ref %}<span class="commentary-print-ref">{{ s.print_ref }}</span>{% endif %}
@@ -61,6 +62,12 @@
                         {{ cm.dutch(s.nl_paras) }}
                         {% else %}
                         <span class="commentary-nl-missing">Geen afzonderlijke Nederlandse tekst: deze staat bij het vorige vers.</span>
+                        {% endif %}
+                    </div>
+                    <div class="institutio-sentence-nl commentary-nl-modern">
+                        {% if s.text_nl %}
+                        <span class="institutio-layer-label">Los, moderne spelling</span>
+                        {{ cm.dutch(s.nl_modern) }}
                         {% endif %}
                     </div>
                 </div>

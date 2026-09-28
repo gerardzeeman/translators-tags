@@ -5430,3 +5430,94 @@ a:hover { text-decoration: underline; }
     .commentary-verse-los::before { content: "Los (1900)"; }
     .commentary-verse-sv::before { content: "Statenvertaling"; }
 }
+
+/* ── Commentaren: moderne spelling van Los (SpellingRules) ─────────────────── */
+/* The commentary pages have three texts side by side: wider than the
+   Institutio's reading column. */
+.page-institutio.page-commentary { max-width: 1240px; }
+.institutio-sentence-row.commentary-row-3 { grid-template-columns: 1.1fr 1fr 1fr; gap: 1.2rem; }
+.commentary-nl-modern { border-left: 1px solid var(--divider); padding-left: 1.2rem; }
+.commentary-spelling-bar { margin-bottom: 1.2rem; }
+.commentary-spelling-rules-link {
+    margin-left: auto;
+    font-family: var(--font-ui);
+    font-size: .8rem;
+    color: var(--accent);
+}
+.spelling-changed { position: relative; outline: none; }
+:root[data-spelling-marks="on"] .spelling-changed {
+    cursor: help;
+    background: color-mix(in srgb, var(--accent) 16%, transparent);
+    border-bottom: 1px dotted var(--accent);
+    border-radius: 2px;
+}
+:root[data-spelling-marks="on"] .spelling-changed:hover .institutio-note-popup,
+:root[data-spelling-marks="on"] .spelling-changed:focus .institutio-note-popup {
+    display: block;
+}
+@media (max-width: 720px) {
+    .institutio-sentence-row.commentary-row-3 { grid-template-columns: 1fr; }
+    .commentary-nl-modern { border-left: none; padding-left: 0; border-top: 1px solid var(--divider); padding-top: .4rem; }
+    .commentary-spelling-rules-link { margin-left: 0; }
+}
+
+/* The rules page (/commentaren/spelling). */
+.spelling-page { max-width: 1100px; margin: 0 auto; padding: 0 1.25rem 3rem; }
+.spelling-title { font-family: var(--font-serif); font-size: 1.5rem; margin: 1rem 0 .4rem; color: var(--text); }
+.spelling-intro { max-width: 46rem; color: var(--text); margin: 0 0 1.2rem; }
+.spelling-muted { color: var(--col-label); font-size: .85em; }
+.spelling-coverage { margin: 0 0 1.4rem; font-family: var(--font-ui); font-size: .9rem; }
+.spelling-coverage p { margin: .4rem 0 0; }
+.spelling-coverage-bar { height: 8px; border-radius: 4px; background: var(--card-warm); border: 1px solid var(--divider); overflow: hidden; }
+.spelling-coverage-bar span { display: block; height: 100%; background: var(--accent); }
+.spelling-columns { display: grid; grid-template-columns: 1.5fr 1fr; gap: 1.2rem; align-items: start; }
+.spelling-card {
+    background: var(--card-warm);
+    border: 1px solid var(--divider);
+    border-radius: 6px;
+    padding: 1rem 1.2rem;
+    margin-bottom: 1.2rem;
+    font-family: var(--font-ui);
+}
+.spelling-card h2 { font-size: 1.05rem; margin: 0 0 .7rem; color: var(--text); }
+.spelling-form label { display: block; font-size: .85rem; color: var(--col-label); margin-bottom: .6rem; }
+.spelling-form input[type="text"], .spelling-form input[type="number"], .spelling-form textarea {
+    display: block; width: 100%; box-sizing: border-box; margin-top: .2rem;
+    padding: .45rem .6rem; font: inherit; font-size: .95rem; color: var(--text);
+    background: var(--bg); border: 1px solid var(--divider); border-radius: 4px;
+}
+.spelling-kind { display: flex; gap: 1.2rem; margin-bottom: .6rem; }
+.spelling-kind label, .spelling-active { display: inline-flex; align-items: center; gap: .35rem; color: var(--text); }
+.spelling-pair { display: grid; grid-template-columns: 1fr auto 1fr; gap: .6rem; align-items: end; }
+.spelling-arrow { padding-bottom: 1rem; color: var(--col-label); }
+.spelling-more { margin: .2rem 0 .8rem; font-size: .85rem; }
+.spelling-more summary { cursor: pointer; color: var(--accent); margin-bottom: .5rem; }
+.spelling-actions { display: flex; gap: .6rem; margin-top: .6rem; }
+.spelling-help { margin-top: 1rem; font-size: .82rem; color: var(--col-label); }
+.spelling-help p { margin: .3rem 0; }
+.spelling-help code, .spelling-table code { font-size: .9em; background: var(--bg); padding: 0 .25em; border-radius: 3px; }
+.spelling-preview { margin-top: 1rem; font-size: .88rem; }
+.spelling-preview:empty { display: none; }
+.spelling-preview-error { color: #b3261e; }
+.spelling-preview-words { display: flex; flex-wrap: wrap; gap: .3rem 1rem; list-style: none; padding: 0; margin: .3rem 0 .6rem; }
+.spelling-preview-examples { padding-left: 1.1rem; margin: 0; font-family: var(--font-serif); }
+.spelling-preview-examples li { margin-bottom: .3rem; }
+.spelling-old { text-decoration: line-through; color: #b3261e; }
+.spelling-new { color: #1e7b34; font-weight: 600; margin-left: .2em; }
+.spelling-suggestions { columns: 2; column-gap: 1.5rem; padding-left: 1.4rem; margin: .4rem 0 0; font-size: .9rem; }
+.spelling-suggestions li { break-inside: avoid; margin-bottom: .15rem; }
+.spelling-rules .list-search-input { margin-bottom: .6rem; }
+.spelling-table td { vertical-align: middle; }
+.spelling-inactive { opacity: .5; }
+.spelling-row-actions { display: flex; gap: .3rem; justify-content: flex-end; }
+.spelling-row-actions form { margin: 0; }
+.spelling-transfer-row { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; }
+.spelling-import { display: flex; flex-wrap: wrap; gap: .6rem 1rem; align-items: center; font-size: .88rem; }
+:root[data-theme="dark"] .spelling-old, :root[data-theme="dark"] .spelling-preview-error { color: #f28b82; }
+:root[data-theme="dark"] .spelling-new { color: #81c995; }
+@media (max-width: 720px) {
+    .spelling-columns { grid-template-columns: 1fr; }
+    .spelling-suggestions { columns: 1; }
+    .spelling-pair { grid-template-columns: 1fr; }
+    .spelling-arrow { display: none; }
+}

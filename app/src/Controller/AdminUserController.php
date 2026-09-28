@@ -28,6 +28,7 @@ class AdminUserController extends AbstractController
         'ROLE_EDIT_INSTITUTIO_TRNL'  => 'Institutie-vertaalvoorstellen indienen',
         'ROLE_REVIEW_INSTITUTIO_TRNL' => 'Institutie-vertaalvoorstellen beoordelen',
         'ROLE_BLOGGER'               => 'Blogger',
+        'ROLE_EDIT_SPELLING'         => 'Moderne spelling (Los) bewerken',
         'ROLE_CGK_RIJNSBURG_NIEUWS'  => 'CGK Rijnsburg nieuwsoverzicht (push)',
         'ROLE_ADMIN'                 => 'Admin',
     ];

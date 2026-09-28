@@ -3,6 +3,7 @@
 namespace App\Controller;
 
 use App\Repository\ConfessionRepository;
+use App\Service\SpellingModernizer;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
@@ -44,6 +45,7 @@ class CommentaryController extends AbstractController
 
     public function __construct(
         private readonly ConfessionRepository $repository,
+        private readonly SpellingModernizer $spelling,
     ) {}
 
     #[Route('/commentaren', name: 'app_commentary_index')]
@@ -147,7 +149,10 @@ class CommentaryController extends AbstractController
             'parts'     => $this->repository->insertNoteParts(
                 $this->repository->splitTextIntoWordParts($s['text_la'], $s['tokens']), $notes),
             'text_nl'   => $s['translations'][self::DUTCH_LAYER] ?? null,
-            'nl_paras'  => self::dutchParagraphs($s['translations'][self::DUTCH_LAYER] ?? null, $strongs),
+            'nl_paras'  => $paras = self::dutchParagraphs($s['translations'][self::DUTCH_LAYER] ?? null, $strongs),
+            // Los's comment in modern spelling (the rules of /commentaren/spelling);
+            // not his Bible text
+            'nl_modern' => ($s['kind'] ?? null) === 'scripture' ? [] : $this->spelling->paragraphs($paras, self::DUTCH_LAYER),
         ];
     }
 

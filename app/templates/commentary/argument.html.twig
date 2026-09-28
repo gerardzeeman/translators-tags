@@ -6,7 +6,7 @@
 {% block nav_center %}{% endblock %}
 
 {% block body %}
-<div class="page-institutio" data-controller="verse-panel strongs-panel">
+<div class="page-institutio page-commentary" data-controller="verse-panel strongs-panel">
 
     <nav class="chapter-nav" aria-label="Commentaar navigatie">
         <a href="{{ path('app_commentary_toc', {boek: boek}) }}" class="chapter-nav-book">{{ meta.title }}</a>
@@ -20,15 +20,20 @@
     <div class="institutio-heading institutio-heading-solo">Argumentum</div>
     <p class="commentary-part-hint">Calvijns inleiding op het boek. De Nederlandse alinea's zijn bij benadering verdeeld: Latijn en Nederlands zijn anders in alinea's opgedeeld.</p>
 
+    {% include 'commentary/_spelling_bar.html.twig' %}
     <div class="institutio-sections">
         {% for s in segments %}
         <div class="institutio-section" id="arg-{{ s.section }}">
             <span class="institutio-section-num">{{ s.section }}</span>
             <div class="institutio-sentence-group">
-                <div class="institutio-sentence-row">
+                <div class="institutio-sentence-row commentary-row-3">
                     <div class="institutio-sentence-la">{{ c.la_parts(s.parts) }}</div>
                     <div class="institutio-sentence-nl">
                         {{ cm.dutch(s.nl_paras) }}
+                    </div>
+                    <div class="institutio-sentence-nl commentary-nl-modern">
+                        <span class="institutio-layer-label">Los, moderne spelling</span>
+                        {{ cm.dutch(s.nl_modern) }}
                     </div>
                 </div>
             </div>
