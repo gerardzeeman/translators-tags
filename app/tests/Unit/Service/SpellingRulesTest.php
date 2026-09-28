@@ -96,6 +96,28 @@ class SpellingRulesTest extends TestCase
         $this->assertNotNull(SpellingRules::validate('word', '', 'x'));
     }
 
+    public function testRuleWrittenWithACapitalKeepsItsOwnCase(): void
+    {
+        $r = $this->rules(['word', 'Gods', 'van God']);
+        // the capital belongs to the word: the result as the rule has it
+        $this->assertSame('het woord van God is', $r->modernize('het woord Gods is'));
+        // "gods" (heathen gods) is another word
+        $this->assertSame('de gods van Egypte', $r->modernize('de gods van Egypte'));
+        // a capital only to start a sentence
+        $this->assertSame('Van God genade. Van God woord, en van God wil', $r->modernize('Gods genade. Gods woord, en Gods wil'));
+        // text that doesn't start a sentence (after a Hebrew word, say)
+        $this->assertSame('van God', $r->modernize('Gods', false));
+        $this->assertSame('„Van God genade', $r->modernize('„Gods genade'));
+        $this->assertSame('vs. 3 van God', $r->modernize('vs. 3 Gods'));
+    }
+
+    public function testCapitalisedRuleGoesBeforeLowerCaseOne(): void
+    {
+        $r = $this->rules(['word', 'gods', 'goden'], ['word', 'Gods', 'van God']);
+        $this->assertSame('de goden en het woord van God', $r->modernize('de gods en het woord Gods'));
+        $this->assertSame('goden', $r->modernize('gods'));
+    }
+
     public function testApostropheWords(): void
     {
         $r = $this->rules(['word', '’t', 'het']);

@@ -17,16 +17,23 @@ namespace App\Service;
  *
  * A word rule wins over the patterns; the patterns apply one after the
  * other, in their order (so "menschelijke" can go through more than one).
- * Matching ignores case; the result gets the case of the word it replaces
- * ("Beteekent" -> "Betekent", "MENSCH" -> "MENS"). Each word is changed
- * once: a replacement is not matched again.
+ * Each word is changed once: a replacement is not matched again.
+ *
+ * Capitals: a rule written in lower case matches the word in any case, and
+ * the result gets the case of the word it replaces ("Beteekent" ->
+ * "Betekent", "MENSCH" -> "MENS"). A word rule written with a capital
+ * ("Gods" -> "van God") has the capital as part of the word: it matches only
+ * the word with that capital (not "gods", heathen gods), and the result is
+ * written as the rule has it -- with a capital only at the start of a
+ * sentence ("Gods genade" at the start -> "Van God genade"). For the same
+ * word, such a rule goes before one in lower case.
  */
 final class SpellingRules
 {
     /** A word: letters, with the apostrophe of "’t" / "zoo’n". */
     public const WORD_RE = '/[\p{L}’\']+/u';
 
-    /** @var array<string, list<array{words: list<string>, target: string, label: string}>> first word => phrases, longest first */
+    /** @var array<string, list<array{words: list<string>, target: string, label: string, cased: bool}>> first word => phrases, longest (and cased) first */
     private array $phrases = [];
 
     /** @var list<array{where: string, from: string, to: string, exceptions: array<string, true>, label: string}> */
@@ -48,7 +55,13 @@ final class SpellingRules
             $label = trim($rule['source']) . ' → ' . trim($rule['target']);
             if ($rule['kind'] === 'word') {
                 $words = preg_split('/\s+/u', mb_strtolower(trim($rule['source'])));
-                $this->phrases[$words[0]][] = ['words' => $words, 'target' => trim($rule['target']), 'label' => $label];
+                $this->phrases[$words[0]][] = [
+                    'words'  => $words,
+                    'target' => trim($rule['target']),
+                    'label'  => $label,
+                    // written with a capital: the capital belongs to the word
+                    'cased'  => self::startsUpper(trim($rule['source'])),
+                ];
             } else {
                 [$where, $from, $to] = self::parsePattern($rule['source'], $rule['target']);
                 $this->patterns[] = [
@@ -61,7 +74,7 @@ final class SpellingRules
             }
         }
         foreach ($this->phrases as &$list) {
-            usort($list, fn($a, $b) => count($b['words']) <=> count($a['words']));
+            usort($list, fn($a, $b) => count($b['words']) <=> count($a['words']) ?: $b['cased'] <=> $a['cased']);
         }
     }
 
@@ -105,11 +118,12 @@ final class SpellingRules
 
     /**
      * The text in parts: unchanged text, and changed words with what they
-     * were and by which rule(s).
+     * were and by which rule(s). $sentenceStart: whether the text begins a
+     * sentence (a paragraph does; the text after a Hebrew word doesn't).
      *
      * @return list<array{type: string, content: string, original?: string, rule?: string}>
      */
-    public function apply(string $text): array
+    public function apply(string $text, bool $sentenceStart = true): array
     {
         if ($this->isEmpty() || $text === '') {
             return [['type' => 'text', 'content' => $text]];
@@ -123,10 +137,17 @@ final class SpellingRules
             [$word, $at] = $words[$i];
             $change = $this->phraseAt($text, $words, $i);
             if ($change !== null) {
-                [$len, $target, $label] = $change;
+                [$len, $target, $label, $cased] = $change;
                 $end = $words[$i + $len - 1][1] + strlen($words[$i + $len - 1][0]);
                 $original = substr($text, $at, $end - $at);
-                $new = self::matchCase($target, $word);
+                if (!$cased) {
+                    $new = self::matchCase($target, $word);
+                } elseif (self::isAllCaps($word)) {
+                    $new = mb_strtoupper($target);
+                } else {
+                    // as the rule has it; a capital only to start a sentence
+                    $new = self::beginsSentence($text, $at, $sentenceStart) ? self::capitalise($target) : $target;
+                }
                 $i += $len - 1;
             } else {
                 [$new, $label] = $this->patternsOn($word);
@@ -149,9 +170,9 @@ final class SpellingRules
     }
 
     /** The whole text in modern spelling, as a string. */
-    public function modernize(string $text): string
+    public function modernize(string $text, bool $sentenceStart = true): string
     {
-        return implode('', array_map(fn($p) => $p['content'], $this->apply($text)));
+        return implode('', array_map(fn($p) => $p['content'], $this->apply($text, $sentenceStart)));
     }
 
     /**
@@ -182,11 +203,12 @@ final class SpellingRules
     }
 
     /**
-     * The phrase rule that matches at word $i (longest first): how many
-     * words it takes, its target and label.
+     * The phrase rule that matches at word $i (longest, then capitalised
+     * first): how many words it takes, its target and label, and whether it
+     * was written with a capital.
      *
      * @param list<array{0: string, 1: int}> $words
-     * @return array{0: int, 1: string, 2: string}|null
+     * @return array{0: int, 1: string, 2: string, 3: bool}|null
      */
     private function phraseAt(string $text, array $words, int $i): ?array
     {
@@ -196,6 +218,9 @@ final class SpellingRules
             if ($i + $len > count($words)) {
                 continue;
             }
+            if ($phrase['cased'] && !self::startsUpper($words[$i][0])) {
+                continue;           // "Gods" is not "gods"
+            }
             for ($k = 1; $k < $len; $k++) {
                 [$prev, $prevAt] = $words[$i + $k - 1];
                 [$cur, $curAt] = $words[$i + $k];
@@ -204,7 +229,7 @@ final class SpellingRules
                     continue 2;
                 }
             }
-            return [$len, $phrase['target'], $phrase['label']];
+            return [$len, $phrase['target'], $phrase['label'], $phrase['cased']];
         }
         return null;
     }
@@ -259,6 +284,36 @@ final class SpellingRules
             fn($w) => mb_strtolower(trim($w)),
             preg_split('/[\n,;]+/u', (string) $exceptions)
         ), fn($w) => $w !== ''));
+    }
+
+    /**
+     * Whether the word at byte offset $at begins a sentence: nothing but
+     * opening quotes/brackets before it since a full stop, question or
+     * exclamation mark (or the start of the text, when that starts one).
+     */
+    private static function beginsSentence(string $text, int $at, bool $sentenceStart): bool
+    {
+        $before = rtrim(preg_replace('/[\s„“"‘\'(]+$/u', '', substr($text, 0, $at)));
+        if ($before === '') {
+            return $sentenceStart;
+        }
+        return (bool) preg_match('/[.!?]["”’)]*$/u', $before) && !preg_match('/\b(?:vs|d\.i|nl|enz|bijv|o\.a|cap|hfdst)\.$/iu', $before);
+    }
+
+    private static function startsUpper(string $s): bool
+    {
+        return preg_match('/\p{L}/u', $s, $m) === 1 && mb_strtoupper($m[0]) === $m[0] && mb_strtolower($m[0]) !== $m[0];
+    }
+
+    private static function isAllCaps(string $word): bool
+    {
+        $letters = preg_replace('/[^\p{L}]/u', '', $word);
+        return mb_strlen($letters) > 1 && mb_strtoupper($letters) === $letters;
+    }
+
+    private static function capitalise(string $s): string
+    {
+        return preg_replace_callback('/\p{L}/u', fn($x) => mb_strtoupper($x[0]), $s, 1);
     }
 
     /** The replacement in the case of the word it replaces. */

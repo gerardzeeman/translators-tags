@@ -39,14 +39,17 @@ class SpellingModernizer
         $rules = $this->rules($layer);
         return array_map(function (array $parts) use ($rules): array {
             $out = [];
+            $sentenceStart = true;      // a paragraph starts a sentence
             foreach ($parts as $part) {
                 if ($part['type'] === 'text') {
-                    array_push($out, ...$rules->apply($part['content']));
+                    array_push($out, ...$rules->apply($part['content'], $sentenceStart));
                 } elseif ($part['type'] === 'correction') {
-                    $out[] = ['content' => $rules->modernize($part['content'])] + $part;
+                    $out[] = ['content' => $rules->modernize($part['content'], $sentenceStart)] + $part;
                 } else {
                     $out[] = $part;
                 }
+                // the next part starts one only after a full stop etc.
+                $sentenceStart = (bool) preg_match('/[.!?]["”’)]*\s*$/u', (string) $part['content']);
             }
             return $out;
         }, $paragraphs);
@@ -70,7 +73,9 @@ class SpellingModernizer
         $hits = 0;
         $words = [];
         $examples = [];
-        $multiWord = $kind === 'word' && preg_match('/\s/u', trim($source));
+        // (a phrase, or a word written with a capital -- which then counts --
+        // is found in the text itself, not in the lower-case word list)
+        $multiWord = $kind === 'word' && (preg_match('/\s/u', trim($source)) || self::startsUpper(trim($source)));
         if (!$multiWord) {
             foreach ($this->frequencies($layer) as $word => $count) {
                 $new = $kind === 'word'
@@ -126,11 +131,17 @@ class SpellingModernizer
                 $hits[$r['id']] = 0;
                 continue;
             }
-            if ($r['kind'] === 'word' && !preg_match('/\s/u', trim($r['source']))) {
+            $cased = self::startsUpper(trim($r['source']));
+            if ($r['kind'] === 'word' && !$cased && !preg_match('/\s/u', trim($r['source']))) {
                 $hits[$r['id']] = $freq[mb_strtolower(trim($r['source']))] ?? 0;
             } elseif ($r['kind'] === 'word') {
+                // a phrase, or a word with its capital -- then the first
+                // letter's case counts: "Gods", not "gods"
                 $corpus ??= implode("\n", $this->repository->corpus($layer));
                 $words = array_map(fn($w) => preg_quote($w, '/'), preg_split('/\s+/u', trim($r['source'])));
+                if ($cased) {
+                    $words[0] = '(?-i:' . mb_substr($words[0], 0, 1) . ')' . mb_substr($words[0], 1);
+                }
                 $hits[$r['id']] = preg_match_all('/(?<![\p{L}’\'])' . implode('\s+', $words) . '(?![\p{L}’\'])/iu', $corpus);
             } else {
                 $one = new SpellingRules([$r + ['active' => true]]);
@@ -197,6 +208,11 @@ class SpellingModernizer
             $this->frequencies[$layer] = $freq;
         }
         return $this->frequencies[$layer];
+    }
+
+    private static function startsUpper(string $s): bool
+    {
+        return preg_match('/\p{L}/u', $s, $m) === 1 && mb_strtoupper($m[0]) === $m[0] && mb_strtolower($m[0]) !== $m[0];
     }
 
     private static function tail(string $s, int $n): string

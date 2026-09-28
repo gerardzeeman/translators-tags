@@ -39,7 +39,9 @@ final class Version20260928150000 extends AbstractMigration
             updated_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL DEFAULT now(),
             PRIMARY KEY(id)
         )");
-        $this->addSql('CREATE UNIQUE INDEX uniq_spelling_rule_source ON spelling_rule (layer, kind, lower(source))');
+        // (case counts: "Gods" -- with the capital as part of the word -- and
+        // "gods" are two rules; see App\Service\SpellingRules)
+        $this->addSql('CREATE UNIQUE INDEX uniq_spelling_rule_source ON spelling_rule (layer, kind, source)');
     }
 
     public function down(Schema $schema): void

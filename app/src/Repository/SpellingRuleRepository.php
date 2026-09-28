@@ -45,11 +45,12 @@ class SpellingRuleRepository
         return $row ? $this->normalise($row) : null;
     }
 
-    /** Whether another rule of the layer has this kind and source already. */
+    /** Whether another rule of the layer has this kind and source already
+     *  (case counts: "Gods" and "gods" are two rules). */
     public function exists(string $layer, string $kind, string $source, ?int $exceptId = null): bool
     {
         return (bool) $this->connection->fetchOne(
-            'SELECT 1 FROM spelling_rule WHERE layer = ? AND kind = ? AND lower(source) = lower(?) AND id <> ?',
+            'SELECT 1 FROM spelling_rule WHERE layer = ? AND kind = ? AND source = ? AND id <> ?',
             [$layer, $kind, trim($source), $exceptId ?? 0]
         );
     }
@@ -118,7 +119,7 @@ class SpellingRuleRepository
             $keep = [];
             foreach ($rules as $rule) {
                 $id = $this->connection->fetchOne(
-                    'SELECT id FROM spelling_rule WHERE layer = ? AND kind = ? AND lower(source) = lower(?)',
+                    'SELECT id FROM spelling_rule WHERE layer = ? AND kind = ? AND source = ?',
                     [$layer, $rule['kind'], trim((string) $rule['source'])]
                 );
                 if ($id) {
