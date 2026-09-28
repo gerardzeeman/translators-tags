@@ -643,6 +643,52 @@ def lemma_verse(lemma_start: str, verse_texts: dict[int, str], read: int) -> int
     return best if share(best) >= 0.75 else read
 
 
+# Verses of Calvin's scripture text without a number of their own -- the
+# edition doesn't print "3." in 13:2-3 (checked on the scan) -- split off
+# still, to stand next to Los's and the Statenvertaling's verse:
+# (chapter, verse) -> the words the verse starts with.
+_LATIN_MISSING_VERSES = {(13, 3): "Et perrexit per profectiones"}
+
+
+class _VerseMarker:
+    """A verse number found by missing_verses(): the re.Match interface the
+    verse markers are used through (group(1) = the verse)."""
+
+    def __init__(self, verse: int, start: int, end: int):
+        self.verse, self._start, self._end = verse, start, end
+
+    def group(self, n: int = 0) -> str:
+        return str(self.verse)
+
+    def start(self) -> int:
+        return self._start
+
+    def end(self) -> int:
+        return self._end
+
+
+def missing_verses(text: str, lo: int, hi: int, after: int, before: int) -> list[_VerseMarker]:
+    """The verse numbers after+1 .. before-1 in text[lo:hi], where the
+    scripture text runs on without them: their stop misread ("terra. 23, Et
+    fuit", "19.- Et tu", "26.. Et", "(28. Et"), missing ("Deus. 24 Abraham"),
+    split ("1. 8. Et" for 18) or half a letter ("4 A. Et" for 44, "3 p.
+    Loquutus" for 30). Each after a sentence end or other mark and before a
+    capital -- and only the very number that is missing, in order."""
+    found, pos = [], lo
+    for verse in range(after + 1, before):
+        tens, units = divmod(verse, 10)
+        forms = [rf"\(?\s*{verse}\s?[.,;]*-?"]
+        if tens:
+            forms += [rf"{tens}\.\s?{units}\.", rf"{tens}\s?[A-Za-z]\."]
+        pattern = re.compile(rf"(?<=[.!?:;,)\]])\s*(?:{'|'.join(forms)})\s+(?=[A-Z])")
+        m = pattern.search(text, pos, hi)
+        if m is None:
+            continue
+        found.append(_VerseMarker(verse, m.start(), m.end()))
+        pos = m.end()
+    return found
+
+
 def comment_starts(starts: list[re.Match], comments: str, last_verse: int,
                    verse_texts: dict[int, str] | None = None) -> list[tuple[re.Match, int]]:
     """The line-start verse numbers that really open a comment: the best
@@ -750,6 +796,31 @@ def parse(full: str, columns: list[tuple[int, int | None]]) -> tuple[list[dict],
             warnings.append(f"chapter {chapter}: no start of the comments found")
             comment_start = len(body)
         text_part = body[:comment_start]
+        # A verse number read as the next one ("6" for 5 in 19:5, "43" for
+        # 42 in 30:42): the real next one follows in its text ("… 6. Et
+        # egressus est") -- the first is the verse missing before it.
+        for i in range(len(verse_markers) - 1, -1, -1):
+            n = int(verse_markers[i].group(1))
+            prev = int(verse_markers[i - 1].group(1)) if i else 0
+            v_end = verse_markers[i + 1].start() if i + 1 < len(verse_markers) else len(text_part)
+            again = re.compile(rf"(?<=[.!?:]\s){n}\.\s+(?=[A-Z])").search(text_part, verse_markers[i].end(), v_end)
+            if again and prev == n - 2:
+                verse_markers[i:i + 1] = [_VerseMarker(n - 1, verse_markers[i].start(), verse_markers[i].end()),
+                                          _VerseMarker(n, again.start(), again.end())]
+        # A verse without a number in print: where it starts, by hand.
+        for (ch, verse), opening in _LATIN_MISSING_VERSES.items():
+            if ch == chapter and verse not in {int(m.group(1)) for m in verse_markers}:
+                at = text_part.find(opening)
+                if at >= 0:
+                    verse_markers.append(_VerseMarker(verse, at, at))
+                    verse_markers.sort(key=lambda m: m.start())
+        # Verse numbers missing from the sequence, misread: see missing_verses().
+        for i in range(len(verse_markers) - 1, -1, -1):
+            n = int(verse_markers[i].group(1))
+            gap_end = verse_markers[i + 1].start() if i + 1 < len(verse_markers) else len(text_part)
+            upto = int(verse_markers[i + 1].group(1)) if i + 1 < len(verse_markers) else n + 2
+            for marker in reversed(missing_verses(text_part, verse_markers[i].end(), gap_end, n, upto)):
+                verse_markers.insert(i + 1, marker)
         verses = verse_markers
         for i, m in enumerate(verses):
             verse = int(m.group(1))
