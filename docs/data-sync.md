@@ -497,3 +497,25 @@ docker exec bible_app php bin/console app:sync:import-computed --input-dir=/tmp/
 | Conflict: zelfde bronwoord heeft berekende link op prod én manuele link op prod | Manuele wint altijd — berekende wordt niet overschreven |
 | CSV-bestanden bevatten gevoelige data (linkanotaties) | Gaan alleen via `scp`/`docker cp` over SSH, nooit via een publieke URL |
 | `link_confidence.created_by_user_id` verwijst naar een user-ID dat op prod iets anders kan betekenen dan op dev | Wordt bewust niet gesynchroniseerd (zie `import-manual`) |
+
+---
+
+## Spellingregels (moderne spelling van Los) — dev ↔ prod
+
+De regels voor de moderne-spellingversie van Los (`/commentaren/spelling`, rol
+`ROLE_EDIT_SPELLING`) staan in de tabel `spelling_rule` en kunnen in beide
+omgevingen worden ingevoerd. Overzetten gaat in beide richtingen op dezelfde manier:
+
+- **Via de pagina**: *Exporteren (.json)* in de ene omgeving, het bestand bij
+  *Importeren* kiezen in de andere. *Samenvoegen* werkt een regel met dezelfde soort en
+  oude vorm bij en voegt de rest toe; *Vervangen* verwijdert daarnaast de regels die niet
+  in het bestand staan. Alles in één transactie.
+- **Via de console** (bijv. over SSH):
+
+```bash
+docker exec bible_app php bin/console app:spelling:export --output=/tmp/spellingregels.json
+docker cp bible_app:/tmp/spellingregels.json .
+# ... naar de andere omgeving kopiëren, daar:
+docker cp spellingregels.json bible_app:/tmp/
+docker exec bible_app php bin/console app:spelling:import /tmp/spellingregels.json [--replace]
+```

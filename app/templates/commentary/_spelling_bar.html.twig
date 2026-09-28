@@ -1,0 +1,16 @@
+{# Above Los's commentary: the switch that marks the words the spelling rules
+   changed in the modern-spelling column (spelling_marks_controller.js), and
+   for editors the way to the rules. #}
+<div class="institutio-hc-diff-bar commentary-spelling-bar" data-controller="spelling-marks">
+    <button type="button"
+            class="institutio-hc-diff-btn"
+            data-spelling-marks-target="button"
+            data-action="spelling-marks#toggle"
+            aria-pressed="false">
+        Markeer wijzigingen moderne spelling
+    </button>
+    <span class="institutio-hc-diff-hint">Gemarkeerde woorden in de rechterkolom zijn aangepast; wijs ze aan voor de vorm van Los en de regel.</span>
+    {% if is_granted('ROLE_EDIT_SPELLING') %}
+    <a href="{{ path('app_spelling_rules') }}" class="commentary-spelling-rules-link">Spellingregels bewerken</a>
+    {% endif %}
+</div>

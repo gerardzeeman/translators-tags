@@ -126,7 +126,7 @@
             {% endif %}
 
             {# Editor-dropdown — alleen als gebruiker ten minste één editorrole heeft #}
-            {% if is_granted('ROLE_LINKER') or is_granted('ROLE_EDIT_STRONG_TRNL') or is_granted('ROLE_BLOGGER') %}
+            {% if is_granted('ROLE_LINKER') or is_granted('ROLE_EDIT_STRONG_TRNL') or is_granted('ROLE_BLOGGER') or is_granted('ROLE_EDIT_SPELLING') %}
             <div class="nav-sep"></div>
             <div class="nav-dropdown">
                 <button class="nav-dropdown-btn" type="button">Editor ▾</button>
@@ -140,6 +140,9 @@
                     {% endif %}
                     {% if is_granted('ROLE_EDIT_STRONG_TRNL') %}
                     <a href="{{ path('app_strongs_translate_home') }}">Vertalen Strong's</a>
+                    {% endif %}
+                    {% if is_granted('ROLE_EDIT_SPELLING') %}
+                    <a href="{{ path('app_spelling_rules') }}">Moderne spelling (Los)</a>
                     {% endif %}
                     {% if is_granted('ROLE_BLOGGER') %}
                     <a href="{{ path('app_blog_mine') }}">Mijn blogs</a>

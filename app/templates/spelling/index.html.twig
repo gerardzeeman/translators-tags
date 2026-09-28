@@ -1,0 +1,192 @@
+{% extends 'base.html.twig' %}
+{% block title %}Moderne spelling (Los) – regels{% endblock %}
+
+{% block nav_center %}{% endblock %}
+
+{% block body %}
+<div class="spelling-page">
+
+    <nav class="chapter-nav" aria-label="Commentaar navigatie">
+        <a href="{{ path('app_commentary_index') }}" class="chapter-nav-book">Commentaren</a>
+        <span class="chapter-nav-sep">›</span>
+        <span class="chapter-nav-current">Moderne spelling (Los)</span>
+    </nav>
+
+    <h1 class="spelling-title">Moderne spelling van de vertaling van Los</h1>
+    <p class="spelling-intro">
+        Deze regels maken van Los' commentaar (1900) een versie in moderne spelling, die als derde kolom naast zijn
+        tekst staat. De tekst van Los zelf verandert niet: de moderne versie wordt bij elke weergave uit de regels
+        gemaakt, dus een nieuwe regel is meteen zichtbaar.
+    </p>
+
+    {% for label, messages in app.flashes %}
+        {% for message in messages %}
+        <div class="alert alert-{{ label }}" role="alert">{{ message }}</div>
+        {% endfor %}
+    {% endfor %}
+
+    {% set pct = coverage.old_tokens ? (100 * coverage.covered_tokens / coverage.old_tokens)|round(1) : 0 %}
+    <div class="spelling-coverage">
+        <div class="spelling-coverage-bar"><span style="width: {{ pct }}%"></span></div>
+        <p>
+            <strong>{{ pct|number_format(1, ',', '.') }}%</strong> van de verouderde woorden in Los' commentaar wordt aangepast
+            ({{ coverage.covered_tokens|number_format(0, ',', '.') }} van {{ coverage.old_tokens|number_format(0, ',', '.') }} keer;
+            {{ coverage.covered_words|number_format(0, ',', '.') }} van {{ coverage.old_words|number_format(0, ',', '.') }} woordvormen).
+            <span class="spelling-muted">Verouderd = komt niet voor in de HSV.</span>
+        </p>
+    </div>
+
+    <div class="spelling-columns">
+
+        {# ── Regel toevoegen / bewerken, met voorbeeld ─────────────────────── #}
+        <section class="spelling-card" id="regel-formulier"
+                 data-controller="spelling-rule"
+                 data-spelling-rule-preview-url-value="{{ path('app_spelling_rule_preview') }}">
+            <h2>{{ form.id ? 'Regel bewerken' : 'Regel toevoegen' }}</h2>
+            <form method="post" action="{{ path('app_spelling_rule_save') }}" class="spelling-form">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token('spelling_rule') }}">
+                <input type="hidden" name="id" value="{{ form.id }}">
+
+                <div class="spelling-kind">
+                    <label><input type="radio" name="kind" value="word" {{ form.kind != 'pattern' ? 'checked' }}
+                                  data-spelling-rule-target="kind" data-action="spelling-rule#update"> Woordregel</label>
+                    <label><input type="radio" name="kind" value="pattern" {{ form.kind == 'pattern' ? 'checked' }}
+                                  data-spelling-rule-target="kind" data-action="spelling-rule#update"> Patroonregel</label>
+                </div>
+
+                <div class="spelling-pair">
+                    <label>Oud
+                        <input type="text" name="source" value="{{ form.source }}" required autocomplete="off"
+                               placeholder="beteekent"
+                               data-spelling-rule-target="source" data-action="input->spelling-rule#update">
+                    </label>
+                    <span class="spelling-arrow" aria-hidden="true">→</span>
+                    <label>Nieuw
+                        <input type="text" name="target" value="{{ form.target }}" required autocomplete="off"
+                               placeholder="betekent"
+                               data-spelling-rule-target="target" data-action="input->spelling-rule#update">
+                    </label>
+                </div>
+
+                <details class="spelling-more" {{ form.exceptions or form.note or form.position ? 'open' }}>
+                    <summary>Uitzonderingen, volgorde, notitie</summary>
+                    <label>Uitzonderingen <span class="spelling-muted">(patroonregel; één woord per regel)</span>
+                        <textarea name="exceptions" rows="3" data-spelling-rule-target="exceptions"
+                                  data-action="input->spelling-rule#update">{{ form.exceptions }}</textarea>
+                    </label>
+                    <label>Volgorde <span class="spelling-muted">(patroonregels, laag eerst)</span>
+                        <input type="number" name="position" value="{{ form.position }}">
+                    </label>
+                    <label>Notitie
+                        <input type="text" name="note" value="{{ form.note }}">
+                    </label>
+                </details>
+
+                <label class="spelling-active"><input type="checkbox" name="active" {{ form.active ? 'checked' }}> Actief</label>
+
+                <div class="spelling-actions">
+                    <button type="submit" class="btn btn-primary">{{ form.id ? 'Opslaan' : 'Toevoegen' }}</button>
+                    {% if form.id %}<a href="{{ path('app_spelling_rules') }}" class="btn">Annuleren</a>{% endif %}
+                </div>
+            </form>
+
+            <div class="spelling-help">
+                <p><strong>Woordregel</strong>: het hele woord, of een paar woorden achter elkaar —
+                    <code>beteekent → betekent</code>, <code>gelijk als → zoals</code>. De langste gaat voor.</p>
+                <p><strong>Patroonregel</strong>: een deel van elk woord; <code>*</code> staat voor de rest van het woord —
+                    <code>*sch → *s</code> (einde: mensch → mens), <code>sch* → s*</code> (begin),
+                    <code>*ee* → *e*</code> (midden). Patroonregels werken na elkaar, in hun volgorde; een woordregel gaat voor.</p>
+                <p><strong>Hoofdletters</strong>: schrijf de oude vorm met kleine letter en hij geldt in elke vorm; een
+                    hoofdletter aan het begin gaat dan over (Beteekent → Betekent). Schrijf hem met hoofdletter
+                    (<code>Gods → van God</code>) en die hoort bij het woord: de regel geldt alleen voor „Gods”, niet voor
+                    „gods”, en de nieuwe vorm komt er precies zo uit — met hoofdletter alleen aan het begin van een zin.</p>
+            </div>
+
+            <div class="spelling-preview" data-spelling-rule-target="preview" aria-live="polite"></div>
+        </section>
+
+        {# ── Suggesties ─────────────────────────────────────────────────────── #}
+        <section class="spelling-card">
+            <h2>Suggesties</h2>
+            <p class="spelling-muted">De vaakst voorkomende woorden van Los die niet in de HSV staan en nog door geen
+                regel worden aangepast. Klik om er een regel van te maken.</p>
+            <ol class="spelling-suggestions">
+                {% for s in coverage.suggestions %}
+                <li><a href="{{ path('app_spelling_rules', {van: s.word}) }}#regel-formulier">{{ s.word }}</a>
+                    <span class="spelling-muted">{{ s.count }}×</span></li>
+                {% else %}
+                <li class="spelling-muted">Geen suggesties meer.</li>
+                {% endfor %}
+            </ol>
+        </section>
+    </div>
+
+    {# ── Alle regels ──────────────────────────────────────────────────────── #}
+    <section class="spelling-card spelling-rules" data-controller="list-search">
+        <h2>Regels <span class="spelling-muted">({{ rules|length }})</span></h2>
+        {% if rules %}
+        <input type="search" class="list-search-input" placeholder="Zoek in de regels…" aria-label="Zoek in de regels"
+               value="{{ filter }}" data-list-search-target="input" data-action="input->list-search#filter">
+        <div class="table-scroll">
+        <table class="admin-table spelling-table">
+            <thead>
+                <tr><th>Soort</th><th>Oud</th><th></th><th>Nieuw</th><th>Uitzonderingen</th><th>Volgorde</th>
+                    <th>Treffers</th><th>Notitie</th><th></th></tr>
+            </thead>
+            <tbody>
+                {% for r in rules %}
+                <tr id="regel-{{ r.id }}" class="{{ r.active ? '' : 'spelling-inactive' }}"
+                    data-list-search-target="row"
+                    data-search="{{ (r.source ~ ' ' ~ r.target ~ ' ' ~ r.exceptions ~ ' ' ~ (r.note ?? ''))|lower }}">
+                    <td>{{ r.kind == 'pattern' ? 'patroon' : 'woord' }}</td>
+                    <td><code>{{ r.source }}</code></td>
+                    <td aria-hidden="true">→</td>
+                    <td><code>{{ r.target }}</code></td>
+                    <td class="spelling-muted">{{ r.exceptions|replace({"\n": ', '}) }}</td>
+                    <td>{{ r.kind == 'pattern' ? r.position : '' }}</td>
+                    <td>{{ hits[r.id] ?? 0 }}</td>
+                    <td class="spelling-muted">{{ r.note }}</td>
+                    <td class="spelling-row-actions">
+                        <a href="{{ path('app_spelling_rules', {bewerk: r.id}) }}#regel-formulier" class="btn btn-sm">Bewerk</a>
+                        <form method="post" action="{{ path('app_spelling_rule_toggle', {id: r.id}) }}">
+                            <input type="hidden" name="_csrf_token" value="{{ csrf_token('spelling_rule') }}">
+                            <button type="submit" class="btn btn-sm">{{ r.active ? 'Uit' : 'Aan' }}</button>
+                        </form>
+                        <form method="post" action="{{ path('app_spelling_rule_delete', {id: r.id}) }}"
+                              data-controller="confirm-submit" data-action="submit->confirm-submit#submit"
+                              data-confirm-submit-message-value="Regel „{{ r.source }} → {{ r.target }}” verwijderen?">
+                            <input type="hidden" name="_csrf_token" value="{{ csrf_token('spelling_rule') }}">
+                            <button type="submit" class="btn btn-sm">Verwijder</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        </div>
+        <p class="spelling-muted" data-list-search-target="empty" hidden>Geen regels gevonden.</p>
+        {% else %}
+        <p class="spelling-muted">Nog geen regels.</p>
+        {% endif %}
+    </section>
+
+    {# ── Overdracht dev ↔ productie ───────────────────────────────────────── #}
+    <section class="spelling-card spelling-transfer">
+        <h2>Overzetten tussen dev en productie</h2>
+        <p class="spelling-muted">Exporteer de regels hier en importeer het bestand in de andere omgeving (in beide richtingen).
+            Een regel met dezelfde soort en oude vorm wordt bijgewerkt, andere worden toegevoegd.</p>
+        <div class="spelling-transfer-row">
+            <a href="{{ path('app_spelling_rules_export') }}" class="btn">Exporteren (.json)</a>
+            <form method="post" action="{{ path('app_spelling_rules_import') }}" enctype="multipart/form-data" class="spelling-import"
+                  data-controller="confirm-submit" data-action="submit->confirm-submit#submit"
+                  data-confirm-submit-message-value="Regels uit dit bestand importeren?" data-confirm-submit-confirm-label-value="Importeren">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token('spelling_rule') }}">
+                <input type="file" name="file" accept=".json,application/json" required>
+                <label><input type="radio" name="mode" value="merge" checked> Samenvoegen</label>
+                <label><input type="radio" name="mode" value="replace"> Vervangen <span class="spelling-muted">(regels die niet in het bestand staan verdwijnen)</span></label>
+                <button type="submit" class="btn btn-primary">Importeren</button>
+            </form>
+        </div>
+    </section>
+</div>
+{% endblock %}
