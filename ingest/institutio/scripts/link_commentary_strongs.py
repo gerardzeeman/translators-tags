@@ -34,6 +34,9 @@ from db import get_connection
 
 _FINALS = str.maketrans("ךםןףץ", "כמנפצ")
 _PREFIXES = "והבלכמש"
+# A Hebrew word (letters and points; maqaf ends it) or a Greek one.
+_SCRIPT_WORD_RE = re.compile("[א-ת֑-ֽֿ-ׇ]*[א-ת][א-ת֑-ֽֿ-ׇ]*"
+                             "|[Ͱ-Ͽἀ-῿]+")
 
 
 def hebrew(word: str) -> str:
@@ -96,6 +99,18 @@ def main() -> int:
                WHERE s.work_id = %s AND t.is_word
                  AND t.surface ~ '[א-תͰ-Ͽἀ-῿]'""", (work_id,))
         words = cur.fetchall()
+        # and those of the Dutch translation(s), not tokenized: its Hebrew
+        # pointed (בָּרָא), found as runs of Hebrew / Greek letters -- the
+        # same runs CommentaryController::dutchParagraphs marks.
+        cur.execute("""SELECT COALESCE(s.chapter, 0), tr.text_nl
+                       FROM translation tr JOIN segment s ON s.id = tr.segment_id
+                       WHERE s.work_id = %s""", (work_id,))
+        seen = set(words)
+        for ch, text in cur.fetchall():
+            for m in _SCRIPT_WORD_RE.finditer(re.sub(r"⟦[^⟧]*⟧", " ", text or "")):
+                if (ch, m.group()) not in seen:
+                    seen.add((ch, m.group()))
+                    words.append((ch, m.group()))
 
         # How often each number occurs in the Bible: the tie-break between
         # lemmas with the same letters.

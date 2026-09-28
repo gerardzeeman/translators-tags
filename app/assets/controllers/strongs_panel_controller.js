@@ -37,6 +37,12 @@ export default class extends Controller {
             this.titleTarget.textContent = link.dataset.panelTitle || 'Lexicon'
         }
 
+        // Op de commentaarpagina's staat ook het Bijbeltekst-paneel
+        // (verse_panel_controller.js) op dezelfde plek: dat gaat dicht.
+        this.element.querySelectorAll('.institutio-verse-sidebar.is-open')
+            .forEach(el => el.classList.remove('is-open'))
+        this.element.classList.remove('verse-panel-open')
+
         this.sidebarTarget.classList.add('is-open')
         this.element.classList.add('strongs-open')
     }

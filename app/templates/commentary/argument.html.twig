@@ -6,7 +6,7 @@
 {% block nav_center %}{% endblock %}
 
 {% block body %}
-<div class="page-institutio" data-controller="verse-panel">
+<div class="page-institutio" data-controller="verse-panel strongs-panel">
 
     <nav class="chapter-nav" aria-label="Commentaar navigatie">
         <a href="{{ path('app_commentary_toc', {boek: boek}) }}" class="chapter-nav-book">{{ meta.title }}</a>
@@ -37,6 +37,7 @@
     </div>
 
     {% include 'confession/_verse_sidebar.html.twig' %}
+    {% include 'commentary/_strongs_sidebar.html.twig' %}
 
 </div>
 {% endblock %}

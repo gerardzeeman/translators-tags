@@ -68,10 +68,11 @@ class CommentaryController extends AbstractController
         $meta = $this->meta($boek);
         $segments = $this->repository->getUnnumberedSection($meta['work'], $meta['argument_prefix']);
         $notes = $this->repository->getSegmentAnnotations(array_map(fn($s) => $s['id'], $segments));
+        $strongs = $this->repository->getWorkWordStrongs($meta['work'], 0);
         return $this->render('commentary/argument.html.twig', [
             'boek'     => $boek,
             'meta'     => $meta,
-            'segments' => array_map(fn($s) => $this->withParts($s, $notes[$s['id']] ?? []), $segments),
+            'segments' => array_map(fn($s) => $this->withParts($s, $notes[$s['id']] ?? [], $strongs), $segments),
             'layer'    => self::DUTCH_LAYER,
         ]);
     }
@@ -85,7 +86,8 @@ class CommentaryController extends AbstractController
             throw $this->createNotFoundException('Hoofdstuk niet gevonden.');
         }
         $notes = $this->repository->getSegmentAnnotations(array_map(fn($s) => $s['id'], $data['articles']));
-        $segments = array_map(fn($s) => $this->withParts($s, $notes[$s['id']] ?? []), $data['articles']);
+        $strongs = $this->repository->getWorkWordStrongs($meta['work'], $chapter);
+        $segments = array_map(fn($s) => $this->withParts($s, $notes[$s['id']] ?? [], $strongs), $data['articles']);
 
         // The Dutch Bible verse next to Calvin's own Latin rendering: HSV
         // for users allowed to see it (copyrighted), the Statenvertaling
@@ -118,9 +120,10 @@ class CommentaryController extends AbstractController
     /**
      * A segment with its Latin word-hover parts (plain text until the
      * segment is tokenized) -- the edition's footnotes placed in them as
-     * hover markers -- and its Dutch translation, if any.
+     * hover markers -- and its Dutch translation, if any, with the
+     * Hebrew/Greek words of $strongs (surface => entry) marked.
      */
-    private function withParts(array $s, array $notes = []): array
+    private function withParts(array $s, array $notes = [], array $strongs = []): array
     {
         return [
             'id'        => $s['id'],
@@ -131,7 +134,7 @@ class CommentaryController extends AbstractController
             'parts'     => $this->repository->insertNoteParts(
                 $this->repository->splitTextIntoWordParts($s['text_la'], $s['tokens']), $notes),
             'text_nl'   => $s['translations'][self::DUTCH_LAYER] ?? null,
-            'nl_paras'  => self::dutchParagraphs($s['translations'][self::DUTCH_LAYER] ?? null),
+            'nl_paras'  => self::dutchParagraphs($s['translations'][self::DUTCH_LAYER] ?? null, $strongs),
         ];
     }
 
@@ -139,11 +142,15 @@ class CommentaryController extends AbstractController
      * The Dutch text as paragraphs of parts: plain text, and the places
      * where the translator's own print has a misprint -- marked in the text
      * by parse_calvin_genesis_nl.py as ⟦C:intended‖printed‖note⟧ -- which
-     * show the intended word, marked, with what was printed and why on hover.
+     * show the intended word, marked, with what was printed and why on hover;
+     * and the Hebrew/Greek words quoted that have a Strong's entry
+     * ($strongs, surface => entry: ConfessionRepository::getWorkWordStrongs),
+     * as 'word' parts with the same popup as the Latin text's.
      *
-     * @return list<list<array{type: string, content: string, printed?: string, note?: string}>>
+     * @param array<string, array{id: string, transliteration: ?string, meaning: ?string}> $strongs
+     * @return list<list<array{type: string, content: string, printed?: string, note?: string, strongs?: array}>>
      */
-    public static function dutchParagraphs(?string $text): array
+    public static function dutchParagraphs(?string $text, array $strongs = []): array
     {
         if ($text === null || $text === '') {
             return [];
@@ -155,7 +162,15 @@ class CommentaryController extends AbstractController
                 if (preg_match('/^⟦C:([^‖⟧]*)‖([^‖⟧]*)‖([^⟧]*)⟧$/u', $piece, $m)) {
                     $parts[] = ['type' => 'correction', 'content' => $m[1], 'printed' => $m[2], 'note' => $m[3]];
                 } else {
-                    $parts[] = ['type' => 'text', 'content' => $piece];
+                    // a Hebrew word (letters and points, maqaf ends it) or a
+                    // Greek one -- as link_commentary_strongs.py finds them
+                    $words = '/([\x{05D0}-\x{05EA}\x{0591}-\x{05BD}\x{05BF}-\x{05C7}]*[\x{05D0}-\x{05EA}]'
+                           . '[\x{05D0}-\x{05EA}\x{0591}-\x{05BD}\x{05BF}-\x{05C7}]*|[\x{0370}-\x{03FF}\x{1F00}-\x{1FFF}]+)/u';
+                    foreach (preg_split($words, $piece, -1, PREG_SPLIT_DELIM_CAPTURE | PREG_SPLIT_NO_EMPTY) as $bit) {
+                        $parts[] = isset($strongs[$bit])
+                            ? ['type' => 'word', 'content' => $bit, 'strongs' => $strongs[$bit]]
+                            : ['type' => 'text', 'content' => $bit];
+                    }
                 }
             }
             $paragraphs[] = $parts;

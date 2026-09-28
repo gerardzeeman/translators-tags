@@ -220,6 +220,37 @@ class ConfessionRepository
     }
 
     /**
+     * The Strong's entries of the Hebrew/Greek words quoted in one chapter
+     * of a work (0: the chapterless Argumentum), by the word as printed --
+     * for the untokenized Dutch translation, which marks them itself
+     * (CommentaryController::dutchParagraphs). See work_word_strongs.
+     *
+     * @return array<string, array{id: string, transliteration: ?string, meaning: ?string}>
+     */
+    public function getWorkWordStrongs(string $workSlug, int $chapter): array
+    {
+        $rows = $this->connection->fetchAllAssociative(
+            'SELECT ws.surface, se.strongs_id, se.transliteration, se.definition, se.definition_nl,
+                    se.short_def, se.short_def_nl
+             FROM work_word_strongs ws
+             JOIN work w ON w.id = ws.work_id
+             JOIN strongs_entries se ON se.strongs_id = ws.strongs_id
+             WHERE w.slug = ? AND ws.chapter = ?',
+            [$workSlug, $chapter]
+        );
+        $bySurface = [];
+        foreach ($rows as $r) {
+            $bySurface[$r['surface']] = [
+                'id'              => $r['strongs_id'],
+                'transliteration' => $r['transliteration'],
+                'meaning'         => self::firstMeaning($r['definition_nl'] ?: $r['definition'],
+                                                        $r['short_def_nl'] ?: $r['short_def']),
+            ];
+        }
+        return $bySurface;
+    }
+
+    /**
      * @param array<int, array<string, mixed>> $rows each with at least 'id', 'text_la'
      * @return array<int, array<string, mixed>> same rows, with a 'tokens' key added
      */
