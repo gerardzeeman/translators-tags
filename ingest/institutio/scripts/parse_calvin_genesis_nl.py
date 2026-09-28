@@ -37,6 +37,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import collections
 import difflib
 import json
 import re
@@ -1277,6 +1278,177 @@ def mirror_reference(text: str, reference: list[str], counts: dict[str, int], vo
     return text
 
 
+def mirror_bible_verse(text: str, reference: str, counts: dict[str, int], vocab: set[str],
+                       changes: list[tuple[str, str]]) -> str:
+    """One verse of Los's Bible text corrected from the reference's: as the
+    comments (mirror_reference), and further -- the verse is short and the
+    two are the same text -- a run of words none of which is a word of the
+    book (OCR junk around the lost margin numbers: "hoenmszeidensdertleere")
+    becomes the reference's, when those are words of Los himself; and the
+    verse ends in the reference's punctuation ("zoo,," -> "zoo,")."""
+    for _ in range(2):
+        text = mirror_reference(text, _REF_TOKEN_RE.findall(reference), counts, vocab, changes)
+    ref_toks = _REF_TOKEN_RE.findall(reference)
+    toks = list(_REF_TOKEN_RE.finditer(text))
+    sm = difflib.SequenceMatcher(a=[t.group().lower() for t in toks], b=[t.lower() for t in ref_toks],
+                                 autojunk=False)
+    edits = []
+    for op, a1, a2, b1, b2 in sm.get_opcodes():
+        # punctuation between two words as the reference has it: specks
+        # read as marks ('Zie"de "mensch', "boom. des"), marks lost
+        if (op != "equal" and 0 < a1 and a2 < len(toks) and b1 > 0
+                and not any(re.search(r"\w", t.group()) for t in toks[a1:a2])
+                and not any(re.search(r"\w", t) for t in ref_toks[b1:b2])):
+            glue = ""
+            for mark in ref_toks[b1:b2]:           # „ ( open to the right, the rest close
+                glue += " " + mark if mark in "„(" else mark
+            if not glue or glue[-1] not in "„(":
+                glue += " "
+            edits.append((toks[a1 - 1].end(), toks[a2].start(), glue))
+            continue
+        if op != "replace":
+            continue
+        ours = [t.group() for t in toks[a1:a2] if re.search(r"[A-Za-zÀ-ÿ]", t.group())]
+        theirs = [t for t in ref_toks[b1:b2] if re.search(r"[A-Za-zÀ-ÿ]", t)]
+        if (all(t.group().isdigit() for t in toks[a1:a2]) and all(t.isdigit() for t in ref_toks[b1:b2])):
+            # a number misread ("Adam leefde 180 jaren" for 130)
+            edits.append((toks[a1].start(), toks[a2 - 1].end(), "".join(ref_toks[b1:b2])))
+            changes.append((text[toks[a1].start():toks[a2 - 1].end()], "".join(ref_toks[b1:b2])))
+            continue
+        if [w.lower() for w in ours] == [w.lower().replace("’", "") for w in theirs] and ours != theirs:
+            # the apostrophe the OCR lost ("en t gevogelte")
+            edits.append((toks[a1].start(), toks[a2 - 1].end(), " ".join(ref_toks[b1:b2])))
+            continue
+        # junk: most of the letters in words that aren't words of the book
+        # (a real word read into it -- "Bip ndatsistiaar Taai" -- is no help)
+        junk = sum(len(w) for w in ours if not _known(w, counts, vocab))
+        if (ours and theirs and junk >= 0.6 * sum(len(w) for w in ours)
+                and all(counts.get(w.lower().strip("’"), 0) >= 2 for w in theirs)):
+            new = " ".join(ref_toks[b1:b2])
+            new = re.sub(r"\s+([,.;:!?”)])", r"\1", re.sub(r"([„(])\s+", r"\1", new))
+            edits.append((toks[a1].start(), toks[a2 - 1].end(), new))
+            changes.append((text[toks[a1].start():toks[a2 - 1].end()], new))
+    for start, end, new in reversed(edits):
+        text = text[:start] + new + text[end:]
+    if edits:     # the junk gone, words glued to it can be told apart ("Geestzal")
+        text = mirror_reference(text, ref_toks, counts, vocab, changes)
+    # Los sets „ ”, never a straight quote (a speck: 'de "mensch'); a space
+    # after , ; : ("God:Zie")
+    text = re.sub(r'\s*"\s*', " ", text)
+    text = re.sub(r"([,;:])(?=[A-Za-zÀ-ÿ„])", r"\1 ", text)
+    # a margin verse number the OCR did read, at either end ("… zou zijn. 21.")
+    text = re.sub(r"^\s*\d{1,2}\s*[.,]?\s+|\s+\d{1,2}\s*[.,]?\s*$", "", text)
+    end_ref = re.search(r"[.,;:!?]+[”’)]*$", reference.strip())
+    if end_ref:
+        text = re.sub(r"[\s.,;:!?]*([”’)]*)$", "", text.strip()) + end_ref.group()
+    return text
+
+
+# Verse numbers the reference lacks altogether: (chapter, verse) -> the words
+# the verse starts with, inside the verse before it.
+_REF_MISSING_VERSES = {(30, 25): "’t Geschiedde nu, toen Rachel"}
+
+
+def reference_verses(part: str, chapter: int | None = None) -> dict[int, str]:
+    """Los's Bible text of one chapter in the reference (load_reference()),
+    by verse: it precedes the comments, each verse opening a line with its
+    number. Its numbers have misprints ("10." for 19, "7 En" without a
+    stop) and some stand mid-line ("… schiep Hij hen. 28. En God"); the
+    comments start where the numbering starts over."""
+    cands = [(int(m.group(1)), m.start(1))
+             for m in re.finditer(r"(?:^|\n)[ \t]*(\d{1,2})\.?[ \t]+(?=[A-Z„(])", part)]
+    starts, prev, end = {}, 0, len(part)
+    for i, (n, pos) in enumerate(cands):
+        nxt = cands[i + 1][0] if i + 1 < len(cands) else None
+        if n == prev + 1 or (prev and prev + 1 < n <= prev + 3 and nxt == n + 1):
+            starts[n], prev = pos, n
+        elif prev and nxt == prev + 2 and n != 1:
+            starts[prev + 1], prev = pos, prev + 1      # misprinted number
+        elif prev and n <= prev:
+            end = pos
+            break
+    keys = sorted(starts)
+    res = {k: re.sub(r"\s+", " ", part[starts[k]:(starts[keys[j + 1]] if j + 1 < len(keys) else end)]).strip()
+           for j, k in enumerate(keys)}
+    for k in sorted(res):
+        if k + 1 not in res and (k + 2 in res or k == max(res)):
+            m = re.search(rf"(?<=[.!?)”]) {k + 1}\. (?=[A-Z„(])", res[k])
+            if m:
+                res[k], res[k + 1] = res[k][:m.start()].strip(), res[k][m.start():].strip()
+    for (ch, k), opening in _REF_MISSING_VERSES.items():
+        if ch == chapter and k not in res and opening in res.get(k - 1, ""):
+            at = res[k - 1].index(opening)
+            res[k - 1], res[k] = res[k - 1][:at].strip(), res[k - 1][at:].strip()
+    return {k:re.sub(r"^\d{1,2}\.?\s+", "", v) for k, v in sorted(res.items())}
+
+
+def _is_verse(paragraph: str, verse: str) -> bool:
+    """Whether an OCR'd paragraph is this Bible verse (its number aside):
+    nearly all words of each in the other -- not a comment opening with
+    the verse as its lemma, which goes on."""
+    ours = [w.lower() for w in re.findall(r"[A-Za-zÀ-ÿ’]+", paragraph)]
+    theirs = [w.lower() for w in re.findall(r"[A-Za-zÀ-ÿ’]+", verse)]
+    if len(theirs) < 4 or not ours:
+        return False
+    sm = difflib.SequenceMatcher(a=ours, b=theirs, autojunk=False)
+    same = sum(size for *_, size in sm.get_matching_blocks())
+    return same >= 0.8 * len(theirs) and same >= 0.8 * len(ours)
+
+
+def split_bible_text(ours: str, ref_verses: dict[int, str]) -> tuple[dict[int, str], dict[int, float]]:
+    """Cut our OCR of Los's Bible text of a chapter (no verse numbers: they
+    stood in the margin, which the OCR lost) into verses, where the
+    reference's verses start -- the two aligned word for word. Returns the
+    verses and, per verse, how much of it our OCR matches word for word."""
+    toks = [m for m in _REF_TOKEN_RE.finditer(ours)]
+    ref_toks, verse_of = [], []
+    for k, text in ref_verses.items():
+        for t in _REF_TOKEN_RE.findall(text):
+            ref_toks.append(t.lower())
+            verse_of.append(k)
+    sm = difflib.SequenceMatcher(a=[t.group().lower() for t in toks], b=ref_toks, autojunk=False)
+    # reference token -> our token, from the matching stretches
+    ours_at: dict[int, int] = {}
+    matched: dict[int, int] = collections.Counter()
+    for a, b, size in sm.get_matching_blocks():
+        for i in range(size):
+            ours_at[b + i] = a + i
+            matched[verse_of[b + i]] += 1
+    first = {}
+    for j, k in enumerate(verse_of):
+        first.setdefault(k, j)
+    # a verse starts at our token matched to its first word, or failing that
+    # to the nearest word after it
+    cut = {}
+    for k, j in first.items():
+        ahead = next((x for x in range(j, len(ref_toks)) if x in ours_at), None)
+        nxt = ours_at[ahead] if ahead is not None else len(toks)
+        back = next((x for x in range(j - 1, -1, -1) if x in ours_at), None)
+        if back is None:
+            start = nxt
+        else:
+            # unmatched (garbled) words between the two verses: shared in
+            # proportion to the words each verse misses there (2:19's "dat
+            # is haar naam", read "Bip ndatsistiaar Taai", is 2:19's)
+            gap = max(0, nxt - ours_at[back] - 1)
+            tail, head = j - back - 1, (ahead if ahead is not None else len(ref_toks)) - j
+            start = min(nxt, ours_at[back] + 1 + (round(gap * tail / (tail + head)) if tail + head else 0))
+        # punctuation right after the previous verse's last word is that one's
+        while start < nxt and not re.search(r"\w", toks[start].group()):
+            start += 1
+        cut[k] = start
+    keys = sorted(cut)
+    out, score = {}, {}
+    for i, k in enumerate(keys):
+        a = cut[k]
+        b = cut[keys[i + 1]] if i + 1 < len(keys) else (ours_at.get(len(ref_toks) - 1, len(toks) - 1) + 1)
+        if a < b <= len(toks):
+            out[k] = re.sub(r"\s+", " ", ours[toks[a].start():toks[b - 1].end()]).strip()
+        n = sum(1 for x in verse_of if x == k)
+        score[k] = matched[k] / n if n else 0.0
+    return out, score
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--raw-dir", type=Path, default=RAW)
@@ -1307,6 +1479,7 @@ def main() -> int:
     args = ap.parse_args()
 
     latin = [json.loads(line) for line in args.latin.read_text(encoding="utf-8").splitlines() if line.strip()]
+    reference_texts = load_reference(args.reference) if args.reference.exists() else {}
     verses = load_verses(args.verses)
     volume_1, volume_2 = ((args.raw_dir / f"los1900_deel{n}.txt").read_text(encoding="utf-8", errors="replace")
                           for n in (1, 2))
@@ -1421,6 +1594,7 @@ def main() -> int:
     if len(chapters) != CHAPTERS:
         warnings.append(f"{len(chapters)} chapter headings found, expected {CHAPTERS}")
     n_matched = n_latin = 0
+    bible_raw: dict[int, str] = {}      # Los's Bible text per chapter, before the comments
     for ch, body in enumerate(chapters[:CHAPTERS], start=1):
         la_comments = [r for r in latin if r["kind"] == "commentary" and r["chapter"] == ch]
         n_latin += len(la_comments)
@@ -1461,6 +1635,16 @@ def main() -> int:
         if comment_start is None:
             warnings.append(f"chapter {ch}: no comments found")
             continue
+        # The chapter's last Bible verses taken for the first comment (40:20-23
+        # as "1. En het geschiedde ten derden dage", "21. …"): paragraphs that
+        # are, word for word, a verse of the reference's Bible text.
+        ref_verses = reference_verses(reference_texts.get(ch, ""), ch)
+        while comment_start < len(paras) - 1 and any(
+                _is_verse(paras[comment_start], v) for k, v in ref_verses.items() if k > max(ref_verses) - 8):
+            comment_start += 1
+        # (no Hebrew in Los's Bible text: a marker there is junk taken for a
+        # quotation -- "Be vanr", ook van, in 3:22)
+        bible_raw[ch] = _MARKER_RE.sub(lambda m: m.group(2), "\n".join(paras[:comment_start]))
         comment_text = "\n\n".join(join_broken_sentences(paras[comment_start:], capitals=True, seam=SEAM))
         scripture = [r for r in latin if r["kind"] == "scripture" and r["chapter"] == ch]
         for r in la_comments:
@@ -1510,8 +1694,8 @@ def main() -> int:
     for r in rows:
         r["text"] = typeset(r["text"])
 
-    if args.reference.exists():
-        reference = {ch: _REF_TOKEN_RE.findall(t) for ch, t in load_reference(args.reference).items()}
+    if reference_texts:
+        reference ={ch: _REF_TOKEN_RE.findall(t) for ch, t in reference_texts.items()}
         chapter_of = {r["ref"]: r["chapter"] for r in latin if r["kind"] == "commentary"}
         vocab = load_dutch_vocab(args.dutch_vocab)
         ref_changes: list[tuple[str, str]] = []
@@ -1522,6 +1706,51 @@ def main() -> int:
                     r["text"] = mirror_reference(r["text"], reference[chapter_of[r["ref"]]], counts, vocab,
                                                  ref_changes)
         print(f"[ref]   {len(ref_changes)} words corrected from the reformata.nl text")
+
+        # Los's Bible text, per verse of Calvin's Latin: our OCR cut where
+        # the reference's verses start, corrected from it like the comments.
+        # A verse our OCR hardly has (under half its words) comes from the
+        # reference; a verse without a Latin segment of its own (Calvin's
+        # text joins two) goes with the one before, under its number.
+        scripture_ref = {(r["chapter"], r["section"]): r["ref"] for r in latin if r["kind"] == "scripture"}
+        bible: dict[str, list[str]] = {}
+        bible_changes: list[tuple[str, str]] = []
+        n_verses = n_from_ref = 0
+        for ch in sorted(bible_raw):
+            ref_verses = reference_verses(reference_texts.get(ch, ""), ch)
+            ours, score = split_bible_text(bible_raw[ch], ref_verses)
+            for k, ref_text in ref_verses.items():
+                n_verses += 1
+                if score.get(k, 0.0) < 0.5 or not ours.get(k):
+                    text = ref_text
+                    n_from_ref += 1
+                    warnings.append(f"Bible text {ch}:{k}: from the reference (OCR {score.get(k, 0.0):.0%})")
+                else:
+                    text = mirror_bible_verse(ours[k], ref_text, counts, vocab, bible_changes)
+                    # still far off (a badly printed page, its lines read out
+                    # of order: 47:9 holding half of 47:16): the reference's
+                    plain = [re.findall(r"\w+", _plain_letters(t).lower()) for t in (text, ref_text)]
+                    like = difflib.SequenceMatcher(a=plain[0], b=plain[1], autojunk=False).ratio()
+                    if like < 0.9:
+                        text = ref_text
+                        n_from_ref += 1
+                        warnings.append(f"Bible text {ch}:{k}: from the reference (OCR {like:.0%} alike)")
+                text = typeset(text)
+                own = max((v for c, v in scripture_ref if c == ch and v <= k), default=None)
+                if own is None:
+                    continue
+                if own == k:
+                    bible.setdefault(scripture_ref[(ch, k)], []).append(text)
+                else:
+                    bible.setdefault(scripture_ref[(ch, own)], []).append(f"{k}. {text}")
+        rows += [{"ref": ref, "layer": LAYER, "text": " ".join(parts), "model": MODEL}
+                 for ref, parts in bible.items()]
+        print(f"[bible] Los's Bible text: {n_verses} verses in {len(bible)} Latin verse segments; "
+              f"{n_from_ref} from the reference where our OCR lacks them; "
+              f"{len(bible_changes)} corrections from the reference")
+        if args.ocr_changes:
+            with args.ocr_changes.open("a", encoding="utf-8") as fh:
+                fh.writelines(f"bible\t{a}\t{b}\n" for a, b in bible_changes)
         if args.ocr_changes:
             with args.ocr_changes.open("a", encoding="utf-8") as fh:
                 fh.writelines(f"ref\t{a}\t{b}\n" for a, b in ref_changes)

@@ -23,14 +23,21 @@
 
     {% if scripture %}
     <h2 class="commentary-part-heading">Tekst</h2>
-    <p class="commentary-part-hint">Calvijns eigen Latijnse weergave van het hoofdstuk, naast de {{ bible_code == 'HSV' ? 'Herziene Statenvertaling' : 'Statenvertaling' }}.</p>
+    <p class="commentary-part-hint">Calvijns eigen Latijnse weergave van het hoofdstuk, Los' vertaling daarvan (1900), en de Statenvertaling.</p>
     <div class="commentary-verses">
+        <div class="commentary-verse-row commentary-verse-head" aria-hidden="true">
+            <span></span>
+            <span class="institutio-layer-label">Calvijn (Latijn)</span>
+            <span class="institutio-layer-label">Los (1900)</span>
+            <span class="institutio-layer-label">Statenvertaling (Jongbloed)</span>
+        </div>
         {% for s in scripture %}
         <div class="commentary-verse-row" id="tekst-{{ s.section }}">
             <a href="{{ path('app_confession_verse', {r: meta.usfm ~ '.' ~ chapter ~ '.' ~ s.section ~ '-' ~ s.section}) }}"
                data-turbo-frame="institutio-verse-panel" class="commentary-verse-num" title="Bekijk Bijbeltekst">{{ s.section }}</a>
             <p class="institutio-sentence-la">{{ c.la_parts(s.parts) }}</p>
-            <p class="institutio-sentence-nl">{{ verses[s.section] ?? '' }}</p>
+            <p class="institutio-sentence-nl commentary-verse-los">{{ s.text_nl ?? '' }}</p>
+            <p class="institutio-sentence-nl commentary-verse-sv">{{ verses[s.section] ?? '' }}</p>
         </div>
         {% endfor %}
     </div>

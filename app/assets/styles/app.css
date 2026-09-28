@@ -5360,7 +5360,7 @@ a:hover { text-decoration: underline; }
 }
 .commentary-verse-row {
     display: grid;
-    grid-template-columns: 2rem 1fr 1fr;
+    grid-template-columns: 2rem 1.1fr 1fr 1fr;  /* nr | Latijn | Los | SV */
     gap: 1.2rem;
     align-items: baseline;
 }
@@ -5412,7 +5412,21 @@ a:hover { text-decoration: underline; }
     color: var(--col-label);
     text-align: center;
 }
+.commentary-verse-head .institutio-layer-label { margin: 0; }
 @media (max-width: 720px) {
     .commentary-verse-row { grid-template-columns: 1.6rem 1fr; }
     .commentary-verse-row .institutio-sentence-nl { grid-column: 2; }
+    /* stacked: the column heads above each text instead */
+    .commentary-verse-head { display: none; }
+    .commentary-verse-los::before,
+    .commentary-verse-sv::before {
+        display: block;
+        font-family: var(--font-ui);
+        font-size: .65rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        color: var(--col-label);
+    }
+    .commentary-verse-los::before { content: "Los (1900)"; }
+    .commentary-verse-sv::before { content: "Statenvertaling"; }
 }

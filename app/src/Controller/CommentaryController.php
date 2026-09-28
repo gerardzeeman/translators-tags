@@ -3,7 +3,6 @@
 namespace App\Controller;
 
 use App\Repository\ConfessionRepository;
-use App\Service\TranslationAccessService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
@@ -40,9 +39,11 @@ class CommentaryController extends AbstractController
     /** Dutch translation layer of each commentary (historical translation). */
     private const DUTCH_LAYER = 'los1900';
 
+    /** The Bible next to Calvin's text: the Statenvertaling (Jongbloed). */
+    private const BIBLE_CODE = 'SV';
+
     public function __construct(
         private readonly ConfessionRepository $repository,
-        private readonly TranslationAccessService $translationAccess,
     ) {}
 
     #[Route('/commentaren', name: 'app_commentary_index')]
@@ -89,19 +90,31 @@ class CommentaryController extends AbstractController
         $strongs = $this->repository->getWorkWordStrongs($meta['work'], $chapter);
         $segments = array_map(fn($s) => $this->withParts($s, $notes[$s['id']] ?? [], $strongs), $data['articles']);
 
-        // The Dutch Bible verse next to Calvin's own Latin rendering: HSV
-        // for users allowed to see it (copyrighted), the Statenvertaling
-        // otherwise -- same rule as the verse side panel.
-        $bibleCode = $this->translationAccess->isVisible('HSV') ? 'HSV' : 'SV';
+        // Next to Calvin's own Latin rendering of each verse: Los's Dutch of
+        // it (the segment's translation) and the Statenvertaling (Jongbloed),
+        // the Bible Los's readers knew. Where Calvin's text joins verses
+        // (1:22-23), the Statenvertaling's are joined too, as Los's are.
+        $scripture = array_values(array_filter($segments, fn($s) => $s['kind'] === 'scripture'));
+        $sv = $this->repository->getChapterVerses($meta['usfm'], $chapter, self::BIBLE_CODE);
+        $verses = [];
+        foreach ($scripture as $i => $s) {
+            $until = isset($scripture[$i + 1]) ? $scripture[$i + 1]['section'] : PHP_INT_MAX;
+            $parts = [];
+            foreach ($sv as $v => $text) {
+                if ($v >= (int) $s['section'] && $v < $until) {
+                    $parts[] = ($v === (int) $s['section'] ? '' : $v . '. ') . $text;
+                }
+            }
+            $verses[$s['section']] = implode(' ', $parts);
+        }
 
         return $this->render('commentary/chapter.html.twig', [
             'boek'       => $boek,
             'meta'       => $meta,
             'chapter'    => $chapter,
-            'scripture'  => array_values(array_filter($segments, fn($s) => $s['kind'] === 'scripture')),
+            'scripture'  => $scripture,
             'comments'   => array_values(array_filter($segments, fn($s) => $s['kind'] === 'commentary')),
-            'verses'     => $this->repository->getChapterVerses($meta['usfm'], $chapter, $bibleCode),
-            'bible_code' => $bibleCode,
+            'verses'     => $verses,
             'layer'      => self::DUTCH_LAYER,
             'nav'        => $this->repository->getAdjacentChapters($meta['work'], $chapter),
         ]);
