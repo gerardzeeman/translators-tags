@@ -2,7 +2,9 @@
 
 namespace App\Controller;
 
+use App\Repository\ConfessionRepository;
 use App\Repository\SpellingRuleRepository;
+use App\Service\SpellingContext;
 use App\Service\SpellingModernizer;
 use App\Service\SpellingRules;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -29,6 +31,7 @@ class SpellingRuleController extends AbstractController
     public function __construct(
         private readonly SpellingRuleRepository $repository,
         private readonly SpellingModernizer $modernizer,
+        private readonly ConfessionRepository $confession,
     ) {}
 
     #[Route('', name: 'app_spelling_rules', methods: ['GET'], priority: 20)]
@@ -39,12 +42,17 @@ class SpellingRuleController extends AbstractController
         return $this->render('spelling/index.html.twig', [
             'rules'    => $rules,
             'hits'     => $this->modernizer->hitsPerRule($rules, self::LAYER),
+            'chosen'   => $this->repository->choiceCounts(self::LAYER),
+            'kept'     => $this->repository->keptCounts(self::LAYER),
+            // how many word rules each old form has (more than one: a default
+            // and alternatives)
+            'group'    => self::groupSizes($rules),
             'coverage' => $this->modernizer->coverage(80, self::LAYER),
             'form'     => $edit ?? [
                 'id'   => null,
                 'kind' => $request->query->get('soort', 'word'),
                 'source' => $request->query->get('van', ''),
-                'target' => '', 'exceptions' => '', 'position' => 0, 'active' => true, 'note' => '',
+                'target' => '', 'exceptions' => '', 'position' => 0, 'active' => true, 'note' => '', 'is_default' => false,
             ],
             'filter'   => $request->query->get('zoek', ''),
         ]);
@@ -67,10 +75,11 @@ class SpellingRuleController extends AbstractController
             'position'   => (int) ($request->request->get('position') ?: 0),
             'active'     => $request->request->has('active'),
             'note'       => (string) $request->request->get('note', ''),
+            'is_default' => $request->request->has('is_default'),
         ];
         $error = SpellingRules::validate($data['kind'], $data['source'], $data['target']);
-        if ($error === null && $this->repository->exists(self::LAYER, $data['kind'], $data['source'], $id)) {
-            $error = "Er is al een regel voor „{$data['source']}”.";
+        if ($error === null && $this->repository->exists(self::LAYER, $data['kind'], $data['source'], $data['target'], $id)) {
+            $error = "Er is al een regel „{$data['source']} → {$data['target']}”.";
         }
         if ($error !== null) {
             $this->addFlash('error', $error);
@@ -96,6 +105,59 @@ class SpellingRuleController extends AbstractController
             $this->addFlash('success', "Regel „{$rule['source']} → {$rule['target']}” verwijderd.");
         }
         return $this->redirectToRoute('app_spelling_rules');
+    }
+
+    #[Route('/{id<\d+>}/standaard', name: 'app_spelling_rule_default', methods: ['POST'], priority: 20)]
+    public function makeDefault(int $id, Request $request): Response
+    {
+        if ($this->isCsrfTokenValid('spelling_rule', $request->request->get('_csrf_token'))) {
+            $this->repository->makeDefault($id);
+        }
+        return $this->redirectToRoute('app_spelling_rules', ['_fragment' => 'regel-' . $id]);
+    }
+
+    /**
+     * The choice at one spot of a segment's Dutch -- another rule for the old
+     * form there, Los's own form ("los"), or back to the default ("default")
+     * -- from the dropdown on the chapter page; answers with the segment's
+     * modern-spelling column as it is now (commentary/_modern_column).
+     */
+    #[Route('/keuze', name: 'app_spelling_choice', methods: ['POST'], priority: 20)]
+    public function choose(Request $request): JsonResponse
+    {
+        $data = json_decode($request->getContent(), true) ?: [];
+        if (!$this->isCsrfTokenValid('spelling_choice', (string) ($data['_token'] ?? ''))) {
+            return $this->json(['error' => 'Ongeldig verzoek.'], 400);
+        }
+        $segment = $this->repository->segmentWithText(self::LAYER, (int) ($data['segment'] ?? 0));
+        $key = (string) ($data['key'] ?? '');
+        $occurrence = (int) ($data['occurrence'] ?? 0);
+        if ($segment === null || $segment['text_nl'] === null || $key === '' || $occurrence < 1) {
+            return $this->json(['error' => 'Onbekende plek.'], 400);
+        }
+        $choice = $data['choice'] ?? 'default';
+        if ($choice === 'default') {
+            $ruleId = null;
+        } elseif ($choice === 'los') {
+            $ruleId = 0;
+        } else {
+            $rule = $this->repository->find((int) $choice);
+            if ($rule === null || $rule['kind'] !== 'word' || SpellingRules::key($rule['source']) !== $key) {
+                return $this->json(['error' => 'Deze regel hoort niet bij dit woord.'], 400);
+            }
+            $ruleId = $rule['id'];
+        }
+        $this->repository->choose(self::LAYER, $segment['id'], $key, $occurrence, $ruleId,
+            $this->getUser()?->getUserIdentifier());
+
+        $strongs = $this->confession->getWorkWordStrongs($segment['work'], $segment['chapter']);
+        $choices = $this->repository->choicesFor(self::LAYER, [$segment['id']]);
+        $paras = $this->modernizer->paragraphs(
+            CommentaryController::dutchParagraphs($segment['text_nl'], $strongs), self::LAYER,
+            new SpellingContext($choices[$segment['id']] ?? []));
+        return $this->json(['html' => $this->renderView('commentary/_modern_column.html.twig', [
+            'paras' => $paras, 'segment_id' => $segment['id'], 'can_edit' => true,
+        ])]);
     }
 
     #[Route('/{id<\d+>}/actief', name: 'app_spelling_rule_toggle', methods: ['POST'], priority: 20)]
@@ -141,11 +203,13 @@ class SpellingRuleController extends AbstractController
             if ($file === null || !$file->isValid()) {
                 throw new \RuntimeException('Kies een exportbestand (.json).');
             }
-            $rules = self::rulesFromExport((string) file_get_contents($file->getPathname()));
-            $result = $this->repository->import(self::LAYER, $rules, $request->request->get('mode') === 'replace',
-                $this->getUser()?->getUserIdentifier());
-            $this->addFlash('success', sprintf('Geïmporteerd: %d toegevoegd, %d bijgewerkt, %d verwijderd.',
-                $result['added'], $result['updated'], $result['removed']));
+            $json = (string) file_get_contents($file->getPathname());
+            $result = $this->repository->import(self::LAYER, self::rulesFromExport($json),
+                $request->request->get('mode') === 'replace', $this->getUser()?->getUserIdentifier(),
+                self::choicesFromExport($json));
+            $this->addFlash('success', sprintf('Geïmporteerd: %d regels toegevoegd, %d bijgewerkt, %d verwijderd; %d keuzes%s.',
+                $result['added'], $result['updated'], $result['removed'], $result['choices'],
+                $result['choices_skipped'] ? " ({$result['choices_skipped']} overgeslagen: tekst of regel ontbreekt hier)" : ''));
         } catch (\RuntimeException $e) {
             $this->addFlash('error', $e->getMessage());
         }
@@ -174,5 +238,35 @@ class SpellingRuleController extends AbstractController
             }
         }
         return array_values($data['rules']);
+    }
+
+    /**
+     * @param list<array<string, mixed>> $rules
+     * @return array<int, int> rule id => the number of word rules for its old form
+     */
+    private static function groupSizes(array $rules): array
+    {
+        $sizes = [];
+        foreach ($rules as $r) {
+            if ($r['kind'] === 'word') {
+                $sizes[SpellingRules::key($r['source'])] = ($sizes[SpellingRules::key($r['source'])] ?? 0) + 1;
+            }
+        }
+        $out = [];
+        foreach ($rules as $r) {
+            $out[$r['id']] = $r['kind'] === 'word' ? $sizes[SpellingRules::key($r['source'])] : 1;
+        }
+        return $out;
+    }
+
+    /**
+     * The choices at single spots in an export (format 2 on; none before).
+     *
+     * @return list<array<string, mixed>>
+     */
+    public static function choicesFromExport(string $json): array
+    {
+        $data = json_decode($json, true);
+        return is_array($data['choices'] ?? null) ? array_values(array_filter($data['choices'], 'is_array')) : [];
     }
 }

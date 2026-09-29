@@ -1,0 +1,8 @@
+{#- Stimulus values for commentary_edit_controller.js (editors only): where
+    the per-spot choices and the flags go, their CSRF tokens, the flag
+    categories. Output as attributes of the page element. -#}
+data-commentary-edit-choice-url-value="{{ path('app_spelling_choice') }}"
+data-commentary-edit-choice-token-value="{{ csrf_token('spelling_choice') }}"
+data-commentary-edit-flags-url-value="{{ path('app_text_flags') }}"
+data-commentary-edit-flag-token-value="{{ csrf_token('text_flag') }}"
+data-commentary-edit-categories-value="{{ flag_categories|json_encode }}"

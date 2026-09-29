@@ -6,8 +6,12 @@
    popup. In the modern-spelling version (SpellingModernizer::paragraphs)
    also the words the spelling rules changed: marked -- when the marks are
    switched on -- with Los's form and the rule on hover. #}
-{% macro dutch(paras) %}{% import 'institutio/_macros.html.twig' as m %}{% for parts in paras %}<p class="commentary-nl-para">{% for part in parts %}{%- if part.type == 'modern' -%}
-<span class="spelling-changed" tabindex="0">{{ part.content }}<span class="institutio-note-popup"><span class="institutio-note-popup-kind">Los: {{ part.original }}</span>{{ part.rule }}</span></span>
+{% macro dutch(paras, editable = false) %}{% import 'institutio/_macros.html.twig' as m %}{% for parts in paras %}<p class="commentary-nl-para">{% for part in parts %}{%- if part.type == 'modern' -%}
+{%- set choosable = editable and part.key is defined -%}
+<span class="spelling-changed{{ choosable ? ' spelling-choosable' }}{{ choosable and (part.options|length > 1 or part.chosen is not null) ? ' spelling-has-choice' }}{{ part.chosen is defined and part.chosen is same as(0) ? ' spelling-kept' }}" tabindex="0"
+      {%- if choosable %} data-key="{{ part.key }}" data-occurrence="{{ part.occurrence }}" data-original="{{ part.original }}"
+      data-chosen="{{ part.chosen is null ? 'default' : (part.chosen == 0 ? 'los' : part.chosen) }}"
+      data-options="{{ part.options|json_encode }}"{% endif %}>{{ part.content }}<span class="institutio-note-popup"><span class="institutio-note-popup-kind">Los: {{ part.original }}</span>{{ part.rule }}</span></span>
 {%- elseif part.type == 'word' -%}{{ m.word_hover(part.content, null, null, false, null, part.strongs) }}{%- elseif part.type == 'correction' -%}
 <span class="commentary-correction" tabindex="0">{{ part.content }}<span class="institutio-note-popup"><span class="institutio-note-popup-kind">Drukfout bij Los</span>{{ part.note }}</span></span>
 {%- else -%}{{ part.content }}{%- endif -%}{% endfor %}</p>{% endfor %}{% endmacro %}

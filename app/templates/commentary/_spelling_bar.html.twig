@@ -9,8 +9,12 @@
             aria-pressed="false">
         Markeer wijzigingen moderne spelling
     </button>
-    <span class="institutio-hc-diff-hint">Gemarkeerde woorden in de rechterkolom zijn aangepast; wijs ze aan voor de vorm van Los en de regel.</span>
+    <span class="institutio-hc-diff-hint">Gemarkeerde woorden in de rechterkolom zijn aangepast; wijs ze aan voor de vorm van Los en de regel.
+        {%- if is_granted('ROLE_EDIT_SPELLING') %} Klik op een woord om per plek een andere vorm te kiezen; selecteer tekst om een flag te plaatsen.{% endif %}</span>
     {% if is_granted('ROLE_EDIT_SPELLING') %}
-    <a href="{{ path('app_spelling_rules') }}" class="commentary-spelling-rules-link">Spellingregels bewerken</a>
+    <span class="commentary-spelling-rules-link">
+        <a href="{{ path('app_spelling_rules') }}">Spellingregels</a> ·
+        <a href="{{ path('app_text_flags') }}">Flags</a>
+    </span>
     {% endif %}
 </div>

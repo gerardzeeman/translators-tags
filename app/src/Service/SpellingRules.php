@@ -19,6 +19,10 @@ namespace App\Service;
  * other, in their order (so "menschelijke" can go through more than one).
  * Each word is changed once: a replacement is not matched again.
  *
+ * An old form can have several word rules ("gelijk" -> "zoals" / "net als"):
+ * the default (is_default) applies everywhere, the others are alternatives,
+ * chosen -- or Los's own form -- at a single spot (SpellingContext).
+ *
  * Capitals: a rule written in lower case matches the word in any case, and
  * the result gets the case of the word it replaces ("Beteekent" ->
  * "Betekent", "MENSCH" -> "MENS"). A word rule written with a capital
@@ -33,7 +37,14 @@ final class SpellingRules
     /** A word: letters, with the apostrophe of "’t" / "zoo’n". */
     public const WORD_RE = '/[\p{L}’\']+/u';
 
-    /** @var array<string, list<array{words: list<string>, target: string, label: string, cased: bool}>> first word => phrases, longest (and cased) first */
+    /**
+     * first word => phrases, longest (and cased) first; a phrase's options
+     * are its rules, the default first (the others: alternatives, chosen at
+     * one spot -- SpellingContext).
+     *
+     * @var array<string, list<array{words: list<string>, key: string, cased: bool,
+     *                               options: list<array{id: ?int, target: string, label: string}>}>>
+     */
     private array $phrases = [];
 
     /** @var list<array{where: string, from: string, to: string, exceptions: array<string, true>, label: string}> */
@@ -45,6 +56,7 @@ final class SpellingRules
      */
     public function __construct(iterable $rules)
     {
+        $groups = [];   // key => phrase
         foreach ($rules as $rule) {
             if (array_key_exists('active', $rule) && !self::truthy($rule['active'])) {
                 continue;
@@ -54,14 +66,19 @@ final class SpellingRules
             }
             $label = trim($rule['source']) . ' → ' . trim($rule['target']);
             if ($rule['kind'] === 'word') {
-                $words = preg_split('/\s+/u', mb_strtolower(trim($rule['source'])));
-                $this->phrases[$words[0]][] = [
-                    'words'  => $words,
-                    'target' => trim($rule['target']),
-                    'label'  => $label,
+                $key = self::key($rule['source']);
+                $groups[$key] ??= [
+                    'words'   => preg_split('/\s+/u', mb_strtolower(trim($rule['source']))),
+                    'key'     => $key,
                     // written with a capital: the capital belongs to the word
-                    'cased'  => self::startsUpper(trim($rule['source'])),
+                    'cased'   => self::startsUpper(trim($rule['source'])),
+                    'options' => [],
+                    'default' => [],
                 ];
+                $option = ['id' => isset($rule['id']) ? (int) $rule['id'] : null, 'target' => trim($rule['target']), 'label' => $label];
+                // the default first; without one marked, the first rule is it
+                $isDefault = !array_key_exists('is_default', $rule) || self::truthy($rule['is_default']);
+                $groups[$key][$isDefault ? 'default' : 'options'][] = $option;
             } else {
                 [$where, $from, $to] = self::parsePattern($rule['source'], $rule['target']);
                 $this->patterns[] = [
@@ -73,9 +90,25 @@ final class SpellingRules
                 ];
             }
         }
+        foreach ($groups as $phrase) {
+            $phrase['options'] = [...$phrase['default'], ...$phrase['options']];
+            unset($phrase['default']);
+            $this->phrases[$phrase['words'][0]][] = $phrase;
+        }
         foreach ($this->phrases as &$list) {
             usort($list, fn($a, $b) => count($b['words']) <=> count($a['words']) ?: $b['cased'] <=> $a['cased']);
         }
+    }
+
+    /**
+     * The key of a word rule's old form -- the same for its alternatives, and
+     * what a choice at one spot (spelling_choice.source) refers to: in lower
+     * case, unless written with a capital ("Gods" is not "gods").
+     */
+    public static function key(string $source): string
+    {
+        $source = preg_replace('/\s+/u', ' ', trim($source));
+        return self::startsUpper($source) ? $source : mb_strtolower($source);
     }
 
     public function isEmpty(): bool
@@ -120,14 +153,22 @@ final class SpellingRules
      * The text in parts: unchanged text, and changed words with what they
      * were and by which rule(s). $sentenceStart: whether the text begins a
      * sentence (a paragraph does; the text after a Hebrew word doesn't).
+     * $context: the choices at single spots of the text this is part of (a
+     * segment's Dutch), and the count of each old form so far in it -- the
+     * n-th "gelijk" of the segment is spot n, however the text is split up.
      *
-     * @return list<array{type: string, content: string, original?: string, rule?: string}>
+     * A word changed by a word rule tells its spot (key, occurrence), its
+     * options (rule id + new form, the default first) and the choice made
+     * there (null: the default; 0: Los's own form, kept).
+     *
+     * @return list<array<string, mixed>>
      */
-    public function apply(string $text, bool $sentenceStart = true): array
+    public function apply(string $text, bool $sentenceStart = true, ?SpellingContext $context = null): array
     {
         if ($this->isEmpty() || $text === '') {
             return [['type' => 'text', 'content' => $text]];
         }
+        $context ??= new SpellingContext();
         preg_match_all(self::WORD_RE, $text, $m, PREG_OFFSET_CAPTURE);
         $words = $m[0];
         $parts = [];
@@ -135,18 +176,37 @@ final class SpellingRules
         $n = count($words);
         for ($i = 0; $i < $n; $i++) {
             [$word, $at] = $words[$i];
-            $change = $this->phraseAt($text, $words, $i);
-            if ($change !== null) {
-                [$len, $target, $label, $cased] = $change;
+            $spot = null;
+            $phrase = $this->phraseAt($text, $words, $i);
+            if ($phrase !== null) {
+                $len = count($phrase['words']);
                 $end = $words[$i + $len - 1][1] + strlen($words[$i + $len - 1][0]);
                 $original = substr($text, $at, $end - $at);
-                if (!$cased) {
-                    $new = self::matchCase($target, $word);
+                $occurrence = $context->next($phrase['key']);
+                $chosen = $context->choice($phrase['key'], $occurrence);
+                $option = $phrase['options'][0];
+                foreach ($phrase['options'] as $o) {
+                    if ($chosen !== null && $chosen !== 0 && $o['id'] === $chosen) {
+                        $option = $o;
+                    }
+                }
+                $spot = [
+                    'key'        => $phrase['key'],
+                    'occurrence' => $occurrence,
+                    'options'    => array_map(fn($o) => ['id' => $o['id'], 'target' => $o['target']], $phrase['options']),
+                    'chosen'     => $chosen === null || $chosen === 0 || $option['id'] === $chosen ? $chosen : null,
+                ];
+                $label = $option['label'];
+                if ($chosen === 0) {
+                    $new = $original;           // Los's own form, at this spot
+                    $label = 'Los ongewijzigd (hier gekozen)';
+                } elseif (!$phrase['cased']) {
+                    $new = self::matchCase($option['target'], $word);
                 } elseif (self::isAllCaps($word)) {
-                    $new = mb_strtoupper($target);
+                    $new = mb_strtoupper($option['target']);
                 } else {
                     // as the rule has it; a capital only to start a sentence
-                    $new = self::beginsSentence($text, $at, $sentenceStart) ? self::capitalise($target) : $target;
+                    $new = self::beginsSentence($text, $at, $sentenceStart) ? self::capitalise($option['target']) : $option['target'];
                 }
                 $i += $len - 1;
             } else {
@@ -160,7 +220,7 @@ final class SpellingRules
             if ($at > $cursor) {
                 $parts[] = ['type' => 'text', 'content' => substr($text, $cursor, $at - $cursor)];
             }
-            $parts[] = ['type' => 'modern', 'content' => $new, 'original' => $original, 'rule' => $label];
+            $parts[] = ['type' => 'modern', 'content' => $new, 'original' => $original, 'rule' => $label] + ($spot ?? []);
             $cursor = $end;
         }
         if ($cursor < strlen($text)) {
@@ -170,9 +230,9 @@ final class SpellingRules
     }
 
     /** The whole text in modern spelling, as a string. */
-    public function modernize(string $text, bool $sentenceStart = true): string
+    public function modernize(string $text, bool $sentenceStart = true, ?SpellingContext $context = null): string
     {
-        return implode('', array_map(fn($p) => $p['content'], $this->apply($text, $sentenceStart)));
+        return implode('', array_map(fn($p) => $p['content'], $this->apply($text, $sentenceStart, $context)));
     }
 
     /**
@@ -203,12 +263,11 @@ final class SpellingRules
     }
 
     /**
-     * The phrase rule that matches at word $i (longest, then capitalised
-     * first): how many words it takes, its target and label, and whether it
-     * was written with a capital.
+     * The phrase (word rule, with its alternatives) that matches at word $i:
+     * the longest, then the one written with a capital.
      *
      * @param list<array{0: string, 1: int}> $words
-     * @return array{0: int, 1: string, 2: string, 3: bool}|null
+     * @return array{words: list<string>, key: string, cased: bool, options: list<array{id: ?int, target: string, label: string}>}|null
      */
     private function phraseAt(string $text, array $words, int $i): ?array
     {
@@ -229,7 +288,7 @@ final class SpellingRules
                     continue 2;
                 }
             }
-            return [$len, $phrase['target'], $phrase['label'], $phrase['cased']];
+            return $phrase;
         }
         return null;
     }

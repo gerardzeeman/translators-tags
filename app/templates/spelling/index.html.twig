@@ -83,6 +83,9 @@
                 </details>
 
                 <label class="spelling-active"><input type="checkbox" name="active" {{ form.active ? 'checked' }}> Actief</label>
+                <label class="spelling-active" title="Heeft dit woord meer regels, dan geldt de standaard overal; de andere kies je per plek op de hoofdstukpagina.">
+                    <input type="checkbox" name="is_default" {{ form.is_default ?? false ? 'checked' }}> Standaard voor dit woord
+                    <span class="spelling-muted">(bij meer regels voor hetzelfde woord)</span></label>
 
                 <div class="spelling-actions">
                     <button type="submit" class="btn btn-primary">{{ form.id ? 'Opslaan' : 'Toevoegen' }}</button>
@@ -96,6 +99,9 @@
                 <p><strong>Patroonregel</strong>: een deel van elk woord; <code>*</code> staat voor de rest van het woord —
                     <code>*sch → *s</code> (einde: mensch → mens), <code>sch* → s*</code> (begin),
                     <code>*ee* → *e*</code> (midden). Patroonregels werken na elkaar, in hun volgorde; een woordregel gaat voor.</p>
+                <p><strong>Meer regels voor één woord</strong> (<code>gelijk → zoals</code>, <code>gelijk → net als</code>):
+                    de standaard geldt overal; op de hoofdstukpagina kies je per plek een andere (zet „Markeer wijzigingen” aan en
+                    klik op het woord).</p>
                 <p><strong>Hoofdletters</strong>: schrijf de oude vorm met kleine letter en hij geldt in elke vorm; een
                     hoofdletter aan het begin gaat dan over (Beteekent → Betekent). Schrijf hem met hoofdletter
                     (<code>Gods → van God</code>) en die hoort bij het woord: de regel geldt alleen voor „Gods”, niet voor
@@ -138,16 +144,24 @@
                 <tr id="regel-{{ r.id }}" class="{{ r.active ? '' : 'spelling-inactive' }}"
                     data-list-search-target="row"
                     data-search="{{ (r.source ~ ' ' ~ r.target ~ ' ' ~ r.exceptions ~ ' ' ~ (r.note ?? ''))|lower }}">
-                    <td>{{ r.kind == 'pattern' ? 'patroon' : 'woord' }}</td>
+                    <td>{{ r.kind == 'pattern' ? 'patroon' : 'woord' }}
+                        {%- if group[r.id] > 1 %}<br><span class="spelling-badge{{ r.is_default ? ' is-default' }}">{{ r.is_default ? 'standaard' : 'alternatief' }}</span>{% endif %}</td>
                     <td><code>{{ r.source }}</code></td>
                     <td aria-hidden="true">→</td>
                     <td><code>{{ r.target }}</code></td>
                     <td class="spelling-muted">{{ r.exceptions|replace({"\n": ', '}) }}</td>
                     <td>{{ r.kind == 'pattern' ? r.position : '' }}</td>
-                    <td>{{ hits[r.id] ?? 0 }}</td>
+                    <td>{% if r.kind == 'word' and not r.is_default %}{{ chosen[r.id] ?? 0 }} <span class="spelling-muted">gekozen</span>
+                        {%- else %}{{ hits[r.id] ?? 0 }}{% if r.kind == 'word' and (kept[r.source|lower] ?? kept[r.source] ?? 0) %}<br><span class="spelling-muted">{{ kept[r.source|lower] ?? kept[r.source] }}× Los gehouden</span>{% endif %}{% endif %}</td>
                     <td class="spelling-muted">{{ r.note }}</td>
                     <td class="spelling-row-actions">
                         <a href="{{ path('app_spelling_rules', {bewerk: r.id}) }}#regel-formulier" class="btn btn-sm">Bewerk</a>
+                        {% if group[r.id] > 1 and not r.is_default %}
+                        <form method="post" action="{{ path('app_spelling_rule_default', {id: r.id}) }}">
+                            <input type="hidden" name="_csrf_token" value="{{ csrf_token('spelling_rule') }}">
+                            <button type="submit" class="btn btn-sm" title="Deze regel overal toepassen; de huidige standaard wordt een alternatief">Standaard</button>
+                        </form>
+                        {% endif %}
                         <form method="post" action="{{ path('app_spelling_rule_toggle', {id: r.id}) }}">
                             <input type="hidden" name="_csrf_token" value="{{ csrf_token('spelling_rule') }}">
                             <button type="submit" class="btn btn-sm">{{ r.active ? 'Uit' : 'Aan' }}</button>

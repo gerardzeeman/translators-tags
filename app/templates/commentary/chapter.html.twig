@@ -7,7 +7,8 @@
 {% block nav_center %}{% endblock %}
 
 {% block body %}
-<div class="page-institutio page-commentary" data-controller="verse-panel strongs-panel">
+<div class="page-institutio page-commentary" data-controller="verse-panel strongs-panel{{ can_edit ? ' commentary-edit' }}"
+     {%- if can_edit %} {{ include('commentary/_edit_values.html.twig') }}{% endif %}>
 
     <nav class="chapter-nav" aria-label="Commentaar navigatie">
         <a href="{{ path('app_commentary_toc', {boek: boek}) }}" class="chapter-nav-book">{{ meta.title }}</a>
@@ -47,16 +48,17 @@
     {% include 'commentary/_spelling_bar.html.twig' %}
     <div class="institutio-sections">
         {% for s in comments %}
-        <div class="institutio-section" id="v{{ s.section }}">
+        <div class="institutio-section" id="v{{ s.section }}"
+             {%- if can_edit %} data-segment-id="{{ s.id }}" data-flags="{{ (flags[s.id] ?? [])|json_encode }}"{% endif %}>
             <a href="{{ path('app_confession_verse', {r: meta.usfm ~ '.' ~ chapter ~ '.' ~ s.section ~ '-' ~ s.section}) }}"
                data-turbo-frame="institutio-verse-panel" class="institutio-section-num commentary-verse-link" title="Bekijk {{ meta.book_nl }} {{ chapter }}:{{ s.section }}">{{ s.section }}</a>
             <div class="institutio-sentence-group">
                 <div class="institutio-sentence-row commentary-row-3">
-                    <div class="institutio-sentence-la">
+                    <div class="institutio-sentence-la" data-flag-field="la">
                         {{ c.la_parts(s.parts) }}
                         {% if s.print_ref %}<span class="commentary-print-ref">{{ s.print_ref }}</span>{% endif %}
                     </div>
-                    <div class="institutio-sentence-nl">
+                    <div class="institutio-sentence-nl" data-flag-field="los">
                         {% if s.text_nl %}
                         <span class="institutio-layer-label">Nederlands (Los, 1900)</span>
                         {{ cm.dutch(s.nl_paras) }}
@@ -64,10 +66,9 @@
                         <span class="commentary-nl-missing">Geen afzonderlijke Nederlandse tekst: deze staat bij het vorige vers.</span>
                         {% endif %}
                     </div>
-                    <div class="institutio-sentence-nl commentary-nl-modern">
+                    <div class="institutio-sentence-nl commentary-nl-modern" data-flag-field="modern">
                         {% if s.text_nl %}
-                        <span class="institutio-layer-label">Los, moderne spelling</span>
-                        {{ cm.dutch(s.nl_modern) }}
+                        {{ include('commentary/_modern_column.html.twig', {paras: s.nl_modern}) }}
                         {% endif %}
                     </div>
                 </div>
