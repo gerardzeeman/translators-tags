@@ -125,8 +125,10 @@ export default class extends Controller {
         const selection = window.getSelection()
         if (selection.isCollapsed || !selection.rangeCount) return
         const range = selection.getRangeAt(0)
-        const start = range.startContainer.parentElement?.closest('[data-flag-field]')
-        const end = range.endContainer.parentElement?.closest('[data-flag-field]')
+        // (a boundary may be an element itself -- the column, even -- not text)
+        const columnOf = (c) => (c.nodeType === Node.ELEMENT_NODE ? c : c.parentElement)?.closest('[data-flag-field]')
+        const start = columnOf(range.startContainer)
+        const end = columnOf(range.endContainer)
         if (!start || start !== end || !this.element.contains(start)) return
         const spot = this.#spotOf(start, range)
         if (!spot) return
@@ -303,15 +305,20 @@ function textModel(column) {
     return { text, nodes }
 }
 
-// the offset in the model's text of a DOM position (container, offset)
+// the offset in the model's text of a DOM position (container, offset) --
+// which may be an element boundary: selecting a single comma often ends the
+// selection just before the next element (a word with a popup), and that
+// element's text must not count (it did, with Range.intersectsNode, which
+// counts a node touching the boundary: a flag on "," ran to the next stop)
 function offsetIn(model, column, container, offset) {
-    const before = document.createRange()
-    before.setStart(column, 0)
-    before.setEnd(container, offset)
+    const point = document.createRange()
+    point.setStart(container, offset)
+    point.collapse(true)
     let at = 0
     for (const { node } of model.nodes) {
         if (node === container) return at + offset
-        if (!before.intersectsNode(node)) break
+        // the whole text node before (or up to) the point counts
+        if (point.comparePoint(node, node.data.length) > 0) break
         at += node.data.length
     }
     return at
@@ -344,12 +351,15 @@ function common(a, b, fromEnd) {
 function highlight(model, start, end, flag) {
     let last = null
     for (const { node, start: at } of model.nodes) {
+        // (the length before splitting: splitText shortens the node, and
+        // measured after, a flag on "," ran on to the end of the text piece)
+        const length = node.data.length
         const from = Math.max(start, at)
-        const to = Math.min(end, at + node.data.length)
+        const to = Math.min(end, at + length)
         if (from >= to) continue
         let piece = node
         if (from > at) piece = piece.splitText(from - at)
-        if (to < at + node.data.length) piece.splitText(to - from)
+        if (to < at + length) piece.splitText(to - from)
         const mark = document.createElement('mark')
         mark.className = `text-flag text-flag-${flag.status}`
         mark.dataset.flagId = flag.id
