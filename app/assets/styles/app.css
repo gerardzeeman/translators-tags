@@ -5521,3 +5521,102 @@ a:hover { text-decoration: underline; }
     .spelling-pair { grid-template-columns: 1fr; }
     .spelling-arrow { display: none; }
 }
+
+/* ── Commentaren: keuze per plek + flags (commentary_edit_controller.js) ────
+   Only for editors, and only while "Markeer wijzigingen" is on. */
+mark.text-flag { background: none; color: inherit; padding: 0; }
+.text-flag-icon { display: none; }
+:root[data-spelling-marks="on"] .spelling-choosable { cursor: pointer; }
+:root[data-spelling-marks="on"] .spelling-has-choice { border-bottom: 2px solid var(--accent); }
+:root[data-spelling-marks="on"] .spelling-kept { background: color-mix(in srgb, var(--gold) 22%, transparent); }
+:root[data-spelling-marks="on"] mark.text-flag {
+    background: color-mix(in srgb, #d93025 18%, transparent);
+    border-bottom: 2px solid #d93025;
+    border-radius: 2px;
+}
+:root[data-spelling-marks="on"] mark.text-flag-resolved {
+    background: none;
+    border-bottom: 2px dotted var(--col-label);
+}
+:root[data-spelling-marks="on"] .text-flag-icon {
+    display: inline;
+    border: none;
+    background: none;
+    padding: 0 .1em;
+    margin-left: .05em;
+    font-size: .8em;
+    line-height: 1;
+    vertical-align: super;
+    color: #d93025;
+    cursor: pointer;
+}
+:root[data-spelling-marks="on"] .text-flag-icon.text-flag-resolved { color: var(--col-label); }
+.text-flag-new {
+    position: absolute;
+    z-index: 300;
+    font-family: var(--font-ui);
+    font-size: .78rem;
+    font-weight: 600;
+    color: #fff;
+    background: #d93025;
+    border: none;
+    border-radius: 999px;
+    padding: .25rem .6rem;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, .2);
+}
+.commentary-edit-pop {
+    position: absolute;
+    z-index: 310;
+    width: 290px;
+    max-width: calc(100vw - 16px);
+    box-sizing: border-box;
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--divider);
+    border-radius: 6px;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, .18);
+    padding: .6rem;
+    font-family: var(--font-ui);
+    font-size: .85rem;
+}
+.commentary-edit-title { font-weight: 600; margin-bottom: .4rem; }
+.commentary-edit-muted { color: var(--col-label); font-size: .9em; }
+.commentary-edit-option {
+    display: block;
+    width: 100%;
+    text-align: left;
+    font: inherit;
+    color: var(--text);
+    background: none;
+    border: none;
+    border-radius: 4px;
+    padding: .35rem .45rem;
+    cursor: pointer;
+}
+.commentary-edit-option:hover { background: var(--hover-warm); }
+.commentary-edit-option.is-current { background: color-mix(in srgb, var(--accent) 16%, transparent); font-weight: 600; }
+.commentary-edit-pop label { display: block; margin: .35rem 0; color: var(--col-label); }
+.commentary-edit-pop select, .commentary-edit-pop textarea {
+    display: block; width: 100%; box-sizing: border-box; margin-top: .15rem;
+    font: inherit; color: var(--text); background: var(--bg);
+    border: 1px solid var(--divider); border-radius: 4px; padding: .3rem .4rem;
+}
+.commentary-edit-pop .commentary-edit-check { display: flex; align-items: center; gap: .35rem; color: var(--text); }
+.commentary-edit-snippet { font-family: var(--font-serif); margin-bottom: .3rem; }
+.commentary-edit-snippet mark { background: color-mix(in srgb, #d93025 20%, transparent); color: inherit; }
+.commentary-edit-actions { display: flex; gap: .4rem; margin-top: .5rem; }
+
+/* The flags overview (/commentaren/flags). */
+.flags-filter { display: flex; flex-wrap: wrap; gap: .6rem 1rem; align-items: end; margin-bottom: 1rem; font-family: var(--font-ui); font-size: .85rem; }
+.flags-filter label { display: flex; flex-direction: column; gap: .15rem; color: var(--col-label); }
+.flags-filter select, .flags-filter input { font: inherit; padding: .3rem .4rem; border: 1px solid var(--divider); border-radius: 4px; background: var(--bg); color: var(--text); }
+.flags-table td { vertical-align: top; }
+.flags-snippet { font-family: var(--font-serif); }
+.flags-snippet mark { background: color-mix(in srgb, #d93025 18%, transparent); color: inherit; }
+.flags-resolved { opacity: .6; }
+.flags-gone { color: #b3261e; font-size: .8rem; }
+:root[data-theme="dark"] .flags-gone { color: #f28b82; }
+.spelling-badge { font-size: .72rem; color: var(--col-label); border: 1px solid var(--divider); border-radius: 999px; padding: 0 .4rem; }
+.spelling-badge.is-default { color: var(--accent); border-color: var(--accent); }
+.commentary-spelling-rules-link a { color: var(--accent); }

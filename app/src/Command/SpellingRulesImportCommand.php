@@ -12,9 +12,10 @@ use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 
 /**
- * Reads spelling rules from an export (app:spelling:export, or the export
- * button on /commentaren/spelling): a rule with the same kind and source is
- * updated, others added; --replace also removes the rules not in the file.
+ * Reads spelling rules -- and the choices made at single spots -- from an
+ * export (app:spelling:export, or the export button on /commentaren/spelling):
+ * a rule with the same kind, old and new form is updated, others added;
+ * --replace also removes the rules (and choices) not in the file.
  * All or nothing.
  *
  *   php bin/console app:spelling:import sync/spellingregels.json [--replace]
@@ -41,16 +42,17 @@ class SpellingRulesImportCommand extends Command
             $output->writeln("<error>Cannot read {$file}</error>");
             return Command::FAILURE;
         }
+        $json = (string) file_get_contents($file);
         try {
-            $rules = SpellingRuleController::rulesFromExport((string) file_get_contents($file));
+            $rules = SpellingRuleController::rulesFromExport($json);
         } catch (\RuntimeException $e) {
             $output->writeln('<error>' . $e->getMessage() . '</error>');
             return Command::FAILURE;
         }
         $result = $this->repository->import((string) $input->getOption('layer'), $rules,
-            (bool) $input->getOption('replace'), 'console');
-        $output->writeln(sprintf('<info>%d added, %d updated, %d removed</info>',
-            $result['added'], $result['updated'], $result['removed']));
+            (bool) $input->getOption('replace'), 'console', SpellingRuleController::choicesFromExport($json));
+        $output->writeln(sprintf('<info>%d added, %d updated, %d removed; %d choices (%d skipped)</info>',
+            $result['added'], $result['updated'], $result['removed'], $result['choices'], $result['choices_skipped']));
         return Command::SUCCESS;
     }
 }

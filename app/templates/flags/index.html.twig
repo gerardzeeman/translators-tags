@@ -1,0 +1,106 @@
+{% extends 'base.html.twig' %}
+{% block title %}Flags in het commentaar{% endblock %}
+
+{% block nav_center %}{% endblock %}
+
+{% block body %}
+<div class="spelling-page">
+
+    <nav class="chapter-nav" aria-label="Commentaar navigatie">
+        <a href="{{ path('app_commentary_index') }}" class="chapter-nav-book">Commentaren</a>
+        <span class="chapter-nav-sep">›</span>
+        <span class="chapter-nav-current">Flags</span>
+    </nav>
+
+    <h1 class="spelling-title">Flags in het commentaar</h1>
+    <p class="spelling-intro">
+        Problemen in de tekst, aangegeven op de hoofdstukpagina's (zet daar „Markeer wijzigingen” aan en selecteer een
+        stuk tekst). {{ counts.open ?? 0 }} open, {{ counts.resolved ?? 0 }} opgelost.
+    </p>
+
+    {% for label, messages in app.flashes %}
+        {% for message in messages %}
+        <div class="alert alert-{{ label }}" role="alert">{{ message }}</div>
+        {% endfor %}
+    {% endfor %}
+
+    <form method="get" class="flags-filter">
+        <label>Status
+            <select name="status">
+                <option value="">alle</option>
+                <option value="open" {{ filter.status == 'open' ? 'selected' }}>open</option>
+                <option value="resolved" {{ filter.status == 'resolved' ? 'selected' }}>opgelost</option>
+            </select>
+        </label>
+        <label>Probleem
+            <select name="categorie">
+                <option value="">alle</option>
+                {% for key, label in categories %}
+                <option value="{{ key }}" {{ filter.categorie == key ? 'selected' }}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label>Hoofdstuk
+            <input type="number" name="hoofdstuk" min="1" max="50" value="{{ filter.hoofdstuk }}" style="width: 6rem">
+        </label>
+        <button type="submit" class="btn btn-sm">Filteren</button>
+    </form>
+
+    <section class="spelling-card">
+        {% if flags %}
+        <div class="table-scroll">
+        <table class="admin-table flags-table">
+            <thead>
+                <tr><th>Waar</th><th>Kolom</th><th>Tekst</th><th>Probleem</th><th>Notitie</th><th>Status</th><th></th></tr>
+            </thead>
+            <tbody>
+                {% for f in flags %}
+                {% set anchor = f.segment_kind == 'argument' ? 'arg-' ~ f.section : 'v' ~ f.section %}
+                {% set href = f.chapter ? path('app_commentary_chapter', {boek: 'genesis', chapter: f.chapter}) : path('app_commentary_argument', {boek: 'genesis'}) %}
+                <tr id="flag-{{ f.id }}" class="{{ f.status == 'resolved' ? 'flags-resolved' }}">
+                    <td><a href="{{ href }}#{{ anchor }}">{{ f.chapter ? 'Gen. ' ~ f.chapter ~ ':' ~ f.section : 'Argumentum ' ~ f.section }}</a></td>
+                    <td>{{ fields[f.field] ?? f.field }}</td>
+                    <td class="flags-snippet">…{{ f.context_before|slice(-25) }}<mark>{{ f.snippet }}</mark>{{ f.context_after|slice(0, 25) }}…
+                        {% if not f.found %}<div class="flags-gone">niet meer in de tekst (mogelijk opgelost)</div>{% endif %}</td>
+                    <td>{{ categories[f.category] ?? f.category }}</td>
+                    <td>{{ f.note }}<div class="spelling-muted">{{ f.created_by }} · {{ f.created_at|slice(0, 10) }}</div></td>
+                    <td>{{ f.status == 'resolved' ? 'opgelost' : 'open' }}</td>
+                    <td class="spelling-row-actions">
+                        <form method="post" action="{{ path('app_text_flag_status', {id: f.id}) }}">
+                            <input type="hidden" name="_csrf_token" value="{{ csrf_token('text_flag') }}">
+                            <button type="submit" class="btn btn-sm">{{ f.status == 'resolved' ? 'Heropen' : 'Opgelost' }}</button>
+                        </form>
+                        <form method="post" action="{{ path('app_text_flag_delete', {id: f.id}) }}"
+                              data-controller="confirm-submit" data-action="submit->confirm-submit#submit"
+                              data-confirm-submit-message-value="Deze flag verwijderen?">
+                            <input type="hidden" name="_csrf_token" value="{{ csrf_token('text_flag') }}">
+                            <button type="submit" class="btn btn-sm">Verwijder</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        </div>
+        {% else %}
+        <p class="spelling-muted">Geen flags{{ filter.status or filter.categorie or filter.hoofdstuk ? ' met dit filter' }}.</p>
+        {% endif %}
+    </section>
+
+    <section class="spelling-card spelling-transfer">
+        <h2>Overzetten tussen dev en productie</h2>
+        <p class="spelling-muted">Exporteer de flags hier en importeer het bestand in de andere omgeving (in beide richtingen).
+            Een flag op dezelfde plek wordt bijgewerkt, andere worden toegevoegd.</p>
+        <div class="spelling-transfer-row">
+            <a href="{{ path('app_text_flags_export') }}" class="btn">Exporteren (.json)</a>
+            <form method="post" action="{{ path('app_text_flags_import') }}" enctype="multipart/form-data" class="spelling-import"
+                  data-controller="confirm-submit" data-action="submit->confirm-submit#submit"
+                  data-confirm-submit-message-value="Flags uit dit bestand importeren?" data-confirm-submit-confirm-label-value="Importeren">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token('text_flag') }}">
+                <input type="file" name="file" accept=".json,application/json" required>
+                <button type="submit" class="btn btn-primary">Importeren</button>
+            </form>
+        </div>
+    </section>
+</div>
+{% endblock %}

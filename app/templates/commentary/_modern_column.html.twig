@@ -1,0 +1,7 @@
+{# The modern-spelling column of one segment -- on the chapter/Argumentum
+   page and, after a choice at one of its spots, from
+   SpellingRuleController::choose (swapped in by commentary_edit_controller.js).
+   An editor's words have their spot and options on them (the dropdown). #}
+{% import 'commentary/_macros.html.twig' as cm %}
+<span class="institutio-layer-label">Los, moderne spelling</span>
+{{ cm.dutch(paras, can_edit ?? false) }}

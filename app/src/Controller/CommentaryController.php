@@ -3,6 +3,9 @@
 namespace App\Controller;
 
 use App\Repository\ConfessionRepository;
+use App\Repository\SpellingRuleRepository;
+use App\Repository\TextFlagRepository;
+use App\Service\SpellingContext;
 use App\Service\SpellingModernizer;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Response;
@@ -46,6 +49,8 @@ class CommentaryController extends AbstractController
     public function __construct(
         private readonly ConfessionRepository $repository,
         private readonly SpellingModernizer $spelling,
+        private readonly SpellingRuleRepository $spellingRules,
+        private readonly TextFlagRepository $flags,
     ) {}
 
     #[Route('/commentaren', name: 'app_commentary_index')]
@@ -70,14 +75,16 @@ class CommentaryController extends AbstractController
     {
         $meta = $this->meta($boek);
         $segments = $this->repository->getUnnumberedSection($meta['work'], $meta['argument_prefix']);
-        $notes = $this->repository->getSegmentAnnotations(array_map(fn($s) => $s['id'], $segments));
+        $ids = array_map(fn($s) => $s['id'], $segments);
+        $notes = $this->repository->getSegmentAnnotations($ids);
         $strongs = $this->repository->getWorkWordStrongs($meta['work'], 0);
+        $choices = $this->spellingRules->choicesFor(self::DUTCH_LAYER, $ids);
         return $this->render('commentary/argument.html.twig', [
             'boek'     => $boek,
             'meta'     => $meta,
-            'segments' => array_map(fn($s) => $this->withParts($s, $notes[$s['id']] ?? [], $strongs), $segments),
+            'segments' => array_map(fn($s) => $this->withParts($s, $notes[$s['id']] ?? [], $strongs, $choices), $segments),
             'layer'    => self::DUTCH_LAYER,
-        ]);
+        ] + $this->editing($ids));
     }
 
     #[Route('/commentaren/{boek}/{chapter<\d+>}', name: 'app_commentary_chapter')]
@@ -88,9 +95,11 @@ class CommentaryController extends AbstractController
         if (!$data['articles']) {
             throw $this->createNotFoundException('Hoofdstuk niet gevonden.');
         }
-        $notes = $this->repository->getSegmentAnnotations(array_map(fn($s) => $s['id'], $data['articles']));
+        $ids = array_map(fn($s) => $s['id'], $data['articles']);
+        $notes = $this->repository->getSegmentAnnotations($ids);
         $strongs = $this->repository->getWorkWordStrongs($meta['work'], $chapter);
-        $segments = array_map(fn($s) => $this->withParts($s, $notes[$s['id']] ?? [], $strongs), $data['articles']);
+        $choices = $this->spellingRules->choicesFor(self::DUTCH_LAYER, $ids);
+        $segments = array_map(fn($s) => $this->withParts($s, $notes[$s['id']] ?? [], $strongs, $choices), $data['articles']);
 
         // Next to Calvin's own Latin rendering of each verse: Los's Dutch of
         // it (the segment's translation) and the Statenvertaling (Jongbloed),
@@ -119,7 +128,26 @@ class CommentaryController extends AbstractController
             'verses'     => $verses,
             'layer'      => self::DUTCH_LAYER,
             'nav'        => $this->repository->getAdjacentChapters($meta['work'], $chapter),
-        ]);
+        ] + $this->editing($ids));
+    }
+
+    /**
+     * For an editor of the commentary (ROLE_EDIT_SPELLING) only: the flags
+     * on these segments, and what they can be (TextFlagRepository), for the
+     * flags and the per-spot choices on the page -- shown when the marks
+     * are switched on (spelling_marks_controller.js).
+     *
+     * @param list<int> $segmentIds
+     * @return array{can_edit: bool, flags: array<int, list<array<string, mixed>>>, flag_categories: array<string, string>}
+     */
+    private function editing(array $segmentIds): array
+    {
+        $canEdit = $this->isGranted('ROLE_EDIT_SPELLING');
+        return [
+            'can_edit'        => $canEdit,
+            'flags'           => $canEdit ? $this->flags->forSegments($segmentIds) : [],
+            'flag_categories' => TextFlagRepository::CATEGORIES,
+        ];
     }
 
     /** @return array<string, string> */
@@ -138,7 +166,7 @@ class CommentaryController extends AbstractController
      * hover markers -- and its Dutch translation, if any, with the
      * Hebrew/Greek words of $strongs (surface => entry) marked.
      */
-    private function withParts(array $s, array $notes = [], array $strongs = []): array
+    private function withParts(array $s, array $notes = [], array $strongs = [], array $choices = []): array
     {
         return [
             'id'        => $s['id'],
@@ -152,7 +180,9 @@ class CommentaryController extends AbstractController
             'nl_paras'  => $paras = self::dutchParagraphs($s['translations'][self::DUTCH_LAYER] ?? null, $strongs),
             // Los's comment in modern spelling (the rules of /commentaren/spelling);
             // not his Bible text
-            'nl_modern' => ($s['kind'] ?? null) === 'scripture' ? [] : $this->spelling->paragraphs($paras, self::DUTCH_LAYER),
+            // (with the choices made at single spots of this segment)
+            'nl_modern' => ($s['kind'] ?? null) === 'scripture' ? [] : $this->spelling->paragraphs(
+                $paras, self::DUTCH_LAYER, new SpellingContext($choices[$s['id']] ?? [])),
         ];
     }
 

@@ -34,17 +34,20 @@ class SpellingModernizer
      * @param list<list<array<string, mixed>>> $paragraphs
      * @return list<list<array<string, mixed>>>
      */
-    public function paragraphs(array $paragraphs, string $layer = SpellingRuleRepository::DEFAULT_LAYER): array
+    public function paragraphs(array $paragraphs, string $layer = SpellingRuleRepository::DEFAULT_LAYER,
+                               ?SpellingContext $context = null): array
     {
         $rules = $this->rules($layer);
-        return array_map(function (array $parts) use ($rules): array {
+        // one context for the whole text: spots count on across paragraphs
+        $context ??= new SpellingContext();
+        return array_map(function (array $parts) use ($rules, $context): array {
             $out = [];
             $sentenceStart = true;      // a paragraph starts a sentence
             foreach ($parts as $part) {
                 if ($part['type'] === 'text') {
-                    array_push($out, ...$rules->apply($part['content'], $sentenceStart));
+                    array_push($out, ...$rules->apply($part['content'], $sentenceStart, $context));
                 } elseif ($part['type'] === 'correction') {
-                    $out[] = ['content' => $rules->modernize($part['content'], $sentenceStart)] + $part;
+                    $out[] = ['content' => $rules->modernize($part['content'], $sentenceStart, $context)] + $part;
                 } else {
                     $out[] = $part;
                 }

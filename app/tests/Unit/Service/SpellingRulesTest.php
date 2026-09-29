@@ -2,6 +2,7 @@
 
 namespace App\Tests\Unit\Service;
 
+use App\Service\SpellingContext;
 use App\Service\SpellingRules;
 use PHPUnit\Framework\TestCase;
 
@@ -71,7 +72,8 @@ class SpellingRulesTest extends TestCase
         $parts = $r->apply('Dit beteekent veel.');
         $this->assertSame([
             ['type' => 'text', 'content' => 'Dit '],
-            ['type' => 'modern', 'content' => 'betekent', 'original' => 'beteekent', 'rule' => 'beteekent → betekent'],
+            ['type' => 'modern', 'content' => 'betekent', 'original' => 'beteekent', 'rule' => 'beteekent → betekent',
+             'key' => 'beteekent', 'occurrence' => 1, 'options' => [['id' => null, 'target' => 'betekent']], 'chosen' => null],
             ['type' => 'text', 'content' => ' veel.'],
         ], $parts);
     }
@@ -116,6 +118,38 @@ class SpellingRulesTest extends TestCase
         $r = $this->rules(['word', 'gods', 'goden'], ['word', 'Gods', 'van God']);
         $this->assertSame('de goden en het woord van God', $r->modernize('de gods en het woord Gods'));
         $this->assertSame('goden', $r->modernize('gods'));
+    }
+
+    public function testDefaultRuleAppliesAndAlternativesCanBeChosenPerSpot(): void
+    {
+        $r = new SpellingRules([
+            ['id' => 1, 'kind' => 'word', 'source' => 'gelijk', 'target' => 'net als', 'is_default' => false],
+            ['id' => 2, 'kind' => 'word', 'source' => 'gelijk', 'target' => 'zoals', 'is_default' => true],
+        ]);
+        $this->assertSame('zoals a, zoals b, zoals c', $r->modernize('gelijk a, gelijk b, gelijk c'));
+
+        // the 2nd "gelijk": the alternative; the 3rd: Los's own form
+        $context = new SpellingContext(['gelijk' => [2 => 1, 3 => 0]]);
+        $this->assertSame('zoals a, net als b, gelijk c', $r->modernize('gelijk a, gelijk b, gelijk c', true, $context));
+
+        // spots count on through the parts of one text
+        $context = new SpellingContext(['gelijk' => [2 => 1]]);
+        $first = $r->apply('Gelijk a.', true, $context);
+        $second = $r->apply(' gelijk b', false, $context);
+        $this->assertSame('Zoals', $first[0]['content']);
+        $this->assertSame(1, $first[0]['occurrence']);
+        $this->assertSame('net als', $second[1]['content']);
+        $this->assertSame(2, $second[1]['occurrence']);
+        $this->assertSame(1, $second[1]['chosen']);
+        $this->assertSame([['id' => 2, 'target' => 'zoals'], ['id' => 1, 'target' => 'net als']], $second[1]['options']);
+    }
+
+    public function testChoiceOfARuleThatIsGoneFallsBackToTheDefault(): void
+    {
+        $r = new SpellingRules([['id' => 2, 'kind' => 'word', 'source' => 'gelijk', 'target' => 'zoals']]);
+        $parts = $r->apply('gelijk', true, new SpellingContext(['gelijk' => [1 => 99]]));
+        $this->assertSame('zoals', $parts[0]['content']);
+        $this->assertNull($parts[0]['chosen']);
     }
 
     public function testApostropheWords(): void

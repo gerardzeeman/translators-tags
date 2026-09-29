@@ -143,6 +143,7 @@
                     {% endif %}
                     {% if is_granted('ROLE_EDIT_SPELLING') %}
                     <a href="{{ path('app_spelling_rules') }}">Moderne spelling (Los)</a>
+                    <a href="{{ path('app_text_flags') }}">Flags (commentaar)</a>
                     {% endif %}
                     {% if is_granted('ROLE_BLOGGER') %}
                     <a href="{{ path('app_blog_mine') }}">Mijn blogs</a>
